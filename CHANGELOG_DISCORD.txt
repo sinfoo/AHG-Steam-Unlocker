@@ -1,0 +1,33 @@
+# 🚀 AHG STEAM UNLOCKER — v1.0.0
+📅 2026-06-25 · what's new since v0.90
+
+## 🎯 New
+🔄 Auto-syncing catalogue — new games appear on their own
+🎮 Library loads up front → instant browse after sign-in
+🏆 Achievements now save across restarts
+🖼️ Fresh AHG app icon
+
+## 🔐 Activation
+🔒 Reliable & re-checked every launch (per device)
+✨ Reimagined success screen
+
+## 🎨 UI
+💫 Reimagined loading screen + hero banners
+🃏 Premium cards with "Update" badges
+🧭 New sidebar hover/click effects
+🎉 Rebuilt "Purchase Complete" screen
+🔍 Sharper search
+
+## ⚡ Performance
+⚡ Near-instant startup — no more hangs
+🧹 Lighter, faster build
+
+## 🐛 Fixes
+✅ Activation now enforced
+✅ Missing games get cards
+✅ Cards no longer revert after adding
+✅ Removing a game fully cleans up
+✅ No more stuck / blank loading screen
+
+💾 Built with ❤️ by the AHG Team
+#AHG #SteamUnlocker #v1_0_0

@@ -1,0 +1,192 @@
+================================================================================
+🚀 AHG STEAM UNLOCKER - CHANGELOG
+🔖 Version 0.80.0
+📅 Date: 2026-05-12
+================================================================================
+
+🎯 NEW FEATURES
+════════════════════════════════════════════════════════════════════════════════
+
+📦 Download Progress Modal
+  ■ Real-time progress bar (0-100%) with 3 states
+  ■ Shows file size, download speed & downloaded/total
+
+🎮 Games Catalogue Update
+  ■ Added 487 new games (176,752 total)
+
+📁 Local ZIP Install Fallback
+  ■ Install from local ZIP with manifests
+  ■ Extracts to depotcache & config/stplug-in
+
+🎯 DLC System
+  ■ Add DLCs button with multi-source fetching
+  ■ Auto-install via addToSteam
+  ■ Batch registration for all DLCs in single IPC call
+  ■ DLC registry (dlc_registry.json) for library filtering
+
+🏆 Enhanced Achievements
+  ■ XP & leveling (10-100 XP per achievement)
+  ■ 30+ achievements with level badge display
+
+🔔 Enhanced Notifications
+  ■ Stack up to 4 toasts with spring animations
+  ■ Color-coded & auto-dismiss (4s)
+
+🔍 Enhanced Search
+  ■ Live suggestions dropdown (top 10 matches)
+  ■ Cover images & favorites indicator
+  ■ useDeferredValue for instant typing response
+
+🖱️ Right-Click Context Menu
+  ■ Premium redesign with glass-gradient background
+  ■ Game header with cover thumbnail
+  ■ Direct install from context menu
+  ■ DLC toggle switch with spring animation
+
+📁 Collections System
+  ■ User-created named groups with icon + color
+  ■ Full page with hero section
+  ■ Premium collection cards with cover preview strip
+  ■ Auto-save with 500ms debounce
+
+📤 Export/Import System
+  ■ JSON backup: installed games, favorites, collections, stats
+  ■ Import restores to userData JSON files
+
+🤖 Discord Bot Overhaul
+  ■ Persistent button Views (/wherefrom command)
+  ■ Media source tracking (media_stats.json)
+  ■ /mediastats staff command
+  /storegift command for USDT purchases
+  ■ Staff role system (STAFF_ROLE_ID)
+
+🔧 IMPROVEMENTS
+════════════════════════════════════════════════════════════════════════════════
+
+🎨 Sidebar Hover Effects
+  ■ Smooth animations on logo, nav, quick tools
+  ■ Spring physics & glow effects
+
+🎨 Library Card Hover
+  ■ Spring lift + scale animation
+  ■ Image zoom on hover (1.18x)
+  ■ Violet glow shadow with purple overlay
+  ■ Animated delete button with rotate
+
+🎨 Premium Collection Cards
+  ■ Cover preview strip with gradient fade
+  ■ Game count badge, first-3-names preview
+  ■ Glass edit/delete buttons on hover
+
+⚡ Search Performance
+  ■ useDeferredValue for instant typing response
+
+⚡ DLC Registration Performance
+  ■ Batch registration avoids 90-second manifest downloads
+  ■ File write verification with fs.statSync()
+  ■ Detailed error reporting per DLC
+
+⚡ Manifest Installation
+  ■ REPO_CONCURRENCY increased from 3 to 15
+  ■ repoNegativeCache skips repos known to lack a game
+  ■ repoSpeedCache sorts repos by measured response time
+
+⚡ Error Handling
+  ■ Better error messages in register-dlcs
+  ■ Per-DLC error tracking
+  ■ File existence verification after writes
+
+⚡ Git Repositories
+  ■ Expanded from 30 to 97 manifest mirror repos
+
+📊 About Section Reorder
+  ■ Founder card now appears first with gradient border
+
+💾 Version Updates
+  ■ All references updated to v0.70 → v0.80
+
+🛠️ Settings Page
+  ■ "Steam Control" renamed to "AHG Tools"
+  ■ Custom Steam path configuration
+  ■ Quick tools colorized (7 distinct colors)
+
+🐛 CRITICAL FIXES
+════════════════════════════════════════════════════════════════════════════════
+
+🔧 DLC Registration Not Working
+  ❌ ISSUE: DLC files written to disk but SteamTools did not detect them
+  🔍 CAUSE: Incorrect Lua format using non-existent DlcOwnership() function
+  ✅ FIX: Batched {appid}_dlcs.lua file with addappid() calls
+  💥 IMPACT: DLC registration works immediately after installation
+
+🔧 Update Installation Infinite Loop & ENOENT Error
+  ❌ ISSUE: Updates entered infinite download loop and failed with ENOENT
+  🔍 CAUSE: Missing install-update IPC handler + improper archive extraction
+  ✅ FIX: Created new install-update IPC with manual file extraction
+
+🔧 Free-to-Play Games Removed from Catalogue
+  ❌ ISSUE: 12,000+ F2P appids cluttered the catalogue
+  ✅ FIX: Added filter in loadGames() and reloadGamesList()
+  💥 IMPACT: Cleaner catalogue with only premium games
+
+🔧 Games Can't Be Removed from Steam via App Library
+  ✅ FIX: Library remove function now works correctly
+
+🔧 "License is being used" Visual Bug
+  ✅ FIX: No longer prevents accessing the app on random restarts
+
+🔧 tryRepoForGame Returning Success with 0 Manifests
+  ❌ ISSUE: Empty branch ZIP reported success, Steam showed 0B game
+  ✅ FIX: Returns null when manifestCount === 0, allowing fallbacks
+
+🔧 ryuu.lol Unconditional foundRepo
+  ❌ ISSUE: foundRepo set before processing ZIP entries
+  ✅ FIX: Only set when a manifest is actually written
+
+🔧 Bundled Repo Lua in Old OnStartup Format
+  ❌ ISSUE: SteamTools v3 ignores old OnStartup wrapper
+  ✅ FIX: Always overwrites with addappid(appid)\n
+
+🔧 depots: {} Causing 0B in Steam
+  ❌ ISSUE: Empty depots object tells Steam game has no depots
+  ✅ FIX: Reverted to v0.70 format (no depots field)
+
+🔧 10s HTTP Timeout Causing Silent Failures
+  ❌ ISSUE: 10s timeout failed on large ZIP downloads
+  ✅ FIX: Increased to 30s
+
+🔧 DLC Registration Duplicate .lua Bug
+  ❌ ISSUE: Fixed 200-DLC limit where SteamTools only processed 99 files
+  ✅ FIX: Batched lua file with all addappid() calls
+
+🐛 MINOR FIXES
+════════════════════════════════════════════════════════════════════════════════
+
+📱 Game Added Modal — Fixed trigger after successful install
+📱 ThankYouModal — Fixed edges touching screen
+📱 Collection creation — Fixed MouseEvent passed as collection argument
+📱 Collection mutation — Fixed stale closures with functional updater pattern
+📱 Collections page freeze — Fixed with dedicated detail page
+📱 Quick Tools "Fix Games Not Showing" — Fixed non-existent IPC call
+📱 Quick Tools "Fix No Internet" — Fixed misspelled state setter
+📱 Colourless button — Added orange to DARK_COLORS
+📱 Fix success detection — Non-zero exit code no longer reports failure
+📱 Collections persistence — Removed auto-save that wiped data on restart
+📱 "iex" not recognized — Removed shell:true from spawn() calls
+📱 bot.py crash on startup — Fixed ClientException with CommandTree
+📱 Commands not appearing — Added guild-scoped sync with try/except
+
+🏗️ ARCHITECTURE
+════════════════════════════════════════════════════════════════════════════════
+
+  🔑 register-dlcs: Batch registration avoids manifest downloads
+  🔑 install-update: Manual extraction for reliable update installation
+  🔑 Discord bot: discord.Client → commands.Bot for persistent Views
+  🔑 21 new manifest repos added (30 → 97 total)
+  🔑 GitHub token rotated for security
+  🔑 games.json merged (176,785 total entries)
+
+================================================================================
+🎮 AHG Steam Unlocker — Premium Steam Unlocking Solution
+💾 Built with ❤️ by the AHG Team
+================================================================================

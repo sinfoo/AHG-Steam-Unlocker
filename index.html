@@ -1,0 +1,725 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AHG Unlocker</title>
+    <script>console.log('[HTML] Page loaded at', new Date())</script>
+    <!-- Tailwind is compiled at build time via @tailwindcss/postcss (src/index.css). The Play CDN was online-only, v3, and explicitly not for production. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://i.steamstatic.com">
+    <link rel="dns-prefetch" href="https://steamcdn-a.akamaihd.net">
+    <link rel="dns-prefetch" href="https://shared.akamai.steamstatic.com">
+    <link rel="dns-prefetch" href="https://steamcommunity.com">
+    <link rel="dns-prefetch" href="https://api.steampowered.com">
+    <link rel="preconnect" href="https://shared.akamai.steamstatic.com">
+    <style>
+      :root {
+        --violet: #8b5cf6;
+        --violet-light: #a78bfa;
+        --violet-dark: #7c3aed;
+        --blue: #3b82f6;
+        --cyan: #06b6d4;
+        --pink: #ec4899;
+        --amber: #f59e0b;
+        --green: #10b981;
+        --bg-deep: #030308;
+        --bg-dark: #080810;
+        --bg-card: #12121f;
+        --bg-secondary: #0c0c18;
+        --bg-hover: #1a1a2c;
+        --text-muted: #94a3b8;
+        --text-secondary: #cbd5e1;
+        --text-primary: #f8fafc;
+        --border-border: #2a2a44;
+        --border-accent: #8b5cf6;
+        --text-accent: #a78bfa;
+      }
+      
+      * { box-sizing: border-box; }
+      
+      html, body { 
+        margin: 0; 
+        padding: 0; 
+        height: 100%; 
+        width: 100%; 
+        overflow: hidden; 
+        background: #030308;
+        font-family: 'Orbitron', 'Inter', system-ui, sans-serif;
+      }
+
+      #loadingScreen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #030308 0%, #0a0a15 50%, #080812 100%);
+        z-index: 9999;
+        pointer-events: none; /* Safety: never block React app behind us */
+        transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.5s;
+      }
+      
+      #loadingScreen.hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transform: scale(1.04);
+      }
+
+      .bg-grid {
+        position: absolute;
+        inset: 0;
+        background-image: 
+          linear-gradient(rgba(139, 92, 246, 0.06) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(139, 92, 246, 0.06) 1px, transparent 1px);
+        background-size: 60px 60px;
+        animation: gridMove 12s linear infinite;
+      }
+      /* Pans one full tile (60px) so it loops seamlessly — clearly moving, not static. */
+      @keyframes gridMove { 100% { transform: translate(60px, 60px); } }
+      
+      .bg-noise {
+        position: absolute;
+        inset: 0;
+        opacity: 0.03;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      }
+
+      .orb {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(40px);
+        opacity: 0.6;
+        animation: orbFloat 12s ease-in-out infinite;
+      }
+      .orb-1 { width: 400px; height: 400px; background: radial-gradient(circle, rgba(139,92,246,0.3) 0%, transparent 70%); top: -15%; left: -10%; animation-delay: 0s; }
+      .orb-2 { width: 300px; height: 300px; background: radial-gradient(circle, rgba(59,130,246,0.25) 0%, transparent 70%); top: 10%; right: -5%; animation-delay: 2s; }
+      .orb-3 { width: 350px; height: 350px; background: radial-gradient(circle, rgba(236,72,153,0.2) 0%, transparent 70%); bottom: -10%; left: 10%; animation-delay: 4s; }
+      .orb-4 { width: 250px; height: 250px; background: radial-gradient(circle, rgba(6,182,212,0.25) 0%, transparent 70%); bottom: 5%; right: 5%; animation-delay: 3s; }
+      .orb-5 { width: 200px; height: 200px; background: radial-gradient(circle, rgba(245,158,11,0.2) 0%, transparent 70%); top: 40%; left: 40%; animation-delay: 5s; }
+      
+      @keyframes orbFloat { 
+        0%, 100% { transform: translate(0, 0) scale(1); } 
+        33% { transform: translate(20px, -30px) scale(1.05); }
+        66% { transform: translate(-20px, 20px) scale(0.95); } 
+      }
+
+      .ring-glow {
+        position: absolute;
+        inset: 0;
+        border: 1px solid rgba(139, 92, 246, 0.1);
+        border-radius: 50%;
+        animation: ringExpand 8s ease-out infinite;
+      }
+      .ring-glow:nth-child(2) { animation-delay: 1s; }
+      .ring-glow:nth-child(3) { animation-delay: 2s; }
+      @keyframes ringExpand { 
+        0% { transform: scale(0.8); opacity: 0.5; } 
+        100% { transform: scale(1.5); opacity: 0; } 
+      }
+
+      .particle {
+        position: absolute;
+        width: 4px;
+        height: 4px;
+        background: white;
+        border-radius: 50%;
+        box-shadow: 0 0 10px currentColor;
+      }
+      @keyframes particleFloat {
+        0%, 100% { transform: translateY(0) scale(1); opacity: 0.2; }
+        50% { transform: translateY(-40px) scale(1.8); opacity: 0.9; }
+      }
+      @keyframes particleSpin {
+        0% { rotate: 0deg; }
+        100% { rotate: 360deg; }
+      }
+
+      .loader-content {
+        position: relative;
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        transform-style: preserve-3d;
+      }
+
+      .logo-box {
+        position: relative;
+        width: 160px;
+        height: 160px;
+        margin-bottom: 48px;
+      }
+      
+      .logo-outer {
+        position: absolute;
+        inset: -15px;
+        border-radius: 36px;
+        background: transparent;
+        box-shadow: 0 0 100px rgba(139, 92, 246, 0.3), inset 0 0 60px rgba(139, 92, 246, 0.1);
+        border: 1px solid rgba(139, 92, 246, 0.2);
+        animation: outerPulse 3s ease-in-out infinite;
+      }
+      @keyframes outerPulse {
+        0%, 100% { transform: scale(1); opacity: 0.5; box-shadow: 0 0 60px rgba(139, 92, 246, 0.3); }
+        50% { transform: scale(1.08); opacity: 0.8; box-shadow: 0 0 100px rgba(139, 92, 246, 0.6); }
+      }
+      /* Rotating conic-gradient "scanning beam" ring around the logo */
+      .logo-outer::before {
+        content: '';
+        position: absolute;
+        inset: -2px;
+        border-radius: 38px;
+        background: conic-gradient(from 0deg, transparent 0%, rgba(139,92,246,0.9) 10%, rgba(6,182,212,0.7) 22%, transparent 38%, transparent 100%);
+        animation: conicSpin 4s linear infinite;
+        -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2.5px));
+        mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2.5px));
+        pointer-events: none;
+      }
+      @keyframes conicSpin { to { transform: rotate(360deg); } }
+      
+      .logo-inner {
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 50%, #3b82f6 100%);
+        border-radius: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 0 50px rgba(139, 92, 246, 0.5);
+        animation: logoFloat 4s ease-in-out infinite, logoGlow 2s ease-in-out infinite alternate;
+      }
+      @keyframes logoFloat { 
+        0%, 100% { transform: translateY(0) rotate(0deg); } 
+        50% { transform: translateY(-10px) rotate(5deg); } 
+      }
+      @keyframes logoGlow { 
+        0% { box-shadow: 0 0 40px rgba(139, 92, 246, 0.5), 0 0 80px rgba(139, 92, 246, 0.3); } 
+        100% { box-shadow: 0 0 60px rgba(139, 92, 246, 0.8), 0 0 120px rgba(139, 92, 246, 0.5); } 
+      }
+      
+      .logo-inner svg {
+        width: 64px;
+        height: 64px;
+        color: white;
+        filter: drop-shadow(0 0 15px rgba(255,255,255,0.5));
+      }
+      
+      .logo-shine {
+        position: absolute;
+        inset: 0;
+        border-radius: 36px;
+        background: linear-gradient(135deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.3) 50%, rgba(255,255,255,0) 100%);
+        animation: shine 3s ease-in-out infinite;
+      }
+      @keyframes shine { 0%, 100% { transform: translateX(-100%); } 50% { transform: translateX(100%); } }
+
+      .logo-ring {
+        position: absolute;
+        width: 220px;
+        height: 220px;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        animation: ringRotate 20s linear infinite;
+      }
+      @keyframes ringRotate { 100% { transform: translate(-50%, -50%) rotate(360deg); } }
+      
+      .ring-dot {
+        position: absolute;
+        width: 8px;
+        height: 8px;
+        background: #8b5cf6;
+        border-radius: 50%;
+        box-shadow: 0 0 15px #8b5cf6;
+      }
+      .ring-dot:nth-child(1) { top: 0; left: 50%; transform: translate(-50%, -50%); background: #8b5cf6; box-shadow: 0 0 15px #8b5cf6; }
+      .ring-dot:nth-child(2) { top: 50%; right: 0; transform: translate(50%, -50%); background: #3b82f6; box-shadow: 0 0 15px #3b82f6; }
+      .ring-dot:nth-child(3) { bottom: 0; left: 50%; transform: translate(-50%, 50%); background: #10b981; box-shadow: 0 0 15px #10b981; }
+      .ring-dot:nth-child(4) { top: 50%; left: 0; transform: translate(-50%, -50%); background: #ec4899; box-shadow: 0 0 15px #ec4899; }
+
+      .title {
+        display: inline-flex;
+        justify-content: center;
+        gap: 0.2em;
+        font-size: 64px;
+        font-weight: 900;
+        letter-spacing: 0;
+        color: white;
+        margin: 0 0 8px 0;
+        filter: drop-shadow(0 0 30px rgba(139, 92, 246, 0.5));
+        perspective: 400px;
+      }
+      
+      .title-char {
+        display: inline-block;
+        background: linear-gradient(135deg, #fff 0%, #8b5cf6 50%, #a78bfa 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        opacity: 0;
+        animation: textReveal 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+      }
+      .title-char:nth-child(1) { animation-delay: 0.1s; }
+      .title-char:nth-child(2) { animation-delay: 0.28s; }
+      .title-char:nth-child(3) { animation-delay: 0.46s; }
+      
+      .subtitle {
+        font-size: 14px;
+        font-weight: 500;
+        letter-spacing: 0.5em;
+        color: rgba(167, 139, 250, 0.8);
+        text-transform: uppercase;
+        margin-bottom: 48px;
+        opacity: 0;
+      }
+
+      .progress-section {
+        width: 400px;
+        opacity: 0;
+      }
+      
+      .progress-track {
+        height: 12px;
+        background: rgba(18, 18, 31, 0.8);
+        border-radius: 12px;
+        border: 1px solid rgba(139, 92, 246, 0.3);
+        overflow: hidden;
+        position: relative;
+      }
+      
+      .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #8b5cf6 0%, #a78bfa 25%, #3b82f6 55%, #06b6d4 80%, #8b5cf6 100%);
+        background-size: 220% 100%;
+        animation: progressFlow 3s linear infinite;
+        border-radius: 12px;
+        width: 0%;
+        box-shadow: 0 0 30px rgba(139, 92, 246, 0.6), 0 0 60px rgba(139, 92, 246, 0.3);
+        position: relative;
+        overflow: hidden;
+        transition: width 0.3s ease-out, box-shadow 0.3s ease-out;
+      }
+      @keyframes progressFlow { to { background-position: 220% 0; } }
+      /* Diagonal shimmer sweep across the fill */
+      .progress-fill::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.45) 50%, transparent 70%);
+        transform: translateX(-130%);
+        animation: progressShimmer 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      }
+      @keyframes progressShimmer { 0% { transform: translateX(-130%); } 60%, 100% { transform: translateX(130%); } }
+      
+      /* Liquid wave shimmer */
+      .progress-fill::before {
+        content: '';
+        position: absolute;
+        top: -3px;
+        left: -5%;
+        width: 110%;
+        height: 10px;
+        background: radial-gradient(ellipse at 50% 50%, rgba(255,255,255,0.25) 0%, transparent 70%);
+        border-radius: 50%;
+        animation: liquidWave 1.8s ease-in-out infinite;
+      }
+      
+      .progress-glow {
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        width: 60px;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4));
+        animation: glowMove 2s ease-in-out infinite;
+      }
+      @keyframes glowMove { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.8; } }
+      @keyframes liquidWave {
+        0% { transform: translateX(-5%) scaleY(0.4); }
+        50% { transform: translateX(5%) scaleY(1); }
+        100% { transform: translateX(-5%) scaleY(0.4); }
+      }
+      @keyframes pulseGlow {
+        0% { box-shadow: 0 0 30px rgba(139, 92, 246, 0.6), 0 0 60px rgba(139, 92, 246, 0.3); }
+        50% { box-shadow: 0 0 50px rgba(139, 92, 246, 0.9), 0 0 100px rgba(139, 92, 246, 0.6); }
+        100% { box-shadow: 0 0 30px rgba(139, 92, 246, 0.6), 0 0 60px rgba(139, 92, 246, 0.3); }
+      }
+
+      .status {
+        margin-top: 24px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 14px;
+        color: rgba(167, 139, 250, 0.7);
+      }
+      .status span {
+        display: inline-block;
+        transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+      }
+      
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        background: #8b5cf6;
+        border-radius: 50%;
+        box-shadow: 0 0 15px #8b5cf6;
+        animation: dotPulse 1.5s ease-in-out infinite;
+      }
+      @keyframes dotPulse { 0%, 100% { transform: scale(0.8); opacity: 0.5; } 50% { transform: scale(1.3); opacity: 1; } }
+
+      .fade-in-up {
+        opacity: 0;
+        animation: fadeInUp 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+      }
+      @keyframes fadeInUp {
+        0% { opacity: 0; transform: translateY(16px); }
+        100% { opacity: 1; transform: translateY(0); }
+      }
+
+      @keyframes textReveal {
+        0% { opacity: 0; transform: translateY(24px) rotateX(-30deg); filter: blur(8px) brightness(2); }
+        60% { opacity: 1; filter: blur(0) brightness(1.4); }
+        100% { opacity: 1; transform: translateY(0) rotateX(0); filter: blur(0) brightness(1); }
+      }
+
+      .stats-row {
+        display: flex;
+        gap: 24px;
+        margin-top: 36px;
+        opacity: 0;
+      }
+      
+      .stat-badge {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 20px;
+        background: rgba(18, 18, 31, 0.8);
+        border: 1px solid rgba(139, 92, 246, 0.3);
+        border-radius: 16px;
+      }
+      
+      .stat-badge svg { width: 18px; height: 18px; }
+      .stat-badge span { color: white; font-size: 14px; font-weight: 700; }
+
+      .version {
+        position: absolute;
+        bottom: 32px;
+        font-size: 12px;
+        color: rgba(167, 139, 250, 0.3);
+        font-weight: 500;
+      }
+
+      .boot-log {
+        margin-top: 16px;
+        height: 16px;
+        font-family: ui-monospace, 'JetBrains Mono', 'Cascadia Code', Menlo, monospace;
+        font-size: 11px;
+        letter-spacing: 0.02em;
+        color: #5f6b7e;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 360px;
+        text-align: center;
+        transition: opacity 0.25s ease;
+      }
+      .boot-log .lg-tag { color: #8b5cf6; font-weight: 700; }
+      .boot-log .lg-ok { color: #22c55e; font-weight: 700; }
+      .boot-tip {
+        margin-top: 18px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        justify-content: center;
+        font-size: 12.5px;
+        color: #94a3b8;
+        max-width: 400px;
+        min-height: 18px;
+      }
+      .boot-tip-icon { filter: drop-shadow(0 0 6px rgba(139, 92, 246, 0.55)); }
+      #bootTipText { transition: opacity 0.4s ease, transform 0.4s ease; }
+
+      #root {
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+    <script type="module" src="/src/main.tsx"></script>
+  </head>
+  <body>
+      <div id="loadingScreen">
+      <div class="bg-grid"></div>
+      <div class="bg-noise"></div>
+      
+      <div class="orb orb-1"></div>
+      <div class="orb orb-2"></div>
+      <div class="orb orb-3"></div>
+      <div class="orb orb-4"></div>
+      <div class="orb orb-5"></div>
+      
+      <div class="ring-glow"></div>
+      <div class="ring-glow"></div>
+      <div class="ring-glow"></div>
+      
+      <div class="loader-content">
+        <div class="logo-box">
+          <div class="ring-glow"></div>
+          <div class="logo-outer"></div>
+          <div class="logo-inner">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+            </svg>
+            <div class="logo-shine"></div>
+          </div>
+          <div class="logo-ring">
+            <div class="ring-dot"></div>
+            <div class="ring-dot"></div>
+            <div class="ring-dot"></div>
+            <div class="ring-dot"></div>
+          </div>
+        </div>
+        
+        <h1 class="title"><span class="title-char">A</span><span class="title-char">H</span><span class="title-char">G</span></h1>
+        <p class="subtitle fade-in-up" style="animation-delay:0.4s">Steam Unlocker</p>
+        
+        <div class="progress-section fade-in-up" style="animation-delay:0.8s">
+          <div class="progress-track">
+            <div class="progress-fill">
+              <div class="progress-glow"></div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="status">
+          <div class="status-dot"></div>
+          <span><span style="color:#8b5cf6">Loading</span> games database</span>
+        </div>
+        
+        <div class="stats-row fade-in-up" style="animation-delay:1.0s">
+          <div class="stat-badge">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#8b5cf6" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+            </svg>
+            <span id="percentText">0%</span>
+          </div>
+          <div class="stat-badge">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#3b82f6" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+            </svg>
+            <span>176K+</span>
+          </div>
+          <div class="stat-badge">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#10b981" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.75 3.75 0 00-2.455-2.456L14.25 6l1.036-.259a3.75 3.75 0 002.455-2.456L18 2.25l.259 1.035a3.75 3.75 0 002.456 2.456L21.75 6l-1.035.259a3.75 3.75 0 00-2.456 2.456z" />
+            </svg>
+            <span>Ready</span>
+          </div>
+        </div>
+
+        <!-- Live boot log stream -->
+        <div class="boot-log fade-in-up" style="animation-delay:1.15s" id="bootLog"></div>
+
+        <!-- Rotating tips -->
+        <div class="boot-tip fade-in-up" style="animation-delay:1.3s">
+          <span class="boot-tip-icon">💡</span>
+          <span id="bootTipText">Tip: Press Ctrl+K to search instantly</span>
+        </div>
+      </div>
+
+      <p class="version">v1.0 • Developed by sinfo</p>
+    </div>
+    
+    <script>
+      // Enable fullscreen support immediately
+      document.addEventListener('DOMContentLoaded', () => {
+        document.body.addEventListener('dblclick', () => {
+          if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen?.();
+          } else {
+            document.exitFullscreen?.();
+          }
+        });
+      });
+      
+      // Splash screen uses CSS width/height: 100vw/100vh — no JS resize needed
+
+      // Create enhanced particle system
+      const particleColors = ['#8b5cf6', '#3b82f6', '#10b981', '#ec4899', '#06b6d4', '#a78bfa', '#818cf8', '#22d3ee'];
+      for (let i = 0; i < 65; i++) {
+        const p = document.createElement('div');
+        p.className = 'particle';
+        const size = 2 + Math.floor(Math.random() * 5); // 2-6px
+        const isRound = Math.random() > 0.45;
+        const w = isRound ? size : Math.round(size * 1.6);
+        const h = size;
+        p.style.left = Math.random() * 100 + '%';
+        p.style.top = Math.random() * 100 + '%';
+        p.style.width = w + 'px';
+        p.style.height = h + 'px';
+        p.style.borderRadius = isRound ? '50%' : (size * 0.25) + 'px';
+        const color = particleColors[Math.floor(Math.random() * particleColors.length)];
+        p.style.background = color;
+        p.style.color = color;
+        p.style.opacity = 0.12 + Math.random() * 0.5;
+        p.style.boxShadow = `0 0 ${size * 2.5}px ${color}`;
+        const floatDur = (4 + Math.random() * 6);
+        // Particles MOVE (drift up/down) — no spin-in-place. The rectangular
+        // particles used to visibly rotate on themselves via particleSpin; that
+        // is removed so every particle simply travels and fades.
+        p.style.animation = `particleFloat ${floatDur}s ease-in-out infinite`;
+        p.style.animationDelay = Math.random() * 6 + 's';
+        document.getElementById('loadingScreen').appendChild(p);
+      }
+
+      // Smooth progress animation with expo easing
+      const progressFill = document.querySelector('.progress-fill');
+      const percentText = document.getElementById('percentText');
+      const loadingScreen = document.getElementById('loadingScreen');
+      const statusText = document.querySelector('.status span');
+      
+      function easeOutExpo(t) {
+        return t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
+      }
+      
+      // Initial ramp-up animation — brief flash while React mounts
+      function animateInitialProgress() {
+        const startTime = performance.now();
+        const duration = 600;
+        const targetPct = 15;
+        
+        function frame(now) {
+          const elapsed = now - startTime;
+          const t = Math.min(elapsed / duration, 1);
+          const eased = easeOutExpo(t);
+          const percent = Math.round(eased * targetPct);
+          
+          progressFill.style.width = percent + '%';
+          if (percentText) percentText.textContent = percent + '%';
+          
+          if (t < 1) {
+            requestAnimationFrame(frame);
+          } else {
+            // Signal React to start loading games — React sends real progress updates
+            if (statusText) statusText.innerHTML = '<span style="color:#8b5cf6">Loading</span> games database';
+            window.dispatchEvent(new CustomEvent('splash-complete'));
+            window.__splashCompleted = true;
+            // After initial animation, listen for real progress from React
+            window.addEventListener('progress-update', (e) => {
+              const pct = e.detail.percent;
+              progressFill.style.width = pct + '%';
+              if (percentText) percentText.textContent = pct + '%';
+              // Pulse the glow on progress jump
+              progressFill.style.animation = 'none';
+              void progressFill.offsetHeight; // force reflow
+              progressFill.style.animation = 'pulseGlow 0.35s ease-out';
+              // Update phase text with fade transition
+              if (statusText) {
+                let newHtml;
+                if (pct < 30) newHtml = '<span style="color:#8b5cf6">Loading</span> game database';
+                else if (pct < 55) newHtml = '<span style="color:#a78bfa">Parsing</span> game entries';
+                else if (pct < 70) newHtml = '<span style="color:#818cf8">Processing</span> genres & filters';
+                else if (pct < 90) newHtml = '<span style="color:#6366f1">Finalizing</span> game catalog';
+                else newHtml = '<span style="color:#22c55e">Starting</span> app...';
+                if (statusText.innerHTML !== newHtml) {
+                  statusText.style.opacity = '0';
+                  statusText.style.transform = 'translateY(4px)';
+                  setTimeout(() => {
+                    statusText.innerHTML = newHtml;
+                    statusText.style.opacity = '1';
+                    statusText.style.transform = 'translateY(0)';
+                  }, 150);
+                }
+              }
+            });
+          }
+        }
+        
+        requestAnimationFrame(frame);
+      }
+      
+      // React dispatches this event when games are loaded and the main app is ready
+      window.addEventListener('hide-splash', () => {
+        progressFill.style.width = '100%';
+        if (percentText) percentText.textContent = '100%';
+        if (statusText) statusText.innerHTML = '<span style="color:#22c55e">Ready</span>';
+        // Smooth fade-out with subtle scale — no white flash, no 3D (performance)
+        loadingScreen.style.transition = 'opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1), transform 0.35s cubic-bezier(0.4, 0, 0.2, 1)';
+        loadingScreen.style.transform = 'scale(1.04)';
+        loadingScreen.classList.add('hidden');
+      });
+      
+      // ── Rotating tips (keeps the wait interactive) ──
+      const BOOT_TIPS = [
+        'Press Ctrl+K to search 176,000+ games instantly',
+        'Right-click any game for quick actions',
+        'Hover a game card to reveal one-click install',
+        'Batch mode adds several games in one go',
+        'Favourite a game to pin it to your library',
+        'Installed games show an Update badge when a new version drops',
+        'AHG keeps your catalogue fresh automatically',
+        'Library, Recent and Favourites stay in sync',
+        'AHG handles the heavy lifting — you just hit Play',
+        '176,000+ games at your fingertips',
+      ];
+      const tipEl = document.getElementById('bootTipText');
+      let tipIdx = 0;
+      setInterval(() => {
+        if (!tipEl) return;
+        tipEl.style.opacity = '0';
+        tipEl.style.transform = 'translateY(5px)';
+        setTimeout(() => {
+          tipIdx = (tipIdx + 1) % BOOT_TIPS.length;
+          tipEl.textContent = 'Tip: ' + BOOT_TIPS[tipIdx];
+          tipEl.style.opacity = '1';
+          tipEl.style.transform = 'translateY(0)';
+        }, 400);
+      }, 3200);
+
+      // ── Live boot log stream ──
+      const BOOT_LOGS = [
+        ['boot', 'Initializing AHG engine'],
+        ['db', 'Opening games database (54 MB)'],
+        ['db', '176,930 games indexed'],
+        ['sync', 'Syncing the latest releases'],
+        ['fixes', 'Loading community fixes'],
+        ['img', 'Warming cover cache'],
+        ['lib', 'Detecting your library'],
+        ['ok', 'Catalogue ready'],
+      ];
+      const bootLogEl = document.getElementById('bootLog');
+      let logIdx = 0;
+      function pushBootLog() {
+        if (!bootLogEl || logIdx >= BOOT_LOGS.length) return;
+        const entry = BOOT_LOGS[logIdx++];
+        const cls = entry[0] === 'ok' ? 'lg-ok' : 'lg-tag';
+        bootLogEl.style.opacity = '0';
+        setTimeout(() => {
+          bootLogEl.innerHTML = '<span class="' + cls + '">[' + entry[0] + ']</span> ' + entry[1] + (entry[0] === 'ok' ? '' : '…');
+          bootLogEl.style.opacity = '1';
+        }, 180);
+      }
+      pushBootLog();
+      const bootLogTimer = setInterval(() => {
+        if (logIdx >= BOOT_LOGS.length) { clearInterval(bootLogTimer); return; }
+        pushBootLog();
+      }, 820);
+
+      // Start immediately
+      animateInitialProgress();
+    </script>
+    
+    <div id="root"></div>
+  </body>
+</html>

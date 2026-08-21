@@ -1,0 +1,36 @@
+# 🎮 AHG Unlocker Changelog
+## v0.6.1 → v0.8.0
+
+## ✨ New
+• **🎮 Page Panel** : Changed game detail to full page with back chevron button.
+• **🖼️ Screenshot Carousel** : Added Steam screenshots carousel below header.
+• **🎮 DLC Toggle** : Added toggle to fetch DLCs from 4 sources.
+• **🔍 Instant Search** : Changed to useDeferredValue; typing is instant.
+• **🔽 Live Suggestions** : Added dropdown with top 10 game covers.
+• **🎉 Game Added Modal** : Added modern modal with restart button.
+• **🔔 Toast Stacking** : Changed to support multiple toasts at once.
+• **🏆 XP & Leveling** : Added XP system to 30+ achievements.
+• **📦 DepotBox.org** : Added as new download source.
+• **🎾 DepotDownloader** : Added Steam CDN direct download.
+• **✨ Search Effects** : Added hover glow and scale animations.
+
+## 🐛 Fixed
+• **🔍 Search Crash** : Fixed crash for numeric appids.
+• **🖥️ Black Screen** : Fixed by including dist folder in build.
+• **🗑️ Duplicates** : Removed duplicate "About" sections.
+• **🔧 z-index** : Fixed search dropdown positioning.
+• **🔧 Screenshots** : Fixed broken carousel rendering.
+
+## ⚡ Improved
+• **⚡ Faster Search** : No more lag; background filtering.
+• **📥 Download Chain** : Changed to 5 sources with fallback.
+• **🔔 Notifications** : Enhanced with animations and auto-dismiss.
+• **🎨 UI Animations** : Added spring physics throughout.
+
+## 🔧 Technical
+• **🔧 Build Config** : Updated package.json with extraResources.
+• **💾 Backup** : Restored from 2026-05-03 backup.
+• **🔌 IPC** : Added handlers for ZIP install and DepotBox.
+
+## 🎉 Total
+15+ features, 5 fixes, 4 improvements

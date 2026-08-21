@@ -1,0 +1,110 @@
+{
+  "name": "ahg-unlocker",
+  "productName": "AHG Unlocker",
+  "version": "1.1.0",
+  "description": "AHG Steam Unlocker - Professional Game Manager",
+  "author": "AHG Team",
+  "private": true,
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "node scripts/check-css-layers.cjs && tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "smoke": "node scripts/smoke-packaged.cjs",
+    "lint": "eslint src/",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@tanstack/react-virtual": "^3.13.6",
+    "adm-zip": "^0.5.16",
+    "framer-motion": "^11.18.2",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "sharp": "^0.35.1",
+    "sql.js": "^1.14.1",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@tailwindcss/postcss": "^4.2.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "eslint": "^10.3.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "node-gyp": "^13.0.0",
+    "postcss": "^8.5.10",
+    "rollup-plugin-visualizer": "^7.0.1",
+    "tailwindcss": "^4.2.2",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.59.3",
+    "vite": "^7.0.0"
+  },
+  "build": {
+    "appId": "com.ahgteam.unlocker",
+    "productName": "AHG Unlocker",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "**/*",
+      "!_ARCHIVE/**",
+      "!backup-*/**",
+      "!screenshots/**",
+      "!docs/**",
+      "!deliberations/**",
+      "!audit-results/**",
+      "!instructions/**",
+      "!.claude/**",
+      "!.omo/**",
+      "!.opencode/**",
+      "!.sisyphus/**",
+      "!.suggestions/**",
+      "!.anchorsummary.md",
+      "!e2e/**",
+      "!tests/**",
+      "!*.md",
+      "!*.bat",
+      "!resources/app.asar",
+      "!resources/app.asar.unpacked/**",
+      "!resources/app-extracted/**",
+      "!AHG Unlocker.exe",
+      "!*.dll",
+      "!*.pak",
+      "!*.bin",
+      "!icudtl.dat",
+      "!vk_swiftshader_icd.json",
+      "!locales/**",
+      "!tmp/**",
+      "!config/opencode-cli.exe",
+      "!config/*.spec",
+      "!backups/**",
+      "!graphify-out/**",
+      "!test-results/**",
+      "!.playwright-mcp/**",
+      "!**/__tests__/**",
+      "!**/*.test.cjs",
+      "!**/*.map",
+      "!*.log"
+    ],
+    "asarUnpack": [
+      "dist/assets/**",
+      "electron/preload.cjs",
+      "node_modules/@img/sharp-win32-x64/**",
+      "node_modules/sql.js/dist/*.wasm"
+    ],
+    "extraResources": [
+      { "from": "games.db", "to": "games.db" },
+      { "from": "fixes.db", "to": "fixes.db" },
+      { "from": "resources/cover-seed", "to": "cover-seed" }
+    ],
+    "win": {
+      "target": ["dir"],
+      "icon": "AHG Unlocker Icon.ico"
+    }
+  }
+}

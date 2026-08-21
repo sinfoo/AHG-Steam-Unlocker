@@ -1,0 +1,45 @@
+# -*- mode: python ; coding: utf-8 -*-
+
+# Single EXE with all data embedded
+
+a = Analysis(
+    ['main_test2.py'],
+    pathex=[],
+    binaries=[],
+    datas=[
+        ('ahg reimagined logo.png', '.'),
+        ('games.json', '.'),
+        ('fixes.json', '.'),
+        ('AHG_logo.png', '.'),
+    ],
+    hiddenimports=[],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    noarchive=False,
+    optimize=0,
+)
+pyz = PYZ(a.pure)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.datas,
+    [],
+    name='AHG_Steam_Unlocker_TEST_2',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=False,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon=['ahg_icon.ico'],
+)

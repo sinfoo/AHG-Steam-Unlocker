@@ -1,0 +1,233 @@
+/* ================================================================
+   FIXES PAGE ANIMATIONS
+   Converted from framer-motion runtime animations to pure CSS
+   @keyframes + Tailwind transitions.
+   ================================================================ */
+
+:root { --fixes-hue: 260; }
+
+/* ─── 1. Hero inner entrance (fade + scale up) ─── */
+@keyframes fixes-hero-in {
+  0%   { opacity: 0; transform: translateY(24px) scale(0.97); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-fixes-hero-in {
+  animation: fixes-hero-in 0.6s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* ─── 2. Hero image slow zoom ─── */
+@keyframes fixes-zoom {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.08); }
+}
+.animate-fixes-zoom {
+  animation: fixes-zoom 14s ease-in-out infinite;
+}
+
+/* ─── 3. Ambient orbs rotation ─── */
+@keyframes fixes-orb-1 {
+  to { transform: rotate(360deg); }
+}
+@keyframes fixes-orb-2 {
+  to { transform: rotate(-360deg); }
+}
+@keyframes fixes-orb-3 {
+  to { transform: rotate(360deg); }
+}
+.animate-fixes-orb-1 { animation: fixes-orb-1 45s linear infinite; }
+.animate-fixes-orb-2 { animation: fixes-orb-2 55s linear infinite; }
+.animate-fixes-orb-3 { animation: fixes-orb-3 40s linear infinite; }
+
+/* ─── 4. Orbital particles (i=0,1,2) — orbit from center ─── */
+@keyframes fixes-particle-o-0 {
+  0%   { transform: translate(45px, 0px) scale(1); }
+  25%  { transform: translate(0px, 53px) scale(1.35); }
+  50%  { transform: translate(-41px, 0px) scale(0.8); }
+  75%  { transform: translate(0px, -51px) scale(1.25); }
+  100% { transform: translate(45px, 0px) scale(1); }
+}
+@keyframes fixes-particle-o-1 {
+  0%   { transform: translate(-27px, 46px) scale(1); }
+  25%  { transform: translate(-53px, -31px) scale(1.35); }
+  50%  { transform: translate(25px, -42px) scale(0.8); }
+  75%  { transform: translate(51px, 30px) scale(1.25); }
+  100% { transform: translate(-27px, 46px) scale(1); }
+}
+@keyframes fixes-particle-o-2 {
+  0%   { transform: translate(-31px, -53px) scale(1); }
+  25%  { transform: translate(60px, -35px) scale(1.35); }
+  50%  { transform: translate(29px, 49px) scale(0.8); }
+  75%  { transform: translate(-58px, 34px) scale(1.25); }
+  100% { transform: translate(-31px, -53px) scale(1); }
+}
+.animate-fixes-particle-o-0 { animation: fixes-particle-o-0 6s ease-in-out infinite; }
+.animate-fixes-particle-o-1 { animation: fixes-particle-o-1 8s ease-in-out 0.5s infinite; }
+.animate-fixes-particle-o-2 { animation: fixes-particle-o-2 10s ease-in-out 1s infinite; }
+
+/* ─── 5. Spiral particles (i=3,4,5) — outward scatter ─── */
+@keyframes fixes-particle-s-3 {
+  0%   { transform: translate(0px, 0px) scale(0.4); }
+  25%  { transform: translate(3px, 3px) scale(0.8); }
+  50%  { transform: translate(0px, 8px) scale(1.3); }
+  75%  { transform: translate(-2px, 2px) scale(0.6); }
+  100% { transform: translate(0px, 0px) scale(0.4); }
+}
+@keyframes fixes-particle-s-4 {
+  0%   { transform: translate(0px, 0px) scale(0.4); }
+  25%  { transform: translate(-7px, 2px) scale(0.8); }
+  50%  { transform: translate(-10px, -6px) scale(1.3); }
+  75%  { transform: translate(-1px, -5px) scale(0.6); }
+  100% { transform: translate(0px, 0px) scale(0.4); }
+}
+@keyframes fixes-particle-s-5 {
+  0%   { transform: translate(0px, 0px) scale(0.4); }
+  25%  { transform: translate(3px, -9px) scale(0.8); }
+  50%  { transform: translate(14px, -8px) scale(1.3); }
+  75%  { transform: translate(6px, 2px) scale(0.6); }
+  100% { transform: translate(0px, 0px) scale(0.4); }
+}
+.animate-fixes-particle-s-3 { animation: fixes-particle-s-3 7s ease-in-out 1.5s infinite; }
+.animate-fixes-particle-s-4 { animation: fixes-particle-s-4 9s ease-in-out 2s infinite; }
+.animate-fixes-particle-s-5 { animation: fixes-particle-s-5 11s ease-in-out 2.5s infinite; }
+
+/* ─── 6. Orbit ring rotation (centered) ─── */
+@keyframes fixes-orbit-ring {
+  0%   { transform: translate(-50%, -50%) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+.animate-fixes-orbit-ring {
+  animation: fixes-orbit-ring 30s linear infinite;
+}
+
+/* ─── 7. Orbit glow dots ─── */
+@keyframes fixes-glow-dot-1 {
+  0%, 100% { transform: translateX(-50%) scale(1); opacity: 0.3; }
+  50%      { transform: translateX(-50%) scale(1.8); opacity: 0.7; }
+}
+.animate-fixes-glow-dot-1 {
+  animation: fixes-glow-dot-1 2s ease-in-out infinite;
+}
+
+@keyframes fixes-glow-dot-2 {
+  0%, 100% { transform: translateX(-50%) scale(1); opacity: 0.2; }
+  50%      { transform: translateX(-50%) scale(1.5); opacity: 0.5; }
+}
+.animate-fixes-glow-dot-2 {
+  animation: fixes-glow-dot-2 3s ease-in-out 0.5s infinite;
+}
+
+/* ─── 8. Grid dot opacity pulse ─── */
+@keyframes fixes-grid-pulse {
+  0%, 100% { opacity: 0.1; }
+  50%      { opacity: 0.2; }
+}
+.animate-fixes-grid-pulse {
+  animation: fixes-grid-pulse 5s ease-in-out infinite;
+}
+
+/* ─── 9. Border glow (boxShadow pulse) ─── */
+@keyframes fixes-border-glow {
+  0%, 100% {
+    box-shadow:
+      inset 0 0 40px hsla(var(--fixes-hue), 60%, 50%, 0.03),
+      0 0 30px hsla(var(--fixes-hue), 50%, 50%, 0.05);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 60px hsla(var(--fixes-hue), 60%, 50%, 0.07),
+      0 0 50px hsla(var(--fixes-hue), 50%, 50%, 0.1);
+  }
+}
+.animate-fixes-border-glow {
+  animation: fixes-border-glow 4s ease-in-out infinite;
+}
+
+/* ─── 10. Light sweep (skewed x translation) ─── */
+@keyframes fixes-light-sweep {
+  0%   { transform: skewX(-20deg) translateX(-150%); }
+  100% { transform: skewX(-20deg) translateX(150%); }
+}
+.animate-fixes-light-sweep {
+  animation: fixes-light-sweep 8s ease-in-out 2s infinite;
+}
+
+/* ─── 11. Badge+count entrance ─── */
+@keyframes fixes-badge-in {
+  0%   { opacity: 0; transform: translateX(-16px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+.animate-fixes-badge-in {
+  animation: fixes-badge-in 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.12s both;
+}
+
+/* ─── 12. Live indicator dot pulse ─── */
+@keyframes fixes-live-dot {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 1; }
+}
+.animate-fixes-live-dot {
+  animation: fixes-live-dot 2s ease-in-out infinite;
+}
+
+/* ─── 13. View toggle entrance ─── */
+@keyframes fixes-toggle-in {
+  0%   { opacity: 0; transform: translateX(16px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+.animate-fixes-toggle-in {
+  animation: fixes-toggle-in 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.22s both;
+}
+
+/* ─── 14. Title entrance ─── */
+@keyframes fixes-title-in {
+  0%   { opacity: 0; transform: translateY(14px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.animate-fixes-title-in {
+  animation: fixes-title-in 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.32s both;
+}
+
+/* ─── 15. Subtitle entrance ─── */
+@keyframes fixes-subtitle-in {
+  0%   { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.animate-fixes-subtitle-in {
+  animation: fixes-subtitle-in 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.42s both;
+}
+
+/* ─── 16. Empty state entrance ─── */
+@keyframes fixes-empty-in {
+  0%   { opacity: 0; transform: translateY(20px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.animate-fixes-empty-in {
+  animation: fixes-empty-in 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* ─── 17. Empty state icon float (y bobbing) ─── */
+@keyframes fixes-empty-float {
+  0%, 100% { transform: translateY(-6px) scale(1); }
+  50%      { transform: translateY(6px) scale(1.02); }
+}
+.animate-fixes-empty-float {
+  animation: fixes-empty-float 3s ease-in-out infinite;
+}
+
+/* ─── 18. Empty state gradient rotation ─── */
+@keyframes fixes-empty-grad-rotate {
+  to { transform: rotate(360deg); }
+}
+.animate-fixes-empty-grad-rotate {
+  animation: fixes-empty-grad-rotate 8s linear infinite;
+}
+
+/* ─── 19. Empty state icon wobble ─── */
+@keyframes fixes-empty-wobble {
+  0%, 100% { transform: rotate(0deg); }
+  25%      { transform: rotate(10deg); }
+  75%      { transform: rotate(-10deg); }
+}
+.animate-fixes-empty-wobble {
+  animation: fixes-empty-wobble 4s ease-in-out infinite;
+}

@@ -1,0 +1,26 @@
+{
+  "skill_name": "suggest",
+  "evals": [
+    {
+      "id": 1,
+      "eval_name": "full-project-overview",
+      "prompt": "I just joined this project. Can you give me the full project overview? Tell me what AHG Unlocker is, the architecture, what state it's in, and what I should work on. I want the big picture.",
+      "expected_output": "A structured project overview covering identity, architecture layers, components, current state, TODOs, and initial recommendations.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "eval_name": "feature-suggestions",
+      "prompt": "Hey, I've been building this AHG Steam Unlocker for a while and I'm wondering what high-impact features I should tackle next. The app can already browse 176K games and do basic unlocking. What's the most impactful thing I could build that fits the app's purpose?",
+      "expected_output": "A prioritized list of 3-5 feature suggestions with rationale, impact assessment, effort estimate, and implementation approach for each.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "eval_name": "onboarding-with-focus",
+      "prompt": "/suggest performance\n\nI'm concerned about the app's performance. We have 176K games and the search needs to be under 100ms. Can you look at the architecture, identify bottlenecks, and suggest specific performance improvements?",
+      "expected_output": "A performance-focused analysis identifying bottlenecks and suggesting specific improvements, written to .suggestions/latest.md with performance focus.",
+      "files": []
+    }
+  ]
+}

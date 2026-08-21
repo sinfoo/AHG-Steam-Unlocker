@@ -1,0 +1,79 @@
+# 🚀 AHG STEAM UNLOCKER — CHANGELOG
+🔖 Version 1.0.0
+📅 2026-06-25
+🔁 What's new since v0.90
+════════════════════
+
+## 🎯 NEW FEATURES
+
+🔄 Auto-Syncing Catalogue
+■ New games appear automatically
+■ Previously missing titles now get cards
+■ "Update available" badges on your games
+
+🎮 Instant Library
+■ Full catalogue loads up front
+■ Ready to browse the moment you sign in
+
+🏆 Persistent Achievements
+■ Unlocks now save across restarts
+■ Full progress tracking
+
+🖼️ New App Icon
+■ Custom AHG icon in File Explorer & taskbar
+
+════════════════════
+
+## 🔐 ACTIVATION
+■ Reliable license checks
+■ Re-verified on every launch (per device)
+■ Loading screen now plays before sign-in
+■ Reimagined success screen
+
+════════════════════
+
+## 🎨 UI UPGRADES
+■ Reimagined animated loading screen
+■ New hero banners with crossfade
+■ Redesigned page headers (Library, Favourites, Recent, Fixes)
+■ Premium game cards with update badges
+■ Reworked sidebar hover & click effects
+■ Rebuilt "Purchase Complete" screen — now fits any window
+■ Progress bar for in-app tools
+■ Cleaner homepage buttons & filter chips
+■ Sharper search results
+
+════════════════════
+
+## ⚡ PERFORMANCE
+■ Near-instant startup splash
+■ No more startup hangs or freezes
+■ Faster, smoother loading
+■ Lighter, leaner install
+
+════════════════════
+
+## 🛠️ IMPROVEMENTS
+■ Added games show as "Installed" instantly
+■ Removing a game fully cleans up its files
+■ Genre & cover data preserved on updates
+■ "Fix Games" tool restored
+
+════════════════════
+
+## 🐛 FIXES
+■ Activation could be skipped — now enforced
+■ Cards reverting after adding a game
+■ Games missing from the catalogue
+■ Achievements resetting on restart
+■ Game removal leaving leftover files
+■ Stuck / blank loading screen
+■ Covers & artwork not displaying
+■ Unstyled homepage buttons
+■ Startup freezes
+
+════════════════════
+
+🎮 AHG Steam Unlocker
+💾 Built with ❤️ by the AHG Team
+#AHG #SteamUnlocker #v1_0_0 #Update #Changelog

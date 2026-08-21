@@ -1,0 +1,95 @@
+# 🎮 AHG Unlocker v0.70 Changelog
+## 📅 Released: May 2026
+## 🆚 Compared to v0.6.1
+
+# 🆕 NEW FEATURES
+
+### 📦 Download Progress Modal
+■ Real-time download progress bar with 0-100% display
+■ Three states: downloading, done, error with animations
+■ Shows file size, download speed, and downloaded amount vs total
+
+### 🎮 Games Catalogue Update
+■ Added 487 new games to the Steam catalogue
+■ Total catalogue: 176,752 games
+
+### 📁 Local ZIP Install Fallback
+■ Install games from local ZIP files containing manifests
+■ Extracts manifests to depotcache and lua to config/stplug-in
+■ Generates Lua stub if none found
+
+### 🔗 ryuu.lol Integration
+■ Automatic fallback after GitHub mirrors fail
+■ Fetches manifests and Lua scripts via generator.ryuu.lol API
+■ Browser-like headers to avoid blocking
+
+### 🎯 DLC System
+■ Add DLCs button in game detail panel
+■ Multi-source fetching: lovable.app, ryuu.lol, luatools, Steam API
+■ Automatic DLC installation via addToSteam
+
+### 🌐 DepotBox.org Integration
+■ Added as fallback download source after ryuu.lol
+■ Handles CAPTCHA detection
+■ Community-driven depot database
+
+### 📡 DepotDownloader.exe Integration
+✓ Direct Steam CDN download for hard-to-find games
+✓ Anonymous Steam login support
+✓ Downloads manifests directly from Valve's servers
+
+### 🏆 Enhanced Achievements System
+■ XP & leveling system (10-100 XP per achievement)
+■ 30+ achievements across multiple categories
+■ Level badge displayed on achievements button
+■ XP progress bar and categorized grouping
+
+### 🔔 Enhanced Notifications
+■ Multiple toast support (stack up to 4)
+■ Enhanced animations with spring physics
+■ Color-coded by type (success, error, info, favorites)
+■ Auto-dismiss after 4 seconds
+
+### 🔍 Enhanced Search Mechanism
+■ Live search suggestions dropdown with top 10 matches
+■ Game cover images in suggestions
+■ Favorites heart icon indicator
+■ Enhanced placeholder text
+
+# 🔧 IMPROVEMENTS & ENHANCEMENTS
+
+### 🎨 Sidebar Hover Effects
+■ Enhanced animations on AHG logo, nav buttons, quick tools
+■ Spring physics and glow effects
+■ Icon rotation and scale transformations
+
+### 📊 About Section Reorder
+■ Founder section now appears first
+■ Enhanced founder card with animated gradient border
+■ Social links with hover effects
+
+### ⚡ Search Performance
+■ Added useDeferredValue for instant typing response
+■ Heavy filtering runs in background without blocking UI
+
+### 💾 Version Updates
+■ All version references updated to v0.70
+■ Settings, footer, loading screen, and about section
+
+# 🐛 FIXES
+
+### 🎯 Game Added Modal Trigger
+■ Fixed modal not appearing after successful install
+■ Now shows with animated success icon and game details
+
+### 🛑 DNS Error Handling
+■ Graceful error messages when ryuu.lol is unreachable
+■ Clear "service down" messages instead of cryptic DNS errors
+■ Skips to next fallback source on DNS failure
+
+### 📱 ThankYouModal UI
+■ Fixed modal touching vertical edges
+■ Improved spacing and max-width constraints
+
+### 📦 Manifest Mirrors Section
+■ Hidden from Settings (code preserved, not deleted)

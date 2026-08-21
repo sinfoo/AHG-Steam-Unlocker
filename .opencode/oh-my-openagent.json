@@ -1,0 +1,80 @@
+{
+  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/oh-my-opencode.schema.json",
+  "agents": {
+    "hephaestus": {
+      "model": "opencode/big-pickle"
+    },
+    "oracle": {
+      "model": "opencode/big-pickle"
+    },
+    "librarian": {
+      "model": "opencode/big-pickle"
+    },
+    "explore": {
+      "model": "opencode/big-pickle"
+    },
+    "multimodal-looker": {
+      "model": "opencode/big-pickle"
+    },
+    "prometheus": {
+      "model": "opencode/big-pickle"
+    },
+    "metis": {
+      "model": "opencode/big-pickle"
+    },
+    "momus": {
+      "model": "opencode/big-pickle"
+    },
+    "atlas": {
+      "model": "opencode/big-pickle"
+    },
+    "sisyphus-junior": {
+      "model": "opencode/big-pickle"
+    },
+    "sisyphus": {
+      "model": "opencode/big-pickle",
+      "fallback_models": [
+        {
+          "model": "opencode/claude-opus-4-7",
+          "variant": "max"
+        },
+        {
+          "model": "opencode/gpt-5.5",
+          "variant": "medium"
+        }
+      ]
+    }
+  },
+  "categories": {
+    "visual-engineering": {
+      "model": "opencode/big-pickle"
+    },
+    "ultrabrain": {
+      "model": "opencode/big-pickle"
+    },
+    "deep": {
+      "model": "opencode/big-pickle"
+    },
+    "artistry": {
+      "model": "opencode/big-pickle"
+    },
+    "quick": {
+      "model": "opencode/big-pickle"
+    },
+    "unspecified-low": {
+      "model": "opencode/big-pickle"
+    },
+    "unspecified-high": {
+      "model": "opencode/big-pickle"
+    },
+    "writing": {
+      "model": "opencode/big-pickle"
+    }
+  },
+  "sisyphus_agent": {
+    "disabled": false,
+    "default_builder_enabled": false,
+    "planner_enabled": true,
+    "replace_plan": true
+  }
+}

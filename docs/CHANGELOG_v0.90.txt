@@ -1,0 +1,213 @@
+🚀 AHG STEAM UNLOCKER — CHANGELOG
+🔖 Version 0.90.0
+📅 Date: 2026-05-29
+════════════════════════════════════════════════════════════════════════════════
+
+🎯 NEW FEATURES
+════════════════════════════════════════════════════════════════════════════════
+
+📦 Download Progress Modal
+■ Real-time progress bar (0–100%) with 3 states (pending/downloading/done)
+■ Shows file size, download speed & downloaded/total for active downloads
+■ Cancel button for in-flight downloads
+
+🎮 Games Catalogue Update
+■ Games database expanded: 176,794 entries (+487 new games since v0.80)
+■ Catalogue covers 99%+ of Steam library
+
+📁 Local ZIP Install Fallback
+■ Install directly from local ZIP archives containing manifests
+■ Extracts to depotcache & config/stplug-in automatically
+
+🎯 DLC System
+■ "Add DLCs" button on install completion
+■ Auto-install with batch registration — register all DLCs in one go
+■ DLC registry for library filtering by DLC status
+■ DLC toggle switch in context menu
+
+🏆 Enhanced Achievements
+■ XP & leveling system (10–100 XP per achievement)
+■ 30+ achievements across 7 categories
+■ Level badge display with XP progress meter
+
+🔔 Enhanced Notifications
+■ Stack up to 4 toasts with smooth spring animations
+■ Color-coded by type (success/error/info/warning)
+■ Auto-dismiss after 4s with hover-to-pause
+
+🔍 Enhanced Search
+■ Live suggestions dropdown (top 10 matches) with game covers
+■ Favorites indicator in search results
+■ Instant typing response with no lag
+■ Search history remembered across sessions
+
+🖱️ Right-Click Context Menu
+■ Premium design with glass-gradient background
+■ Game header with cover thumbnail and name
+■ Direct Install from right-click
+■ DLC toggle switch with spring animation
+■ Staggered entrance animation with gradient separators
+
+📁 Collections System
+■ Create named groups with icon + color picker
+■ Full collections page with hero section
+■ Premium collection cards: cover preview strip, game count badge
+■ Edit/delete buttons that appear on hover
+
+📤 Export/Import System
+■ JSON backup: installed games, favorites, collections, stats
+■ Import restores everything to your user data
+
+🎨 HERO UPGRADES
+════════════════════════════════════════════════════════════════════════════════
+
+🏠 LibraryPage Hero
+■ Violet accent with animated gradient orbs
+■ Showcase card with installed game count
+
+❤️ FavouritesPage Hero
+■ Pink accent with same premium treatment
+■ Glassmorphism hero section with glow effects
+
+🕐 RecentPage Hero
+■ Amber accent hero section with hover glow effects
+
+🔧 IMPROVEMENTS
+════════════════════════════════════════════════════════════════════════════════
+
+🎨 Sidebar Hover Effects
+■ Smooth animations on logo, nav items, and quick tools
+■ Spring physics with violet glow on all nav elements
+■ Settings button gets icon rotation on hover with extra glow
+
+🎨 Library Card Hover
+■ Triple-layer violet glow shadow on hover
+■ Cover image zoom on hover (1.12–1.18x)
+■ Violet gradient sweep overlay on cover
+■ Heart/trash buttons always slightly visible
+
+🎨 GameCard Premium Redesign
+■ 3D perspective effect with shadows that follow your mouse
+■ Light sweep across card surface on hover
+■ Glass footer with game name and action buttons
+■ Better aspect ratio for grid fit
+
+🎨 Premium Collection Cards
+■ Cover preview strip with gradient fade
+■ Game count badge + first-3 names preview
+■ Hover gradient overlay with edit/delete buttons
+
+🎨 Portrait Buttons Premium Redesign
+■ Heart/trash buttons appear on hover with smooth animation
+■ Delete button glows red on hover
+■ Same treatment on all card types
+
+🎨 ThankYouModal Premium Redesign
+■ Animated floating particles and ring bursts
+■ Glowing checkmark with pulse effect
+■ Glass-morphism cards with hover lift
+■ Button shimmer animation
+
+🎨 Fullscreen Button Glow
+■ Glow shadow + scale effect on hover
+■ Works in both fullscreen and windowed mode
+
+⚡ ANIMATION IMPROVEMENTS
+════════════════════════════════════════════════════════════════════════════════
+
+🎬 Smoother Animations
+■ All interactive animations standardised to 80ms for consistent feel
+■ 44 animation timings fixed across the app
+■ Background effect rewritten for smoother motion and richer visuals
+■ Background now pauses on non-home/browse pages (performance)
+
+⬆️ LOADING SCREEN OVERHAUL
+════════════════════════════════════════════════════════════════════════════════
+
+🔄 Faster App Startup
+■ App loads instantly — content paints behind the splash screen
+■ No more blank gap or artificial delay between splash and app
+■ Smoother transition from splash to main interface
+
+⚡ PERFORMANCE IMPROVEMENTS
+════════════════════════════════════════════════════════════════════════════════
+
+📊 Smoother Scrolling
+■ Library, Favourites, and Recent pages now scroll at smooth 60fps even with 1000+ games
+■ Collections detail page also virtualised
+
+🧠 Faster Navigation
+■ Reduced app freezes when browsing large game lists
+■ Game lists process in smaller chunks so the UI stays responsive
+■ Build time improved significantly for faster updates
+
+🛠️ SIMPLIFIED GENRE SYSTEM
+════════════════════════════════════════════════════════════════════════════════
+
+🗑️ Genre Tags Streamlined
+■ Genre system simplified: no more automatic genre detection
+■ Game genres now come directly from each game's data (no guessing)
+■ Fixed "Elden Ring shows as Sports" — genre badges only appear when valid
+■ Faster app startup without genre processing overhead
+
+📱 KEYBOARD SHORTCUTS
+════════════════════════════════════════════════════════════════════════════════
+
+⌨️ New Shortcut: Command Palette
+■ Press Ctrl+P (Windows/Linux) or Cmd+K (Mac) to open quick search
+■ Same shortcut works everywhere in the app
+
+🛠️ SETTINGS & TOOLS
+════════════════════════════════════════════════════════════════════════════════
+
+⚙️ Settings Page Overhaul
+■ "Steam Control" tab renamed to "AHG Tools"
+■ Set custom Steam installation path
+■ Quick Tools grid with 8 tools in distinct colours
+■ Settings button gets icon rotation and glow on hover
+
+🐛 CRITICAL BUG FIXES
+════════════════════════════════════════════════════════════════════════════════
+
+🔧 DLC Registration Not Working
+🔧 Update Installation Infinite Loop & Missing File Error
+🔧 Free-to-Play Games Removed from Catalogue
+🔧 Games Can't Be Removed from Steam via App Library
+🔧 "License is being used" Visual Bug
+🔧 Installation Reporting Success with 0 Files Downloaded
+🔧 Empty Depots Causing 0-byte Install in Steam
+🔧 Timeouts Causing Silent Failures During Download
+
+🔧 Loading Freeze at Startup
+■ Fixed: app no longer freezes for 3 minutes processing game genres
+
+🔧 Library Shows "No Games" After Steam Update
+■ Fixed: app now recovers when Steam clears its temp folders
+
+🔧 Slow Game Adding
+■ Fixed: installing games no longer causes UI lag from constant re-rendering
+
+🔧 Game Count Wrong (55K instead of 176K)
+■ Fixed: game sync now correctly preserves all existing entries
+
+🐛 MINOR FIXES
+════════════════════════════════════════════════════════════════════════════════
+
+📱 Game Added Modal — Fixed trigger timing after successful install
+📱 ThankYouModal — Fixed edges touching screen edges
+📱 Collection creation — Fixed creating collections without errors
+📱 Collections page freeze — Fixed with dedicated detail page
+📱 Batch header blank — Added visible mode indicator during batch selection
+📱 Portrait hover colour — Improved colour fallback for games without genre
+📱 Heart/trash buttons — Always partially visible so users know they're there
+📱 Hero text clipping — Fixed long game titles overflowing hero section
+📱 Loading screen resize — No more black bars when resizing window during loading
+📱 Pagination — Footer page numbers now only show on Browse page
+📱 Search — No more duplicate results; fixed crash with number searches
+📱 Genre tags — Games no longer show wrong genre labels
+📱 Mouse cursor — Fixed snapping and distance issues with custom cursor
+📱 62+ TypeScript errors — All eliminated, app build is fully clean
+
+================================================================================
+🎮 AHG Steam Unlocker — Premium Steam Unlocking Solution
+💾 Built with ❤️ by the AHG Team

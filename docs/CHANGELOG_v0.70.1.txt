@@ -1,0 +1,82 @@
+🎮 ========================================
+  🚀 AHG Steam Unlocker - Changelog
+  🔖 Version 0.70.1 (Hotfix)
+  📅 Date: 2026-05-04
+  🎯 ========================================
+
+🔥 CRITICAL FIXES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔧 [FIXED] DLC Registration Not Working #dlc #fix #steamtools
+  ❌ ISSUE: DLC files were written to disk but SteamTools did not detect them
+  🔍 CAUSE: Incorrect Lua format using non-existent DlcOwnership() function
+  ✅ FIX: Changed to proper SteamTools addappid() format
+  📁 FILES: ui/electron/main.cjs (register-dlcs handler)
+  📋 DETAILS:
+    📦 Creates stplug-in/{appid}.lua with addappid() calls for main app + all DLCs
+    📦 Creates individual stplug-in/{dlcId}.lua for each DLC
+    📦 Creates depotcache/{appid}_appinfo.json with DLC list
+    📦 Creates depotcache/{dlcId}_appinfo.json for each DLC
+  💥 IMPACT: DLC registration now works immediately after installation
+
+🔧 [FIXED] Update Installation Infinite Loop & ENOENT Error #update #fix #electron
+  ❌ ISSUE: Updates entered infinite download loop and failed with ENOENT chmod error
+  🔍 CAUSE: Missing install-update IPC handler + improper archive extraction
+  ✅ FIX: Created new install-update IPC with manual file extraction
+  📁 FILES: ui/electron/main.cjs (install-update handler)
+  📋 DETAILS:
+    📦 Uses entry.getData() instead of entry.extract() for reliable extraction
+    📦 Writes files directly with fs.writeFileSync()
+    📦 Properly handles file permissions without chmod
+  💥 IMPACT: Updates now install cleanly without errors or loops
+
+🔧 [FIXED] Free-to-Play Games Removed from Catalogue #catalogue #filter #f2p
+  ❌ ISSUE: 12,000+ F2P appids cluttered the catalogue
+  ✅ FIX: Added filter in loadGames() and reloadGamesList()
+  📁 FILES: ui/src/App.tsx
+  📋 DETAILS:
+    🎮 Filters games with "free to play" in name
+    🎮 Filters games with "free-to-play" in name
+    🎮 Filters games with "demo" in name (partial match)
+  💥 IMPACT: Cleaner catalogue with only premium games
+
+⚡ ENHANCEMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📈 [IMPROVED] DLC Registration Performance #performance #optimization
+  ⚡ Batch registration for all DLCs in single IPC call
+  ⚡ Avoids 90-second timeout manifest downloads
+  ⚡ File write verification with fs.statSync()
+  ⚡ Detailed error reporting per DLC
+
+📈 [IMPROVED] Error Handling #errors #reliability
+  🛡️ Better error messages in register-dlcs
+  🛡️ Per-DLC error tracking
+  🛡️ File existence verification after writes
+
+🏗️ ARCHITECTURE CHANGES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  🔑 SteamTools Lua format: addappid(X) claims ownership (NOT DlcOwnership())
+  🔑 register-dlcs: Batch registration avoids manifest downloads
+  🔑 install-update: Manual extraction for reliable update installation
+
+📦 BUILD INFORMATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  🏷️ Version: 0.70.1
+  📆 Build Date: 2026-05-04
+  💻 Platform: Windows x64
+  ⚡ Electron: 33.4.11
+  ⚛️ React: 18.2.0
+
+💾 BACKUP LOCATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  📁 dist-electron/backups/full_backup_2026-05-04_15-30/
+  📄 Contains: main.cjs, preload.cjs, App.tsx, bridge.ts, package.json
+
+🎮 ========================================
+  🎉 End of Changelog - v0.70.1
+  🏷️ #v0701 #hotfix #ahg #steamunlocker
+  🎮 ========================================

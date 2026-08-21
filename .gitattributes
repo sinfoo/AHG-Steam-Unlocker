@@ -1,0 +1,8 @@
+# Windows batch/PowerShell scripts MUST keep CRLF endings.
+# cmd.exe parses .bat files by byte offset and mis-parses LF-only files —
+# it eats leading characters ('tle' for 'title', 'et' for 'set') and can
+# corrupt if/else blocks, but only once the byte layout crosses a threshold,
+# so the same file can work for months and then break after an unrelated edit.
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
