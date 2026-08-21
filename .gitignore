@@ -41,3 +41,7 @@ debug-*.png
 e2e-*.png
 *.backup_broken
 NUL
+config/opencode-cli.exe
+depotdownloader/DepotDownloader.exe
+games.db
+fixes.db
