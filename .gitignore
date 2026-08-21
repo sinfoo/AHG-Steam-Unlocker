@@ -45,3 +45,4 @@ config/opencode-cli.exe
 depotdownloader/DepotDownloader.exe
 games.db
 fixes.db
+config/discord-release.json
