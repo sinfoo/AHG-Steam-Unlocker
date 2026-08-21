@@ -2,10 +2,37 @@
 # Version: 1.0.0
 # Status: IDLE — no open tasks
 
-Session ID: ses_2026-06-25
-Build: PASS (tsc clean, vite build clean)
-Smoke: PASS (packaged-build runtime smoke test green)
-Open tasks: NONE — see TODO.md (all complete)
+Session ID: ses_2026-08-21
+Build: PASS (css guard + tsc clean + vite build clean)
+Open tasks: NONE
+
+## SESSION (2026-08-21) — search/filter overhaul + updater fix
+
+**Search & filtering (commit 5df6055):**
+- Root causes: prefix-only Trie (no substring, <3-char words unindexed), fuzzy fallback
+  REPLACING correct exact results with full-string Levenshtein junk, F2P substring patterns
+  nuking 109+ real games ('trial' → Trials of Mana), popularity sort burying exact matches,
+  stale-index race (worker indices mapped to newer games array), cache keyed on games.length,
+  dropdown (SQLite LIKE) disagreeing with browse (Trie).
+- Fix: searchWorker.ts rewritten — ranked tiers exact 100 > startsWith 90 > acronym 85
+  ("gta"→GTA) > word-exact 80 > word-prefix 75 > substring 65 > dev/pub 30; fuzzy is
+  AND-word-level (0.72), APPENDED only (cap 25), never replaces; popularity bonus ≤+10
+  reorders within tiers only.
+- useGameFilters.ts: fuzzy-replace removed; epoch guard drops stale worker responses; cache
+  keys use content fingerprint; F2P now word-boundary regexes (real demos/betas still out).
+- SearchBar.tsx: dropdown click now searches the clicked game's NAME (pins it top).
+- Verified vs real games.json: "strike"→CS2 #1, "gta"→GTA V #1, "trials of mana" exact,
+  "zelda"→1 fuzzy no flood.
+
+**Updater (commit 8f25fd6):**
+- v1.0.0→v1.1 failed: ENOENT chmod ahg-update-extractedesourcespp.asar — extracted layout
+  never validated. updates.cjs now: ZIP validated before staging; staged layout MUST contain
+  resourcespp.asar (descriptive error instead of half-install); asset picker prefers win
+  .zip; download streamed to disk (was 213MB buffer); robocopy bat logs to
+  ahg-update-apply.log, checks exit code ≥8, relaunches old build on failure.
+
+**Git:** baseline commit 95251ec (repo had zero commits); .gitignore += root secrets.json +
+NUL; junk NUL file deleted (was breaking git add).
 
 ---
 
