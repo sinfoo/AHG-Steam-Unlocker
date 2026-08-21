@@ -31,16 +31,6 @@ function stagingDir() {
   return path.join(app.getPath('temp'), 'ahg-update-staged');
 }
 
-function stageUpdate(zipPath) {
-  const zip = new AdmZip(zipPath);
-  const dir = stagingDir();
-  if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
-  fs.mkdirSync(dir, { recursive: true });
-  console.log('[MAIN] Extracting update ZIP to staging...');
-  zip.extractAllTo(dir, true);
-  return { filesCopied: countFiles(getStagedRoot() || dir) };
-}
-
 // Release zips may wrap everything in a single root folder — unwrap it.
 function getStagedRoot() {
   const dir = stagingDir();
@@ -53,19 +43,77 @@ function getStagedRoot() {
   return dir;
 }
 
+/**
+ * Validate that a staged update actually looks like an install root.
+ * The v1.0.0 updater crashed with ENOENT on resources\app.asar because nothing
+ * ever checked the extracted layout before trying to install it — now we fail
+ * early with a descriptive error instead of half-installing.
+ * @returns {{ ok: boolean, root: string|null, reason?: string }}
+ */
+function validateStagedLayout() {
+  const root = getStagedRoot();
+  if (!root) {
+    return { ok: false, root: null, reason: 'extracted package is empty' };
+  }
+  const asarPath = path.join(root, 'resources', 'app.asar');
+  if (!fs.existsSync(asarPath)) {
+    let found = 'nothing';
+    try { found = fs.readdirSync(root).slice(0, 10).join(', ') || 'nothing'; } catch {}
+    return {
+      ok: false,
+      root,
+      reason: `resources\\app.asar missing in the update package (found: ${found}). The release asset is probably not a full app package.`,
+    };
+  }
+  return { ok: true, root };
+}
+
+function stageUpdate(zipPath) {
+  // Validate the ZIP itself before touching the staging dir
+  let zip;
+  try {
+    zip = new AdmZip(zipPath);
+    const entries = zip.getEntries();
+    if (!entries || entries.length === 0) {
+      throw new Error('ZIP contains no entries');
+    }
+  } catch (e) {
+    throw new Error(`Downloaded file is not a valid update package: ${e.message}`);
+  }
+
+  const dir = stagingDir();
+  if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  console.log('[MAIN] Extracting update ZIP to staging...');
+  zip.extractAllTo(dir, true);
+
+  const layout = validateStagedLayout();
+  if (!layout.ok) {
+    // Clean up the bad staging so a later retry starts fresh
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+    throw new Error(`Update package layout invalid: ${layout.reason}`);
+  }
+  return { filesCopied: countFiles(layout.root) };
+}
+
 // Called by the restart-app handler. Spawns a hidden cmd script that waits for this
 // process to exit, robocopies the staged files onto the install dir (the release zip
 // root IS the install root: exe + resources\ — NOT resources\ as the old code
 // assumed), starts the new exe, and cleans up after itself.
 function applyStagedUpdateOnExit() {
-  const sourceRoot = getStagedRoot();
-  if (!sourceRoot) return false;
+  const layout = validateStagedLayout();
+  if (!layout.ok) {
+    console.error('[UPDATES] Refusing to apply staged update:', layout.reason);
+    return false;
+  }
   if (!app.isPackaged) {
     console.log('[UPDATES] Dev build — skipping staged update swap');
     return false;
   }
+  const sourceRoot = layout.root;
   const installDir = path.dirname(process.execPath);
   const exePath = process.execPath;
+  const logPath = path.join(app.getPath('temp'), 'ahg-update-apply.log');
   const batPath = path.join(app.getPath('temp'), 'ahg-apply-update.bat');
   const bat = [
     '@echo off',
@@ -79,9 +127,17 @@ function applyStagedUpdateOnExit() {
     '  goto wait',
     ')',
     ':copy',
-    `robocopy "${sourceRoot}" "${installDir}" /E /IS /IT /R:3 /W:1 >nul`,
+    `robocopy "${sourceRoot}" "${installDir}" /E /IS /IT /R:3 /W:1 /LOG:"${logPath}" /NFL /NDL /NP >nul`,
+    // Robocopy exit codes 0–7 are success (copied/purged/extras); 8+ is failure.
+    'if errorlevel 8 goto fail',
     `start "" "${exePath}"`,
     `rd /s /q "${stagingDir()}"`,
+    'del "%~f0"',
+    'exit',
+    ':fail',
+    `echo Robocopy failed with exit code %errorlevel% >> "${logPath}"`,
+    // Relaunch the OLD build so the user is not left with a dead shortcut
+    `start "" "${exePath}"`,
     'del "%~f0"',
   ].join('\r\n');
   fs.writeFileSync(batPath, bat);
@@ -91,29 +147,69 @@ function applyStagedUpdateOnExit() {
   return true;
 }
 
+/** Pick the best downloadable asset from a GitHub release (prefer .zip). */
+function pickReleaseAsset(assets) {
+  if (!Array.isArray(assets) || assets.length === 0) return null;
+  const zips = assets.filter(a => /\.zip$/i.test(a.name || ''));
+  const winZip = zips.find(a => /win|windows|portable|x64/i.test(a.name || ''));
+  return winZip || zips[0] || assets[0];
+}
+
+/** Stream an HTTPS response to disk with progress events. */
+function streamToFile(res, filePath, onProgress) {
+  return new Promise((resolve, reject) => {
+    const total = parseInt(res.headers['content-length'] || '0', 10);
+    let received = 0;
+    const out = fs.createWriteStream(filePath);
+    res.on('data', (chunk) => {
+      received += chunk.length;
+      if (total && onProgress) onProgress(received, total);
+    });
+    res.pipe(out);
+    out.on('finish', () => out.close(() => resolve({ received, total })));
+    out.on('error', reject);
+    res.on('error', reject);
+  });
+}
+
+function httpsGet(url, headers, redirectDepth = 0) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { headers }, (res) => {
+      if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
+        const location = res.headers.location;
+        res.resume();
+        if (!location || redirectDepth >= 5) {
+          reject(new Error(`Redirect loop or missing Location (HTTP ${res.statusCode})`));
+          return;
+        }
+        resolve(httpsGet(location, headers, redirectDepth + 1));
+        return;
+      }
+      if (res.statusCode !== 200) {
+        res.resume();
+        reject(new Error(`HTTP ${res.statusCode}`));
+        return;
+      }
+      resolve(res);
+    });
+    req.on('error', reject);
+    req.setTimeout(120000, () => { req.destroy(); reject(new Error('Timeout')); });
+  });
+}
+
 function registerUpdateHandlers() {
   // Check for new releases on GitHub
   ipcMain.handle('check-for-updates', async () => {
     console.log('[MAIN] Checking for updates from GitHub...');
     try {
       const url = `https://api.github.com/repos/${GITHUB_REPO}/releases`;
-      const data = await new Promise((resolve, reject) => {
-        const req = https.get(url, {
-          headers: {
-            'User-Agent': 'AHG-Steam-Unlocker',
-            'Accept': 'application/vnd.github.v3+json'
-          }
-        }, (res) => {
-          if (res.statusCode !== 200) { reject(new Error(`HTTP ${res.statusCode}`)); return; }
-          const chunks = [];
-          res.on('data', (chunk) => chunks.push(chunk));
-          res.on('end', () => resolve(Buffer.concat(chunks)));
-        });
-        req.on('error', reject);
-        req.setTimeout(30000, () => { req.destroy(); reject(new Error('Timeout')); });
+      const res = await httpsGet(url, {
+        'User-Agent': 'AHG-Steam-Unlocker',
+        'Accept': 'application/vnd.github.v3+json',
       });
-
-      const releases = JSON.parse(data.toString());
+      const chunks = [];
+      for await (const chunk of res) chunks.push(chunk);
+      const releases = JSON.parse(Buffer.concat(chunks).toString());
       if (!releases || releases.length === 0) {
         return { success: false, message: 'No releases found' };
       }
@@ -134,6 +230,7 @@ function registerUpdateHandlers() {
         if (l < c) { hasUpdate = false; break; }
       }
 
+      const asset = pickReleaseAsset(latest.assets);
       return {
         success: true,
         latestTag,
@@ -143,8 +240,9 @@ function registerUpdateHandlers() {
         releaseNotes: latest.body || '',
         releaseUrl: latest.html_url,
         publishedAt: latest.published_at,
-        downloadUrl: latest.assets?.[0]?.browser_download_url || null,
-        downloadSize: latest.assets?.[0]?.size || 0,
+        downloadUrl: asset?.browser_download_url || null,
+        downloadSize: asset?.size || 0,
+        assetName: asset?.name || null,
       };
     } catch (error) {
       console.error('[MAIN] Error checking updates:', error);
@@ -152,87 +250,41 @@ function registerUpdateHandlers() {
     }
   });
 
-  // Download update ZIP from GitHub
+  // Download update ZIP from GitHub (streamed to disk — no 200+MB memory buffer)
   ipcMain.handle('download-update', async (event, downloadUrl, savePath) => {
     console.log('[MAIN] Downloading update from:', downloadUrl);
     try {
+      if (!downloadUrl || !/^https:\/\//.test(downloadUrl)) {
+        return { success: false, message: 'Invalid download URL' };
+      }
       const tempDir = app.getPath('temp');
       const zipFileName = 'ahg-update.zip';
       const finalSavePath = savePath || path.join(tempDir, zipFileName);
 
-      const data = await new Promise((resolve, reject) => {
-        const req = https.get(downloadUrl, {
-          headers: {
-            'User-Agent': 'AHG-Steam-Unlocker',
-            'Accept': 'application/octet-stream'
-          }
-        }, (res) => {
-          if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 303 || res.statusCode === 307 || res.statusCode === 308) {
-            const redirectUrl = res.headers.location;
-            if (redirectUrl) {
-              console.log('[MAIN] Following redirect to:', redirectUrl);
-              const redirectReq = https.get(redirectUrl, {
-                headers: {
-                  'User-Agent': 'AHG-Steam-Unlocker',
-                  'Accept': 'application/octet-stream'
-                }
-              }, (redirectRes) => {
-                if (redirectRes.statusCode !== 200) { reject(new Error(`HTTP ${redirectRes.statusCode}`)); return; }
-                const chunks = [];
-                const contentLength = parseInt(redirectRes.headers['content-length'] || 0);
-                let received = 0;
-
-                redirectRes.on('data', (chunk) => {
-                  chunks.push(chunk);
-                  received += chunk.length;
-                  if (contentLength && state.mainWindow) {
-                    state.mainWindow.webContents.send('download-progress', {
-                      received,
-                      total: contentLength,
-                      percent: Math.round(received * 100 / contentLength)
-                    });
-                  }
-                });
-                redirectRes.on('end', () => resolve(Buffer.concat(chunks)));
-              });
-              redirectReq.on('error', reject);
-              redirectReq.setTimeout(120000, () => { redirectReq.destroy(); reject(new Error('Timeout')); });
-              return;
-            }
-          }
-          if (res.statusCode !== 200) { reject(new Error(`HTTP ${res.statusCode}`)); return; }
-          const chunks = [];
-          const contentLength = parseInt(res.headers['content-length'] || 0);
-          let received = 0;
-
-          res.on('data', (chunk) => {
-            chunks.push(chunk);
-            received += chunk.length;
-            if (contentLength && state.mainWindow) {
-              state.mainWindow.webContents.send('download-progress', {
-                received,
-                total: contentLength,
-                percent: Math.round(received * 100 / contentLength)
-              });
-            }
-          });
-          res.on('end', () => resolve(Buffer.concat(chunks)));
-        });
-        req.on('error', reject);
-        req.setTimeout(120000, () => { req.destroy(); reject(new Error('Timeout')); });
+      const res = await httpsGet(downloadUrl, {
+        'User-Agent': 'AHG-Steam-Unlocker',
+        'Accept': 'application/octet-stream',
       });
-
-      fs.writeFileSync(finalSavePath, data);
+      await streamToFile(res, finalSavePath, (received, total) => {
+        if (state.mainWindow) {
+          state.mainWindow.webContents.send('download-progress', {
+            received,
+            total,
+            percent: Math.round(received * 100 / total),
+          });
+        }
+      });
       console.log('[MAIN] Update ZIP saved to:', finalSavePath);
 
       // Stage the update — actual file replacement happens on restart, when the
-      // exe/asar are no longer locked.
+      // exe/asar are no longer locked. Layout is validated here so a bad package
+      // fails NOW (with a clear message) instead of at install time.
       try {
         const { filesCopied } = stageUpdate(finalSavePath);
         return { success: true, message: 'Update staged — restart the app to apply it', path: finalSavePath, filesCopied, staged: true };
       } catch (extractErr) {
         console.error('[MAIN] Extraction error:', extractErr);
-        return { success: false, message: 'Downloaded but could not extract: ' + extractErr.message, path: finalSavePath, extracted: false };
+        return { success: false, message: 'Downloaded but could not install: ' + extractErr.message, path: finalSavePath, extracted: false };
       }
     } catch (error) {
       console.error('[MAIN] Download error:', error);
