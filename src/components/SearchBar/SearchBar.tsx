@@ -155,12 +155,17 @@ export default function SearchBar({ onSearch, accentColor, colors }: SearchBarPr
     inputRef.current?.focus()
   }, [])
 
-  const handleResultClick = useCallback((_game: SearchResult) => {
+  const handleResultClick = useCallback((game: SearchResult) => {
     setShowDropdown(false)
-    // Select the game and navigate to browse
-    // We set search query in gameStore so browse shows filtered results
-    onSearch(query)
-  }, [onSearch, query])
+    // Navigate to browse with the CLICKED GAME's name — not the raw typed query.
+    // The dropdown (SQLite substring) and browse (worker search) rank differently,
+    // so re-submitting the raw query could lose the very game the user picked.
+    // An exact-name query scores 100 and pins the game to the top.
+    const target = (game.name || query).trim()
+    setQuery(target)
+    saveToHistory(target)
+    onSearch(target)
+  }, [onSearch, query, saveToHistory])
 
   const showHistory = !query.trim() && searchHistory.length > 0
   const showResults = query.trim().length > 0

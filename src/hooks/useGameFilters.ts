@@ -3,7 +3,6 @@ import { useShallow } from 'zustand/react/shallow'
 import { useGameStore, useUserStore, useUIStore } from '../store'
 import type { Game, Fix } from '../types'
 import { COLORS } from '../constants/colors'
-import { fuzzySearch } from './useFuzzySearch'
 
 // ── Lucide icons for nav items ──
 import {
@@ -53,7 +52,20 @@ const VERY_POPULAR_IDS: string[] = veryPopularIdsData
 
 const FREE_TO_PLAY_IDS: Set<string> = new Set(freeToPlayIdsData)
 
-const F2P_NAME_PATTERNS = ['free to play', 'free-to-play', 'f2p', 'demo', 'trial', 'play free', 'free game', 'open beta', 'free access']
+// F2P detection by name — WORD-BOUNDARY matches only. Substring matching used
+// to nuke real paid games ("Trials of Mana" contained 'trial', "Demonologist"
+// contained 'demo'). Word boundaries keep genuine demos/trials out while
+// leaving legitimate titles searchable.
+const F2P_NAME_PATTERNS: RegExp[] = [
+  /\bfree[ -]to[ -]play\b/i,
+  /\bf2p\b/i,
+  /\bdemo\b/i,
+  /\btrial\b/i,
+  /\bplay free\b/i,
+  /\bfree game\b/i,
+  /\bopen beta\b/i,
+  /\bfree access\b/i,
+]
 
 // Home-section category Sets — lifted to module level so they're created once, not on every homeSections recomputation
 const HOME_SECTION_SETS = {
@@ -69,8 +81,8 @@ const HOME_SECTION_SETS = {
 
 export function isF2PGame(g: any, dynamicFreeIds: Set<string>): boolean {
   if (FREE_TO_PLAY_IDS.has(g.appid) || dynamicFreeIds.has(g.appid)) return true
-  const name = (g.name || '').toLowerCase()
-  return F2P_NAME_PATTERNS.some(p => name.includes(p))
+  const name = g.name || ''
+  return F2P_NAME_PATTERNS.some(p => p.test(name))
 }
 
 const FIXES_PER_PAGE = 50
@@ -107,12 +119,10 @@ export function useGameFilters() {
   const gamesRef = useRef<Game[]>([])
   gamesRef.current = games
 
-  // Refs for fuzzy fallback in worker response handler
-  const currentPageRef = useRef(currentPage)
-  currentPageRef.current = currentPage
-  const deferredSearchQueryRef = useRef(deferredSearchQuery)
-  deferredSearchQueryRef.current = deferredSearchQuery
-  const f2pFilteredGamesRef = useRef<Game[]>([])
+  // Monotonic version of the games array — echoed by the worker in every result
+  // so stale responses (computed against an older array) can be dropped instead
+  // of mapping wrong indices to wrong games.
+  const gamesEpochRef = useRef(0)
 
   // Cache for per-page filteredGames results — prevents redundant re-filtering when inputs
   // haven't meaningfully changed (e.g., games array reference changed via store update,
@@ -137,27 +147,17 @@ export function useGameFilters() {
     worker.onmessage = (e: MessageEvent) => {
       const data = e.data
       if (data.type === 'result' && data.queryId === requestIdRef.current) {
+        // Stale-index guard: the worker computed indices against the games array
+        // it was initialised with. If the main thread's games changed since
+        // (content sync, cover backfill), those indices point at the WRONG
+        // games — drop the response and let the next effect run re-dispatch.
+        if (typeof data.epoch === 'number' && data.epoch !== gamesEpochRef.current) {
+          return
+        }
         // Worker returns indices into the original games array (sent via INIT).
         // Map them back to full Game objects from the main-thread copy.
         const indices = data.indices as number[]
         const result = indices.map(idx => gamesRef.current[idx]!).filter(Boolean)
-        // Fuzzy fallback: on the browse page, if exact Trie search yields < 3
-        // results and the query is long enough, fall back to Levenshtein fuzzy
-        // search over the pre-filtered (non-F2P, has cover) game list.
-        if (currentPageRef.current === 'browse' && result.length < 3) {
-          const query = deferredSearchQueryRef.current.trim()
-          if (query.length > 2) {
-            const fuzzyResults = fuzzySearch(f2pFilteredGamesRef.current, query.toLowerCase(), 0.35)
-            if (fuzzyResults.length > 0) {
-              if (pendingCacheKeyRef.current) {
-                prevFilterResultRef.current = { key: pendingCacheKeyRef.current, result: fuzzyResults }
-                pendingCacheKeyRef.current = null
-              }
-              setFilteredGames(fuzzyResults)
-              return
-            }
-          }
-        }
         // Populate cache so a subsequent identical filter resolves immediately
         if (pendingCacheKeyRef.current) {
           prevFilterResultRef.current = { key: pendingCacheKeyRef.current, result }
@@ -173,11 +173,14 @@ export function useGameFilters() {
     }
   }, [])
 
-  // ── INIT: send slimmed-down game data once for Trie building ──
-  // Re-sent whenever the games array reference changes so the worker's Trie
-  // stays in sync with the main thread's game data.
+  // ── INIT: send slimmed-down game data once for index building ──
+  // Re-sent whenever the games array reference changes so the worker's index
+  // stays in sync with the main thread's game data. Each send bumps the epoch;
+  // search results echo it back and stale ones are discarded.
   useEffect(() => {
     if (games.length === 0 || !workerRef.current) return
+
+    const epoch = ++gamesEpochRef.current
 
     // Strip to only the fields needed for search indexing + sorting
     const slimGames = games.map(g => {
@@ -195,7 +198,7 @@ export function useGameFilters() {
     workerRef.current.postMessage({
       type: 'init',
       queryId: -1, // distinct from any search queryId so the handler ignores this response
-      payload: { games: slimGames },
+      payload: { games: slimGames, epoch },
     })
   }, [games])
 
@@ -219,7 +222,6 @@ export function useGameFilters() {
     () => gamesWithCover.filter(g => !isF2PGame(g, dynamicFreeIds)),
     [gamesWithCover, dynamicFreeIds]
   )
-  f2pFilteredGamesRef.current = f2pFilteredGames
 
   // Stable empty state for non-home pages — prevents re-render cascades when currentPage changes.
   // MUST be declared BEFORE popularGamesWithCover useMemo to avoid TDZ on navigation.
@@ -432,6 +434,19 @@ export function useGameFilters() {
     return order
   }, [])
 
+  // Content fingerprint for the games array — length + sampled appids. Cache
+  // keys built from this stay correct when games are updated in place at the
+  // same length (content sync, cover backfill), which a bare games.length key
+  // would silently serve stale results for.
+  const gamesFingerprint = useMemo(() => {
+    const len = games.length
+    if (len === 0) return '0'
+    const q1 = games[Math.floor(len * 0.25)]?.appid ?? ''
+    const mid = games[Math.floor(len * 0.5)]?.appid ?? ''
+    const q3 = games[Math.floor(len * 0.75)]?.appid ?? ''
+    return `${len}|${games[0]?.appid}|${q1}|${mid}|${q3}|${games[len - 1]?.appid}`
+  }, [games])
+
   // ── Worker-based search+sort dispatch (debounced, deduped) ──
   // Pre-filtered games are sent to the Web Worker, keeping the main thread
   // free for rendering. Rapid keystrokes are collapsed to max 1 msg / 33ms.
@@ -475,7 +490,7 @@ export function useGameFilters() {
   // Browse filter — pre-filter on main thread, send search+sort to worker
   useEffect(() => {
     if (currentPage !== 'browse') return
-    const cacheKey = `browse|${games.length}|${deferredSearchQuery}|${sortBy}`
+    const cacheKey = `browse|${gamesFingerprint}|${deferredSearchQuery}|${sortBy}`
     if (prevFilterResultRef.current?.key === cacheKey) {
       setFilteredGames(prevFilterResultRef.current.result)
       return
@@ -488,11 +503,11 @@ export function useGameFilters() {
       return acc
     }, [] as number[])
     sendToWorkerDebounced(preFilteredIndices, deferredSearchQuery, sortBy, cacheKey)
-  }, [games, currentPage, deferredSearchQuery, sortBy, sendToWorkerDebounced, dynamicFreeIds])
+  }, [games, gamesFingerprint, currentPage, deferredSearchQuery, sortBy, sendToWorkerDebounced, dynamicFreeIds])
   // Favourites filter — pre-filter on main thread, send search+sort to worker
   useEffect(() => {
     if (currentPage !== 'favourites') return
-    const cacheKey = `favourites|${games.length}|${favorites.size}|${deferredSearchQuery}|${sortBy}`
+    const cacheKey = `favourites|${gamesFingerprint}|${favorites.size}|${deferredSearchQuery}|${sortBy}`
     if (prevFilterResultRef.current?.key === cacheKey) {
       setFilteredGames(prevFilterResultRef.current.result)
       return
@@ -504,11 +519,11 @@ export function useGameFilters() {
       return acc
     }, [] as number[])
     sendToWorkerDebounced(preFilteredIndices, deferredSearchQuery, sortBy, cacheKey)
-  }, [games, currentPage, favorites, deferredSearchQuery, sortBy, sendToWorkerDebounced, dynamicFreeIds])
+  }, [games, gamesFingerprint, currentPage, favorites, deferredSearchQuery, sortBy, sendToWorkerDebounced, dynamicFreeIds])
   // Recent filter — pre-filter on main thread, send search+sort to worker
   useEffect(() => {
     if (currentPage !== 'recent') return
-    const cacheKey = `recent|${games.length}|${recentGames.length}|${deferredSearchQuery}|${sortBy}`
+    const cacheKey = `recent|${gamesFingerprint}|${recentGames.length}|${deferredSearchQuery}|${sortBy}`
     if (prevFilterResultRef.current?.key === cacheKey) {
       setFilteredGames(prevFilterResultRef.current.result)
       return
@@ -520,7 +535,7 @@ export function useGameFilters() {
       return acc
     }, [] as number[])
     sendToWorkerDebounced(preFilteredIndices, deferredSearchQuery, sortBy, cacheKey)
-  }, [games, currentPage, recentGames, deferredSearchQuery, sortBy, sendToWorkerDebounced, dynamicFreeIds])
+  }, [games, gamesFingerprint, currentPage, recentGames, deferredSearchQuery, sortBy, sendToWorkerDebounced, dynamicFreeIds])
 
   // Lines 1359-1362
   const realInstalledGamesCount = useMemo(

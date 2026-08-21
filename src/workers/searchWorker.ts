@@ -1,29 +1,26 @@
 /// <reference lib="webworker" />
 
 // ══════════════════════════════════════════════════════════════
-// Trie-based prefix search worker for AHG Unlocker
+// Ranked hybrid search worker for AHG Unlocker
 //
 // Protocol:
-//   Main → Worker:  { type: 'init',  queryId, payload: { games: IndexedGame[] } }
+//   Main → Worker:  { type: 'init',  queryId, payload: { games: IndexedGame[], epoch: number } }
 //   Main → Worker:  { type: 'search', queryId, payload: SearchPayload }
-//   Worker → Main:  { type: 'result', queryId, indices: number[] }
+//   Worker → Main:  { type: 'result', queryId, epoch, indices: number[] }
 //
-// The Trie is built once on the 'init' message. All subsequent
-// 'search' messages use O(k + m) prefix lookup instead of O(n) scan.
-// Results are returned as indices into the original games array.
+// Matching tiers (highest score wins):
+//   100  exact normalized name match
+//    90  name starts with query
+//    75  every query word is a prefix of a name word
+//    65  full query is a substring of the name
+//    55  every query word appears as a substring of the name
+//    30  developer / publisher match
+//   ≤25  fuzzy (word-level Levenshtein) — only when few exact results,
+//        APPENDED after real matches, never replacing them
+//
+// Sorting: score desc → popularity order → name asc.
+// Explicit name_asc / name_desc sorts are honored after filtering.
 // ══════════════════════════════════════════════════════════════
-
-// ── Trie Node ──
-
-interface TrieNode {
-  children: Map<string, TrieNode>
-  /** Game indices that have this exact prefix */
-  results: number[]
-}
-
-function createTrieNode(): TrieNode {
-  return { children: new Map(), results: [] }
-}
 
 // ── Indexed Game Data (fields needed for search + sort) ──
 
@@ -35,10 +32,23 @@ interface IndexedGame {
   storeId?: string
 }
 
+/** Precomputed per-game search haystack, built once on init. */
+interface SearchEntry {
+  /** Normalized name (lowercase, no diacritics, punctuation → space) */
+  norm: string
+  /** Normalized name with spaces removed — catches "counterstrike" style queries */
+  squashed: string
+  /** Normalized word tokens of the name */
+  words: string[]
+  /** Normalized developer + publisher */
+  devPub: string
+}
+
 // ── Message Types ──
 
 interface InitPayload {
   games: IndexedGame[]
+  epoch?: number
 }
 
 interface InitMessage {
@@ -66,169 +76,252 @@ type WorkerInMessage = InitMessage | SearchMessage
 interface ResultMessage {
   type: 'result'
   queryId: number
+  epoch: number
   indices: number[]
 }
 
 // ── Module-level state ──
-// Holds the game data that the Trie indices reference.
-// Rebuilt entirely on every 'init' message.
+
 let games: IndexedGame[] = []
-let trie: TrieNode | null = null
+let entries: SearchEntry[] = []
+let epoch = 0
 
-// ── Trie helpers ──
+// ── Normalization ──
 
-/** Insert every prefix of `word` and associate it with `gameIndex`. */
-function insert(word: string, gameIndex: number): void {
-  let node = trie!
-  for (let i = 0; i < word.length; i++) {
-    const char = word[i]!
-    let child = node.children.get(char)
-    if (!child) {
-      child = createTrieNode()
-      node.children.set(char, child)
-    }
-    node = child
-    node.results.push(gameIndex)
+/** Lowercase, strip diacritics, turn punctuation/symbols into spaces, collapse. */
+function normalize(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ')
+}
+
+function buildEntry(g: IndexedGame): SearchEntry {
+  const norm = normalize(g.name || '')
+  return {
+    norm,
+    squashed: norm.replace(/\s+/g, ''),
+    words: norm.split(' ').filter(Boolean),
+    devPub: normalize(`${g.developer || ''} ${g.publisher || ''}`),
   }
 }
 
-/** Return all game indices whose stored text has a word starting with `prefix`. */
-function searchPrefix(prefix: string): number[] {
-  if (!trie) return []
-  let node = trie
-  for (let i = 0; i < prefix.length; i++) {
-    const char = prefix[i]!
-    const child = node.children.get(char)
-    if (!child) return []
-    node = child
+// ── Fuzzy (word-level Levenshtein) ──
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length
+  const n = b.length
+  if (m < n) return levenshtein(b, a)
+  const dp = new Uint32Array(n + 1)
+  for (let j = 0; j <= n; j++) dp[j] = j
+  for (let i = 1; i <= m; i++) {
+    let prev = dp[0]!
+    dp[0] = i
+    for (let j = 1; j <= n; j++) {
+      const temp = dp[j]!
+      dp[j] = a[i - 1] === b[j - 1]
+        ? prev
+        : 1 + Math.min(dp[j]!, dp[j - 1]!, prev)
+      prev = temp
+    }
   }
-  return node.results
+  return dp[n]!
 }
 
 /**
- * Lowercase `text`, split into words, and insert every prefix of each word
- * into the Trie, associated with `gameIndex`.
+ * Word-level fuzzy score 0–1 with AND semantics: EVERY query word must have a
+ * close name-word match; the score is the WORST per-word best match. A single
+ * lucky word pair ("elden"~"elder") can no longer drag in unrelated games.
  */
-function indexText(text: string, gameIndex: number): void {
-  const words = text.toLowerCase().split(/\s+/).filter(Boolean)
-  for (const word of words) {
-    for (let i = 3; i <= word.length; i++) {
-      insert(word.substring(0, i), gameIndex)
+function wordSimilarity(queryWords: string[], nameWords: string[]): number {
+  let worst = 1
+  for (const qw of queryWords) {
+    if (qw.length < 3) continue
+    let best = 0
+    for (const nw of nameWords) {
+      if (nw.length < 3) continue
+      // Skip pairs whose length difference alone dooms the score
+      const maxLen = Math.max(qw.length, nw.length)
+      if (Math.abs(qw.length - nw.length) / maxLen > 0.34) continue
+      const sim = 1 - levenshtein(qw, nw) / maxLen
+      if (sim > best) best = sim
     }
+    if (best < worst) worst = best
   }
+  return worst
 }
 
-/** Build the Trie from the full game list. */
-function buildIndex(gameList: IndexedGame[]): void {
-  trie = createTrieNode()
-  games = gameList
+// ── Scoring ──
 
-  for (let i = 0; i < games.length; i++) {
-    const g = games[i]!
-    indexText(g.name, i)
-    if (g.developer) indexText(g.developer, i)
-    if (g.publisher) indexText(g.publisher, i)
-    if (g.storeId) {
-      // StoreId indexed as character prefixes for partial appid matching
-      const storeId = g.storeId.toLowerCase()
-      for (let j = 1; j <= storeId.length; j++) {
-        insert(storeId.substring(0, j), i)
-      }
-    }
+const SCORE_EXACT = 100
+const SCORE_STARTS_WITH = 90
+const SCORE_ACRONYM = 85
+const SCORE_WORD_EXACT = 80
+const SCORE_WORD_PREFIX = 75
+const SCORE_SUBSTRING = 65
+const SCORE_WORD_SUBSTRING = 55
+const SCORE_DEV_PUB = 30
+const FUZZY_THRESHOLD = 0.72
+const FUZZY_MAX_RESULTS = 25
+const FUZZY_TRIGGER_BELOW = 10
+const APPID_PREFIX_MAX = 10
+
+function scoreEntry(e: SearchEntry, q: string, qSquashed: string, qWords: string[]): number {
+  if (!q) return 0
+
+  // Exact normalized match
+  if (e.norm === q || e.squashed === qSquashed) return SCORE_EXACT
+
+  // Name starts with the full query
+  if (e.norm.startsWith(q)) return SCORE_STARTS_WITH
+
+  // Acronym match: "gta" → "grand theft auto", "cod" → "call of duty"
+  if (qSquashed.length >= 2 && qSquashed.length <= 5 && e.words.length >= qSquashed.length) {
+    const acronym = e.words.map(w => w[0]).join('')
+    if (acronym.startsWith(qSquashed)) return SCORE_ACRONYM
   }
+
+  // Single-word query that equals a whole name word ("strike" in "counter strike")
+  // outranks mere prefix hits on unrelated words ("strike cars").
+  if (qWords.length === 1 && e.words.includes(qWords[0]!)) return SCORE_WORD_EXACT
+
+  // Every query word is a prefix of some name word ("elden ri" → "elden ring")
+  const allWordsPrefix = qWords.every(qw => qw.length > 0 && e.words.some(nw => nw.startsWith(qw)))
+  if (allWordsPrefix) return SCORE_WORD_PREFIX
+
+  // Full query appears anywhere in the name ("strike" → "counter strike")
+  if (q.length >= 2 && (e.norm.includes(q) || e.squashed.includes(qSquashed))) return SCORE_SUBSTRING
+
+  // Every query word appears as a substring somewhere in the name
+  if (qWords.length > 0 && qWords.every(qw => qw.length >= 2 && e.norm.includes(qw))) {
+    return SCORE_WORD_SUBSTRING
+  }
+
+  // Developer / publisher match (full query as substring)
+  if (q.length >= 3 && e.devPub && e.devPub.includes(q)) return SCORE_DEV_PUB
+
+  return 0
 }
 
-// ── Search logic ──
+// ── Search ──
 
-/**
- * Core search: use the Trie for prefix matching, then intersect with
- * the pre-filtered index set.
- *
- * For numeric queries (appid exact match) we fall back to a linear scan
- * of the pre-filtered set — this preserves the current exact-match behaviour
- * and avoids false positives from partial numeric prefix matches.
- */
-function searchGames(query: string, preFilteredIndices: number[]): number[] {
+interface ScoredIndex {
+  idx: number
+  score: number
+}
+
+function searchGames(
+  query: string,
+  preFilteredIndices: number[],
+  popularGamesOrder: Record<string, number>,
+  maxPopIdx: number,
+): ScoredIndex[] {
   if (!query || !query.trim()) {
-    return preFilteredIndices
+    return preFilteredIndices.map(idx => ({ idx, score: 0 }))
   }
 
-  const q = query.toLowerCase().trim()
+  // Popularity bonus: up to +10, smaller than every tier gap (15–25), so it
+  // can only reorder WITHIN a tier — but a hugely popular game in a lower tier
+  // (Counter-Strike via word-exact 80) catches up to obscure games in the tier
+  // above ("Strike Cars" via starts-with 90) and wins the tiebreak.
+  const popBonus = (idx: number): number => {
+    const popIdx = popularGamesOrder[games[idx]?.appid ?? '']
+    if (popIdx === undefined || maxPopIdx <= 0) return 0
+    return 10 * (1 - popIdx / maxPopIdx)
+  }
 
-  // Numeric query → exact appid match (unchanged behaviour)
-  if (/^\d+$/.test(q)) {
-    const results: number[] = []
+  const qRaw = query.trim()
+
+  // Numeric query → exact appid first, then a few appid prefix matches
+  if (/^\d+$/.test(qRaw)) {
+    const exact: ScoredIndex[] = []
+    const prefix: ScoredIndex[] = []
     for (const idx of preFilteredIndices) {
-      if (games[idx]?.appid === q) {
-        results.push(idx)
+      const appid = games[idx]?.appid
+      if (appid === qRaw) exact.push({ idx, score: SCORE_EXACT })
+      else if (appid?.startsWith(qRaw) && prefix.length < APPID_PREFIX_MAX) {
+        prefix.push({ idx, score: SCORE_STARTS_WITH })
       }
     }
-    return results
+    return exact.concat(prefix)
   }
 
-  // Text query → Trie prefix lookup per word, then intersect
-  const words = q.split(/\s+/).filter(Boolean)
+  const q = normalize(qRaw)
+  if (!q) return []
+  const qSquashed = q.replace(/\s+/g, '')
+  const qWords = q.split(' ').filter(Boolean)
 
-  // Collect the index set for each word
-  const wordSets: Set<number>[] = words.map(word => new Set(searchPrefix(word)))
+  const scored: ScoredIndex[] = []
+  for (const idx of preFilteredIndices) {
+    const e = entries[idx]
+    if (!e) continue
+    const s = scoreEntry(e, q, qSquashed, qWords)
+    if (s > 0) scored.push({ idx, score: s + popBonus(idx) })
+  }
 
-  // Intersect all word sets (AND semantics — all words must match)
-  const intersection = wordSets.reduce<Set<number> | null>((acc, set) => {
-    if (acc === null) return set
-    const result = new Set<number>()
-    for (const x of acc) {
-      if (set.has(x)) result.add(x)
+  // Fuzzy fallback: APPEND loosely-matching games only when real matches are
+  // scarce — never replaces or displaces genuine matches.
+  if (scored.length < FUZZY_TRIGGER_BELOW && q.length >= 3) {
+    const already = new Set(scored.map(s => s.idx))
+    const fuzzy: ScoredIndex[] = []
+    for (const idx of preFilteredIndices) {
+      if (already.has(idx)) continue
+      const e = entries[idx]
+      if (!e || e.words.length === 0) continue
+      const sim = wordSimilarity(qWords, e.words)
+      if (sim >= FUZZY_THRESHOLD) {
+        fuzzy.push({ idx, score: Math.round(sim * 25) }) // max 25 — always below real matches
+        if (fuzzy.length >= FUZZY_MAX_RESULTS) break
+      }
     }
-    return result
-  }, null)
-
-  if (!intersection) return []
-
-  // Intersect with the pre-filtered index set
-  if (preFilteredIndices.length === 0) return []
-  const pfSet = new Set(preFilteredIndices)
-  const result: number[] = []
-  for (const idx of intersection) {
-    if (pfSet.has(idx)) result.push(idx)
+    fuzzy.sort((a, b) => b.score - a.score)
+    scored.push(...fuzzy)
   }
-  return result
+
+  return scored
 }
 
 // ── Sorting ──
 
+/**
+ * Orders scored results for display.
+ * - 'popularity': match score is the primary rank; popularity order breaks
+ *   ties within the same relevance tier (empty query → pure popularity sort).
+ * - 'name_asc' / 'name_desc': explicit alphabetical, applied within each
+ *   relevance tier so exact matches still surface first.
+ */
 function sortGameIndices(
-  indices: number[],
+  scored: ScoredIndex[],
   sortBy: string,
   popularGamesOrder: Record<string, number>,
   maxPopIdx: number,
 ): number[] {
-  const sorted = [...indices]
+  const sorted = [...scored]
 
-  if (sortBy === 'popularity') {
+  if (sortBy === 'name_asc') {
+    sorted.sort((a, b) =>
+      b.score - a.score ||
+      (games[a.idx]?.name || '').localeCompare(games[b.idx]?.name || ''))
+  } else if (sortBy === 'name_desc') {
+    sorted.sort((a, b) =>
+      b.score - a.score ||
+      (games[b.idx]?.name || '').localeCompare(games[a.idx]?.name || ''))
+  } else {
     sorted.sort((a, b) => {
-      const ga = games[a]!
-      const gb = games[b]!
-      const aIdx = popularGamesOrder[ga?.appid] ?? maxPopIdx
-      const bIdx = popularGamesOrder[gb?.appid] ?? maxPopIdx
+      if (a.score !== b.score) return b.score - a.score
+      const ga = games[a.idx]
+      const gb = games[b.idx]
+      const aIdx = popularGamesOrder[ga?.appid ?? ''] ?? maxPopIdx
+      const bIdx = popularGamesOrder[gb?.appid ?? ''] ?? maxPopIdx
       if (aIdx !== bIdx) return aIdx - bIdx
       return (ga?.name || '').localeCompare(gb?.name || '')
     })
-  } else if (sortBy === 'name_asc') {
-    sorted.sort((a, b) => {
-      const ga = games[a]!
-      const gb = games[b]!
-      return (ga?.name || '').localeCompare(gb?.name || '')
-    })
-  } else {
-    // name_desc
-    sorted.sort((a, b) => {
-      const ga = games[a]!
-      const gb = games[b]!
-      return (gb?.name || '').localeCompare(ga?.name || '')
-    })
   }
 
-  return sorted
+  return sorted.map(s => s.idx)
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -239,10 +332,16 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
   const msg = e.data
 
   if (msg.type === 'init') {
-    buildIndex(msg.payload.games)
+    games = msg.payload.games
+    epoch = msg.payload.epoch ?? 0
+    entries = new Array(games.length)
+    for (let i = 0; i < games.length; i++) {
+      entries[i] = buildEntry(games[i]!)
+    }
     const response: ResultMessage = {
       type: 'result',
       queryId: msg.queryId,
+      epoch,
       indices: [],
     }
     self.postMessage(response)
@@ -252,15 +351,15 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
   if (msg.type === 'search') {
     const { query, sortBy, popularGamesOrder, maxPopIdx, preFilteredIndices } = msg.payload
 
-    let resultIndices = searchGames(query, preFilteredIndices)
-    resultIndices = sortGameIndices(resultIndices, sortBy, popularGamesOrder, maxPopIdx)
+    const scored = searchGames(query, preFilteredIndices, popularGamesOrder, maxPopIdx)
+    const resultIndices = sortGameIndices(scored, sortBy, popularGamesOrder, maxPopIdx)
 
     const response: ResultMessage = {
       type: 'result',
       queryId: msg.queryId,
+      epoch,
       indices: resultIndices,
     }
-
     self.postMessage(response)
   }
 }
