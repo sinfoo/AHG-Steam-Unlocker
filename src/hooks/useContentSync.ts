@@ -19,7 +19,7 @@ export function useContentSync() {
   useEffect(() => {
     const api = (window as any).electronAPI
     if (!api?.onRemoteSyncUpdated) return
-    api.onRemoteSyncUpdated((data: any) => {
+    const unlisten = api.onRemoteSyncUpdated((data: any) => {
       const newGames = Array.isArray(data?.newGames) ? data.newGames : []
       const updatedGames = Array.isArray(data?.updatedGames) ? data.updatedGames : []
       const newFixes = Array.isArray(data?.newFixes) ? data.newFixes : []
@@ -50,6 +50,9 @@ export function useContentSync() {
       if (fixGames.size) bits.push(`${fixGames.size} fix update${fixGames.size > 1 ? 's' : ''}`)
       if (bits.length) showToast(`Catalogue synced — ${bits.join(', ')}`, 'info')
     })
+    // Remove the listener on unmount so duplicate catalogue merges/toasts can't
+    // accumulate if this hook ever re-runs or remounts.
+    return () => { if (typeof unlisten === 'function') { try { (unlisten as () => void)() } catch { /* no-op */ } } }
   }, [showToast])
 
   // ── Recompute "installed game has an update" whenever catalog or library changes ──

@@ -79,7 +79,10 @@ async function fetchDlcInfos(dlcIds) {
         }, (rsp) => {
           if (rsp.statusCode !== 200) { reject(new Error('HTTP ' + rsp.statusCode)); return; }
           const buf = []; rsp.on('data', c => buf.push(c));
-          rsp.on('end', () => resolve(JSON.parse(Buffer.concat(buf).toString())));
+          // Guard JSON.parse: Steam's appdetails API returns an HTML interstitial
+          // during rate-limiting/maintenance. An unguarded throw here escapes the
+          // Promise executor and leaves the await hanging forever.
+          rsp.on('end', () => { try { resolve(JSON.parse(Buffer.concat(buf).toString())); } catch (e) { reject(e); } });
         });
         req.on('error', reject); req.setTimeout(30000, () => { req.destroy(); reject(new Error('timeout')); });
       });
@@ -106,7 +109,7 @@ async function fetchDlcInfos(dlcIds) {
             }, (rsp) => {
               if (rsp.statusCode !== 200) { reject(new Error('HTTP ' + rsp.statusCode)); return; }
               const buf = []; rsp.on('data', c => buf.push(c));
-              rsp.on('end', () => resolve(JSON.parse(Buffer.concat(buf).toString())));
+              rsp.on('end', () => { try { resolve(JSON.parse(Buffer.concat(buf).toString())); } catch (e) { reject(e); } });
             });
             req.on('error', reject); req.setTimeout(20000, () => { req.destroy(); reject(new Error('timeout')); });
           });
