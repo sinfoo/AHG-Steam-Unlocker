@@ -429,10 +429,22 @@ export async function loadGameImage(appid: string, localHeaderUrl?: string, _gam
   if (!pending) {
     pending = (async (): Promise<string | null> => {
       type RawHit = { blob: Blob; blobUrl: string }
-      const fetchRawOrThrow = async (url: string, timeoutMs = 8000): Promise<RawHit> => {
+      // Every fetchAsBlob success creates an object URL. The race keeps only the
+      // winner; without tracking, every OTHER racer/host that also resolved (the
+      // localHeader, SGDB, and the Promise.any host fan-out) leaked a blob URL that
+      // pinned its Blob for the document's lifetime. Record them all, revoke losers.
+      const created: RawHit[] = []
+      const trackFetch = async (url: string, timeoutMs = 8000): Promise<RawHit | null> => {
         const r = await fetchAsBlob(url, timeoutMs)
-        if (!r) throw new Error('miss')
-        return { blob: r.blob, blobUrl: r.blobUrl }
+        if (!r) return null
+        const hit = { blob: r.blob, blobUrl: r.blobUrl }
+        created.push(hit)
+        return hit
+      }
+      const fetchRawOrThrow = async (url: string, timeoutMs = 8000): Promise<RawHit> => {
+        const hit = await trackFetch(url, timeoutMs)
+        if (!hit) throw new Error('miss')
+        return hit
       }
 
       // 4. RACED FETCH: localHeader (games-DB header_image) vs Steam CDN vs
@@ -453,8 +465,8 @@ export async function loadGameImage(appid: string, localHeaderUrl?: string, _gam
       const localWork = (localHeaderUrl && prefersHeaderFirst)
         ? (async () => {
             try {
-              const r = await fetchAsBlob(localHeaderUrl, 5000)
-              if (r) deferredResolve({ blob: r.blob, blobUrl: r.blobUrl })
+              const hit = await trackFetch(localHeaderUrl, 5000)
+              if (hit) deferredResolve(hit)
             } catch {}
           })().catch(() => {})
         : Promise.resolve()
@@ -495,17 +507,28 @@ export async function loadGameImage(appid: string, localHeaderUrl?: string, _gam
           const minHeight = sgdbType === 'grid' ? 215 : sgdbType === 'hero' ? 430 : undefined
           const best = await getBestImage(appid, sgdbType, minWidth, minHeight, orientation)
           if (best?.url) {
-            const r = await fetchAsBlob(best.url)
-            if (r) deferredResolve({ blob: r.blob, blobUrl: r.blobUrl })
+            const hit = await trackFetch(best.url)
+            if (hit) deferredResolve(hit)
           }
         } catch {}
       })().catch(() => {})
 
       // Race: first success wins; if all fail, allSettled branch rejects → caught → null
+      const allDone = Promise.allSettled([localWork, cdnWork, sgdbWork])
       const winner = await Promise.race([
         firstSuccess,
-        Promise.allSettled([localWork, cdnWork, sgdbWork]).then(() => { throw new Error('all failed') }),
+        allDone.then(() => { throw new Error('all failed') }),
       ]).catch(() => null)
+
+      // Once every racer has settled, free all blob URLs except the winner's (which
+      // is now held by the memory cache). Deferred so the winner still paints instantly.
+      allDone.then(() => {
+        for (const hit of created) {
+          if (!winner || hit.blobUrl !== winner.blobUrl) {
+            try { URL.revokeObjectURL(hit.blobUrl) } catch {}
+          }
+        }
+      })
 
       if (winner) {
         setMemoryCache(key, winner.blobUrl, true)

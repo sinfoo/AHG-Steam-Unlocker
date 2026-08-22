@@ -55,6 +55,11 @@ const GameCover = memo(function GameCover({
   const animFrameRef = useRef<number>(0)
   const hasLoadedRef = useRef(false)
   const loadTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  // Bounded retry: a single transient CDN miss (timeout, queued behind the fetch
+  // concurrency cap, brief offline) used to latch the cover to a permanent
+  // placeholder because hasLoadedRef stayed true and nothing ever retried.
+  const retryRef = useRef(0)
+  const loadImageRef = useRef<(() => void) | null>(null)
   const crossfadeActiveRef = useRef(false)
   const contextLostRef = useRef(false)
   const urlRef = useRef<string | null>(null)
@@ -178,6 +183,7 @@ const GameCover = memo(function GameCover({
     if (loadedAppidRef.current !== appid) {
       loadedAppidRef.current = appid
       hasLoadedRef.current = false
+      retryRef.current = 0
       setState({ url: null, loaded: false, error: false })
       setLqip(null)
       setWebglFailed(false)
@@ -205,11 +211,24 @@ const GameCover = memo(function GameCover({
       return () => { mounted = false }
     }
 
+    const MAX_IMG_RETRIES = 3
+    // Re-attempt a failed load with backoff instead of latching the placeholder.
+    // Returns true if a retry was scheduled, false if the cap is reached.
+    const scheduleRetry = (): boolean => {
+      if (retryRef.current >= MAX_IMG_RETRIES) return false
+      retryRef.current++
+      hasLoadedRef.current = false
+      if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current)
+      loadTimeoutRef.current = setTimeout(() => { if (mounted) loadImage() }, 600 * retryRef.current)
+      return true
+    }
+
     const loadImage = () => {
       if (hasLoadedRef.current) return
       hasLoadedRef.current = true
 
-      // Timeout: show fallback after 3s if image hasn't loaded
+      // Soft timeout: only flips to the placeholder if nothing has painted yet.
+      // A late success still recovers (the promise below sets the url).
       loadTimeoutRef.current = setTimeout(() => {
         if (mounted) setState(s => s.url ? s : { url: null, loaded: false, error: true })
       }, 3000)
@@ -220,9 +239,11 @@ const GameCover = memo(function GameCover({
           if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current)
 
           if (!url) {
-            setState({ url: null, loaded: false, error: true })
+            // Miss — retry with backoff; only show the placeholder once retries run out.
+            if (!scheduleRetry()) setState({ url: null, loaded: false, error: true })
             return
           }
+          retryRef.current = 0
 
           // A local disk-cache hit (image-cache://) is already on the machine —
           // it decodes instantly, so skip the blur-up + crossfade entirely and
@@ -282,10 +303,12 @@ const GameCover = memo(function GameCover({
         .catch(() => {
           if (mounted) {
             if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current)
-            setState(prev => ({ ...prev, url: null, error: true }))
+            if (!scheduleRetry()) setState(prev => ({ ...prev, url: null, error: true }))
           }
         })
     }
+    // Expose to handleImgError so a failed <img> decode can re-attempt too.
+    loadImageRef.current = loadImage
 
     // Staggered load to prevent thundering herd on window restore from minimize.
     // Tightened to a ~250ms window (14ms/increment) so a search's on-screen results
@@ -360,8 +383,21 @@ const GameCover = memo(function GameCover({
   )
 
   const handleImgError = useCallback(() => {
+    // The resolved URL failed to decode (revoked blob, corrupt/half-written disk
+    // cache entry, 404). Invalidate the cached entry and re-run the loader so it
+    // refetches from the network instead of stranding a broken cover.
+    if (retryRef.current < 3 && loadImageRef.current) {
+      retryRef.current++
+      const key = preferredImageTypes?.length ? `${appid}:${[...preferredImageTypes].join(',')}` : appid
+      invalidateCacheKey(key)
+      hasLoadedRef.current = false
+      setLqip(null)
+      setState({ url: null, loaded: false, error: false })
+      loadImageRef.current()
+      return
+    }
     setState(prev => ({ ...prev, url: null, error: true }))
-  }, [])
+  }, [appid, preferredImageTypes])
 
   // ── Derived values ───────────────────────────────────────────────
 
