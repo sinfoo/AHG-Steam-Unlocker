@@ -2316,8 +2316,11 @@ ipcMain.handle('install-game-from-zip', async (event, appid) => {
     }
     
     if (!hasLua) {
+      // Must be addappid() — the legacy `OnStartup` stub is a no-op that never mounts
+      // the depot, so the game shows as installed but Steam never unlocks it. This is
+      // the same fallback installSteamGame writes; the ZIP-import path had no backstop.
       const lp = path.join(luaPath, appid + '.lua');
-      fs.writeFileSync(lp, `function OnStartup() Log("App ${appid}") end return OnStartup`);
+      fs.writeFileSync(lp, `addappid(${appid})\n`);
       sendLog('Lua generated');
     }
     
@@ -2366,16 +2369,10 @@ ipcMain.handle('fetch-dlcs', async (event, appid, gameName) => {
       dlcIds = appData.data.dlc.map(String);
     }
     
-    // Secondary source: packages field often contains DLC bundles and sub-IDs
-    if (appData.data.packages && Array.isArray(appData.data.packages)) {
-      const pkgStrings = appData.data.packages.map(String);
-      // Merge packages that don't overlap with existing DLC IDs
-      for (const pkg of pkgStrings) {
-        if (!dlcIds.includes(pkg)) {
-          dlcIds.push(pkg);
-        }
-      }
-    }
+    // NOTE: do NOT merge `appData.data.packages` — those are store *package*
+    // (sub) IDs, not app IDs. addappid(<packageId>) unlocks nothing and only
+    // pollutes the DLC list with junk entries whose covers 404. Only the real
+    // `dlc` array (Steam app IDs) is used.
     console.log('[MAIN] Found ' + dlcIds.length + ' DLCs for ' + appid);
     
     // Fetch DLC names — check cache FIRST, only hit API for uncached DLCs
