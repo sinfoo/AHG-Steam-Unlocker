@@ -175,10 +175,13 @@ function buildGameQuery(opts = {}) {
   const params = {};
 
   if (opts.search) {
-    const q = `%${escapeLike(opts.search)}%`;
-    clauses.push('(name LIKE $search ESCAPE \'\\\' OR tags LIKE $searchTags ESCAPE \'\\\')');
-    params.$search = q;
-    params.$searchTags = q;
+    // Prefix-first: the name must START with the query, or a WORD in the name must.
+    // The old `%q%` (substring anywhere) + `tags LIKE` matched all over the place and
+    // surfaced irrelevant games (a query hitting a tag, or a mid-word substring).
+    const esc = escapeLike(opts.search.trim());
+    clauses.push("(name LIKE $prefix ESCAPE '\\' OR name LIKE $wordPrefix ESCAPE '\\')");
+    params.$prefix = `${esc}%`;
+    params.$wordPrefix = `% ${esc}%`;
   }
 
   if (opts.platform) {
@@ -225,6 +228,12 @@ function queryGames(opts = {}) {
     case 'added_asc':  orderBy = 'ORDER BY added_date ASC'; break;
     case 'name_asc':
     default:           orderBy = 'ORDER BY name COLLATE NOCASE ASC'; break;
+  }
+  // When searching, rank true prefix matches ("elden…") above word-prefix matches
+  // ("the elden…") regardless of the chosen sort, so the instant dropdown feels precise.
+  if (opts.search) {
+    orderBy = "ORDER BY CASE WHEN name LIKE $prefix ESCAPE '\\' THEN 0 ELSE 1 END, " +
+      orderBy.replace(/^ORDER BY /, '');
   }
 
   // Count total matching
@@ -527,7 +536,12 @@ function persist() {
   const data = _db.export();
   const buffer = Buffer.from(data);
   const destPath = path.join(findDbDir(), DB_FILENAME);
-  fs.writeFileSync(destPath, buffer);
+  // Atomic write: a crash/power-loss mid-write to the live 54 MB games.db would
+  // truncate it and make the whole catalogue fail to load on next launch. Write to
+  // a temp file and rename (rename is atomic on the same volume).
+  const tmpPath = destPath + '.tmp';
+  fs.writeFileSync(tmpPath, buffer);
+  fs.renameSync(tmpPath, destPath);
   console.log('[DB] Persisted to disk:', destPath, `(${(buffer.length / 1024 / 1024).toFixed(1)} MB)`);
   return destPath;
 }
@@ -665,7 +679,10 @@ function persistFixes() {
   const buffer = Buffer.from(data);
   const destPath = findFixesDbPath();
   try {
-    fs.writeFileSync(destPath, buffer);
+    // Atomic write (tmp + rename) — never truncate the live fixes.db on a crash.
+    const tmpPath = destPath + '.tmp';
+    fs.writeFileSync(tmpPath, buffer);
+    fs.renameSync(tmpPath, destPath);
     console.log('[DB] Fixes DB persisted to disk:', destPath, `(${(buffer.length / 1024).toFixed(0)} KB)`);
     return destPath;
   } catch (err) {
