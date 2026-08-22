@@ -24,6 +24,10 @@ const DLC_MANIFEST_SEARCH_REPOS = 3;
 
 // Download actual manifest files
 async function downloadManifest(appid, depotid, manifestid, repo, steamPath) {
+  // depotid/manifestid come from mirror-supplied depotkeys JSON and land in the
+  // written file path. Steam IDs are always numeric — reject anything else so a
+  // hostile mirror can't use "..\\..\\" to write outside depotcache.
+  if (!/^\d+$/.test(String(depotid)) || !/^\d+$/.test(String(manifestid))) return false;
   const depotCache = path.join(steamPath, 'depotcache');
   fs.mkdirSync(depotCache, { recursive: true });
 
@@ -703,6 +707,8 @@ async function tryRepoForGame(appid, repo, depotCache, luaPath, sendLog) {
 
         const depotid = depotId;
         const manifestid = depotData.manifestid;
+        // Numeric-only guard — depot/manifest IDs build the write path (traversal defense).
+        if (!/^\d+$/.test(String(depotid)) || !/^\d+$/.test(String(manifestid))) return null;
 
         // Race primary URLs concurrently (main/depotcache + main/manifests)
         const primaryUrls = [
