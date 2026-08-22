@@ -55,8 +55,16 @@ export const DLCManager = memo(function DLCManager({
 
     ;(async () => {
       try {
-        const result = await bridge.fetchDLCs(game.appid, game.name)
+        // DLCs already added for this game live in the DLC registry (written by
+        // register-dlcs / a game's reseller lua), NOT in the installed-games list
+        // (which excludes DLCs) — so consult both to mark them "Installed".
+        const [result, registry] = await Promise.all([
+          bridge.fetchDLCs(game.appid, game.name),
+          bridge.getDlcRegistry(),
+        ])
         if (cancelled) return
+
+        const registeredForGame = new Set<string>((registry?.[String(game.appid)] || []).map(String))
 
         if (result?.dlcs && result.dlcs.length > 0) {
           const dlcDetails = result.dlcDetails || {}
@@ -71,10 +79,12 @@ export const DLCManager = memo(function DLCManager({
           })
           setDlcs(items)
 
-          // Set initial states based on installed games
+          // A DLC counts as installed if it's in the registry for this game OR
+          // present in the library (some DLCs get their own lua).
           const initialStates: Record<string, DLCState> = {}
           for (const item of items) {
-            initialStates[item.appid] = installedAppids.has(item.appid) ? 'installed' : 'idle'
+            initialStates[item.appid] =
+              (registeredForGame.has(item.appid) || installedAppids.has(item.appid)) ? 'installed' : 'idle'
           }
           setDlcStates(initialStates)
         } else {

@@ -112,6 +112,36 @@ const getInstalledGamesImpl = withCache(async () => {
   return { success: true, games };
 }, 60_000);
 
+// Build the parent-appid → [dlcAppid] map from dlc_registry.json plus any
+// {appid}_dlcs.lua files present in stplug-in (covers DLCs added directly by a
+// game's reseller lua, or a registry that was cleared). Returned to the renderer
+// so the DLC manager can mark already-added DLCs as installed — they live here,
+// NOT in the installed-games list (which deliberately excludes DLCs).
+async function readDlcRegistry() {
+  let registry = {};
+  try {
+    const regPath = path.join(app.getPath('userData'), 'dlc_registry.json');
+    if (fs.existsSync(regPath)) registry = JSON.parse(fs.readFileSync(regPath, 'utf-8'));
+  } catch (e) { /* no registry */ }
+  try {
+    const steamPath = findSteamPath();
+    const luaPath = getCustomStPluginPath() || path.join(steamPath, 'config', 'stplug-in');
+    if (fs.existsSync(luaPath)) {
+      for (const lf of await fs.promises.readdir(luaPath)) {
+        const m = lf.match(/^(\d+)_dlcs\.lua$/);
+        if (!m) continue;
+        const parentId = m[1];
+        const content = await fs.promises.readFile(path.join(luaPath, lf), 'utf-8');
+        const dlcIds = [...content.matchAll(/addappid\((\d+)\)/g)].map(x => x[1]);
+        if (dlcIds.length) {
+          registry[parentId] = [...new Set([...(registry[parentId] || []), ...dlcIds])];
+        }
+      }
+    }
+  } catch (e) { /* lua scan failed — registry-only is fine */ }
+  return registry;
+}
+
 function registerInstalledHandlers() {
   // Get installed games from stplug-in folder (TTL cache: 60s)
   ipcMain.handle('get-installed-games', async () => {
@@ -119,6 +149,15 @@ function registerInstalledHandlers() {
     catch (error) {
       console.log('[MAIN] get-installed-games error:', error.message);
       return { success: false, message: error.message, games: [] };
+    }
+  });
+
+  // Return the parent→DLC map so the DLC manager can show already-added DLCs as installed.
+  ipcMain.handle('get-dlc-registry', async () => {
+    try { return { success: true, registry: await readDlcRegistry() }; }
+    catch (error) {
+      console.log('[MAIN] get-dlc-registry error:', error.message);
+      return { success: false, registry: {} };
     }
   });
 

@@ -486,6 +486,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // DLC support
   fetchDLCs: (appid, gameName) => ipcRenderer.invoke('fetch-dlcs', appid, gameName),
+  getDlcRegistry: () => ipcRenderer.invoke('get-dlc-registry'),
   registerDlcs: (appid, dlcIds, dlcDetails, sourceRepo) => ipcRenderer.invoke('register-dlcs', appid, dlcIds, dlcDetails, sourceRepo),
 
   // Discord Integration

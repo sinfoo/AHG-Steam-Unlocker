@@ -192,6 +192,7 @@ interface ElectronAPI {
   getFixHealth?: () => Promise<any>
 
   // ── v0.8 DLC Support ──
+  getDlcRegistry?: () => Promise<{ success: boolean; registry: Record<string, string[]> }>
   fetchDLCs?: (appid: string, gameName: string) => Promise<{
     count: number
     dlcs: string[]

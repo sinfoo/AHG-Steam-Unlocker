@@ -446,6 +446,14 @@ export const bridge = {
     return null
   },
 
+  async getDlcRegistry(): Promise<Record<string, string[]>> {
+    const api = getAPI()
+    if (api && api.getDlcRegistry) {
+      try { return (await api.getDlcRegistry())?.registry || {} } catch { return {} }
+    }
+    return {}
+  },
+
   async getDownloadPath(): Promise<string | null> {
     const api = getAPI()
     if (api && api.getDownloadPath) {
