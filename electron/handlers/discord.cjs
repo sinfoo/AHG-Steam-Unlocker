@@ -126,9 +126,15 @@ function startOAuthCallbackServer() {
           } else if (u.pathname === '/callback') {
             var errDesc = u.searchParams.get('error_description') || u.searchParams.get('error') || 'No authorization code returned';
             console.warn('[DISCORD] Callback error:', errDesc);
+            // Escape before echoing: this param is attacker-controllable (any page can
+            // navigate to http://localhost:PORT/callback?error_description=<script>…)
+            // while the OAuth server is briefly listening.
+            var safeErr = String(errDesc).replace(/[&<>"']/g, c => (
+              { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+            ));
             res.writeHead(400, { 'Content-Type': 'text/html' });
             callbackProcessed = true;
-            res.end('<!DOCTYPE html><html><body><h2>Discord Authorization Failed</h2><p>' + errDesc + '</p><p>Please close this tab and try again.</p></body></html>');
+            res.end('<!DOCTYPE html><html><body><h2>Discord Authorization Failed</h2><p>' + safeErr + '</p><p>Please close this tab and try again.</p></body></html>');
             setTimeout(function() {
               try { server.close(); } catch(e) {
                 console.error('[DISCORD] Error closing server after error callback:', e.message);

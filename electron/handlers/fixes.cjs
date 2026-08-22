@@ -1,7 +1,7 @@
 // ── Fix-related IPC handlers ──
 const path = require('path');
 const fs = require('fs');
-const { ipcMain, app, dialog, BrowserWindow, session, shell } = require('electron');
+const { ipcMain, app, dialog, BrowserWindow, session, shell, clipboard } = require('electron');
 const { spawn } = require('child_process');
 const state = require('../utils/state.cjs');
 const { findSteamPath } = require('../utils/steamUtils.cjs');
@@ -427,22 +427,18 @@ function registerFixesHandlers() {
       
       if (fs.existsSync(manifestPath)) {
         const content = fs.readFileSync(manifestPath, 'utf-8');
-        // Copy to clipboard using PowerShell
-        spawn('powershell', ['-Command', `Set-Clipboard -Value '${content.replace(/'/g, "''")}'`], { 
-          shell: true, 
-          windowsHide: true 
-        });
+        // Native clipboard — never shell out. The old `powershell Set-Clipboard`
+        // interpolated manifest JSON (which always contains ") through cmd.exe with
+        // shell:true, a command-injection hole for hostile-mirror content.
+        clipboard.writeText(content);
         return { success: true, message: 'Manifest copied to clipboard!' };
       }
-      
+
       // If not local, try to get from mirrors
       for (const repo of getOrderedRepos()) {
         try {
           const data = await downloadFromMirrorSingle(appid, repo);
-          spawn('powershell', ['-Command', `Set-Clipboard -Value '${data.toString().replace(/'/g, "''")}'`], { 
-            shell: true, 
-            windowsHide: true 
-          });
+          clipboard.writeText(data.toString());
           return { success: true, message: 'Manifest copied to clipboard!' };
         } catch (e) { continue; }
       }
