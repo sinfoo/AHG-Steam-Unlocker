@@ -278,18 +278,24 @@ function registerLicenseHandlers() {
         if (gistMachineId === 'pending' || gistMachineId === currentMachineId) {
           gistValidated = true;
         }
+        // else: an AUTHORITATIVE read says the key is bound to another machine, or the
+        // seller marked it 'used'. gistValidated stays false; we must NOT fall through
+        // to the local-file match below (which would keep the original machine active
+        // forever after the key was re-bound elsewhere or disabled).
       }
-      if (gistValidated || local.machineId === currentMachineId) {
+      // Trust the local file only when we could NOT reach the registry (offline).
+      // When the read succeeded, the registry is the source of truth.
+      if (gistValidated || (gistLicenses === null && local.machineId === currentMachineId)) {
         // Gist validated the current machine but the local file holds a stale id
         // (e.g. rebind after a seller reset) — refresh it so offline validation
         // keeps working on the next start.
-        if (local.machineId !== currentMachineId) {
+        if (gistValidated && local.machineId !== currentMachineId) {
           saveLocalLicense(local.licenseKey, currentMachineId);
         }
         console.log('[MAIN] License validated for machine:', currentMachineId);
         return { activated: true, machineId: currentMachineId };
       }
-      console.log('[MAIN] Machine ID mismatch - re-activation required');
+      console.log('[MAIN] License bound elsewhere or machine mismatch - re-activation required');
       return { activated: false, machineMismatch: true };
     } catch (e) {
       console.error('[MAIN] License check error:', e);

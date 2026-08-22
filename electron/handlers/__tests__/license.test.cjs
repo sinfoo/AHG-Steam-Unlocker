@@ -222,6 +222,19 @@ describe('check-license — revocation decision table', () => {
     assert.equal(result.activated, false);
   });
 
+  test('key re-bound to another machine deactivates the original machine (no sharing)', async () => {
+    // The original machine's local file still matches THIS machine, but an
+    // authoritative gist read says the key now belongs to another machine (seller
+    // reset + re-activation elsewhere). The original must NOT stay active.
+    givenActivatedOn(THIS_MACHINE);            // local.machineId === current
+    givenRegistry({ [KEY]: OTHER_MACHINE });   // gist binds the key elsewhere
+
+    const result = await handlers['check-license']();
+
+    assert.equal(result.activated, false, 'must not stay active when re-bound elsewhere');
+    assert.ok(licensePath in fakeFiles, 'not a revocation — keep the file for re-activation');
+  });
+
   test('lost machine-id file recovers the identity from the license file', async () => {
     // Machine-id file gone (cleaner/corruption) but the license survives — the id
     // bound in the registry must be recovered, not re-probed into a fresh one.
