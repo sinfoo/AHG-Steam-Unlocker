@@ -78,5 +78,7 @@ export function useImagePrefetch(
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
     }
-  }, [virtualizer, getRowGames, lookAheadRows])
+    // virtualizer.scrollOffset is the scroll signal — without it the effect only ran
+    // on list/column changes, never during scroll, so look-ahead prefetch was inert.
+  }, [virtualizer, getRowGames, lookAheadRows, virtualizer.scrollOffset])
 }

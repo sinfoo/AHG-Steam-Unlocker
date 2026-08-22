@@ -83,7 +83,10 @@ export function useDirectionalCoverPrefetch(
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
     }
-  }, [virtualizer, rows, prefetchCount])
+    // virtualizer.scrollOffset is the scroll signal — without it the effect never
+    // re-ran while scrolling (the virtualizer instance and rows are stable refs),
+    // so this look-ahead prefetch was dead. The 150ms debounce above absorbs the churn.
+  }, [virtualizer, rows, prefetchCount, virtualizer.scrollOffset])
 
   return result
 }
