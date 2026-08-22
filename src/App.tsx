@@ -597,7 +597,7 @@ function App() {
       // Check for first launch or new version
       try {
         const lastSeen = await bridge.getLastSeenVersion()
-        const currentVersion = '1.0.0'
+        const currentVersion = '1.2.1'
         if (!lastSeen || lastSeen.version !== currentVersion) {
           // Changelog auto-open disabled — was appearing as "second splash screen"
           await bridge.setLastSeenVersion(currentVersion)
