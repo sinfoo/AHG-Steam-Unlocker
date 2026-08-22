@@ -109,51 +109,6 @@ function buildEntry(g: IndexedGame): SearchEntry {
   }
 }
 
-// ── Fuzzy (word-level Levenshtein) ──
-
-function levenshtein(a: string, b: string): number {
-  const m = a.length
-  const n = b.length
-  if (m < n) return levenshtein(b, a)
-  const dp = new Uint32Array(n + 1)
-  for (let j = 0; j <= n; j++) dp[j] = j
-  for (let i = 1; i <= m; i++) {
-    let prev = dp[0]!
-    dp[0] = i
-    for (let j = 1; j <= n; j++) {
-      const temp = dp[j]!
-      dp[j] = a[i - 1] === b[j - 1]
-        ? prev
-        : 1 + Math.min(dp[j]!, dp[j - 1]!, prev)
-      prev = temp
-    }
-  }
-  return dp[n]!
-}
-
-/**
- * Word-level fuzzy score 0–1 with AND semantics: EVERY query word must have a
- * close name-word match; the score is the WORST per-word best match. A single
- * lucky word pair ("elden"~"elder") can no longer drag in unrelated games.
- */
-function wordSimilarity(queryWords: string[], nameWords: string[]): number {
-  let worst = 1
-  for (const qw of queryWords) {
-    if (qw.length < 3) continue
-    let best = 0
-    for (const nw of nameWords) {
-      if (nw.length < 3) continue
-      // Skip pairs whose length difference alone dooms the score
-      const maxLen = Math.max(qw.length, nw.length)
-      if (Math.abs(qw.length - nw.length) / maxLen > 0.34) continue
-      const sim = 1 - levenshtein(qw, nw) / maxLen
-      if (sim > best) best = sim
-    }
-    if (best < worst) worst = best
-  }
-  return worst
-}
-
 // ── Scoring ──
 
 const SCORE_EXACT = 100
@@ -161,22 +116,17 @@ const SCORE_STARTS_WITH = 90
 const SCORE_ACRONYM = 85
 const SCORE_WORD_EXACT = 80
 const SCORE_WORD_PREFIX = 75
-const SCORE_SUBSTRING = 65
-const SCORE_WORD_SUBSTRING = 55
-const SCORE_DEV_PUB = 30
-const FUZZY_THRESHOLD = 0.72
-const FUZZY_MAX_RESULTS = 25
-const FUZZY_TRIGGER_BELOW = 10
 const APPID_PREFIX_MAX = 10
 
 function scoreEntry(e: SearchEntry, q: string, qSquashed: string, qWords: string[]): number {
   if (!q) return 0
 
-  // Exact normalized match
+  // Exact normalized match (squashed catches "spiderman" === "spider man")
   if (e.norm === q || e.squashed === qSquashed) return SCORE_EXACT
 
-  // Name starts with the full query
-  if (e.norm.startsWith(q)) return SCORE_STARTS_WITH
+  // Name starts with the full query. Squashed comparison makes punctuation
+  // irrelevant: "spiderman" → "Spider-Man…", "reddead" → "Red Dead…".
+  if (e.norm.startsWith(q) || e.squashed.startsWith(qSquashed)) return SCORE_STARTS_WITH
 
   // Acronym match: "gta" → "grand theft auto", "cod" → "call of duty"
   if (qSquashed.length >= 2 && qSquashed.length <= 5 && e.words.length >= qSquashed.length) {
@@ -184,24 +134,16 @@ function scoreEntry(e: SearchEntry, q: string, qSquashed: string, qWords: string
     if (acronym.startsWith(qSquashed)) return SCORE_ACRONYM
   }
 
-  // Single-word query that equals a whole name word ("strike" in "counter strike")
-  // outranks mere prefix hits on unrelated words ("strike cars").
+  // Single-word query that equals a whole name word ("strike" in "counter strike").
   if (qWords.length === 1 && e.words.includes(qWords[0]!)) return SCORE_WORD_EXACT
 
-  // Every query word is a prefix of some name word ("elden ri" → "elden ring")
+  // Every query word is a prefix of some name word ("elden ri" → "elden ring",
+  // "witcher" → "the witcher"). This is the strict floor — a game must have a word
+  // that STARTS WITH each typed word. Mid-word substring hits ("punk"→"cyberpunk"),
+  // cross-field dev/publisher matches, and Levenshtein fuzz are deliberately gone:
+  // they were the source of irrelevant results.
   const allWordsPrefix = qWords.every(qw => qw.length > 0 && e.words.some(nw => nw.startsWith(qw)))
   if (allWordsPrefix) return SCORE_WORD_PREFIX
-
-  // Full query appears anywhere in the name ("strike" → "counter strike")
-  if (q.length >= 2 && (e.norm.includes(q) || e.squashed.includes(qSquashed))) return SCORE_SUBSTRING
-
-  // Every query word appears as a substring somewhere in the name
-  if (qWords.length > 0 && qWords.every(qw => qw.length >= 2 && e.norm.includes(qw))) {
-    return SCORE_WORD_SUBSTRING
-  }
-
-  // Developer / publisher match (full query as substring)
-  if (q.length >= 3 && e.devPub && e.devPub.includes(q)) return SCORE_DEV_PUB
 
   return 0
 }
@@ -262,25 +204,9 @@ function searchGames(
     if (s > 0) scored.push({ idx, score: s + popBonus(idx) })
   }
 
-  // Fuzzy fallback: APPEND loosely-matching games only when real matches are
-  // scarce — never replaces or displaces genuine matches.
-  if (scored.length < FUZZY_TRIGGER_BELOW && q.length >= 3) {
-    const already = new Set(scored.map(s => s.idx))
-    const fuzzy: ScoredIndex[] = []
-    for (const idx of preFilteredIndices) {
-      if (already.has(idx)) continue
-      const e = entries[idx]
-      if (!e || e.words.length === 0) continue
-      const sim = wordSimilarity(qWords, e.words)
-      if (sim >= FUZZY_THRESHOLD) {
-        fuzzy.push({ idx, score: Math.round(sim * 25) }) // max 25 — always below real matches
-        if (fuzzy.length >= FUZZY_MAX_RESULTS) break
-      }
-    }
-    fuzzy.sort((a, b) => b.score - a.score)
-    scored.push(...fuzzy)
-  }
-
+  // No fuzzy fallback: it was the main source of irrelevant results
+  // ("elden"→"elder", one lucky word pulling in unrelated games). Strict
+  // prefix/word-prefix matching only — an empty result is better than a wrong one.
   return scored
 }
 
