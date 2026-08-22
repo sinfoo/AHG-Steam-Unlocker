@@ -161,14 +161,20 @@ function streamToFile(res, filePath, onProgress) {
     const total = parseInt(res.headers['content-length'] || '0', 10);
     let received = 0;
     const out = fs.createWriteStream(filePath);
+    // On any error, close the write stream and delete the truncated file so a
+    // dropped download doesn't leak a handle or leave a corrupt partial zip behind.
+    const fail = (err) => {
+      out.destroy();
+      fs.rm(filePath, { force: true }, () => reject(err));
+    };
     res.on('data', (chunk) => {
       received += chunk.length;
       if (total && onProgress) onProgress(received, total);
     });
     res.pipe(out);
     out.on('finish', () => out.close(() => resolve({ received, total })));
-    out.on('error', reject);
-    res.on('error', reject);
+    out.on('error', fail);
+    res.on('error', fail);
   });
 }
 
