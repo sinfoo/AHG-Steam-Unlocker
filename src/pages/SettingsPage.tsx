@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { COLORS } from '../constants/colors'
 import { useSettingsStore } from '../store/settingsStore'
+import { useGameStore } from '../store'
 import { useShallow } from 'zustand/react/shallow'
 
 // ── Settings Page ──
@@ -152,7 +153,7 @@ const SettingsPage = memo(function SettingsPage({ colors, accentColor, soundEnab
                 border: `1px solid ${colors[accentColor as keyof typeof colors]}25`,
               }}
             >
-              v1.2.1
+              v1.2.2
             </span>
           </div>
           <p className="text-sm font-medium" style={{ color: colors.textMuted }}>
@@ -300,7 +301,20 @@ const SettingsPage = memo(function SettingsPage({ colors, accentColor, soundEnab
               <motion.div key="steam" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.12 }} className="space-y-6">
                 <SettingsSection title="Steam Management" icon={HardDrive} color={colors.cyan}>
                   <ActionButton label="Restart Steam" desc="Close and relaunch Steam" icon={RotateCw} color={colors.blue} onClick={() => window.electronAPI?.restartSteam?.()} colors={colors} />
-                  <ActionButton label="Refresh Games" desc="Reload games list" icon={RefreshCw} color={colors.green} onClick={() => {}} colors={colors} />
+                  <ActionButton label="Refresh Games" desc="Reload games list" icon={RefreshCw} color={colors.green} onClick={async () => {
+                    showToast('Refreshing games…', 'info')
+                    try {
+                      const g = await bridge.loadGames?.(true)
+                      if (Array.isArray(g) && g.length > 0) {
+                        useGameStore.getState().setGames(g)
+                        showToast(`Games refreshed — ${g.length.toLocaleString()} titles`, 'success')
+                      } else {
+                        showToast('No games returned from refresh', 'error')
+                      }
+                    } catch (e: any) {
+                      showToast('Refresh failed: ' + (e?.message || e), 'error')
+                    }
+                  }} colors={colors} />
                   <ActionButton label="Open Steam Folder" desc="Open in File Explorer" icon={FolderOpen} color={colors.violet} onClick={() => window.electronAPI?.openSteamFolder?.()} colors={colors} />
                 </SettingsSection>
 
@@ -372,7 +386,11 @@ const SettingsPage = memo(function SettingsPage({ colors, accentColor, soundEnab
                       { label: 'AHG Script', desc: 'Run AHG maintenance script', icon: Eye, color: colors.green, action: () => { bridge.fixGamesNotShowing?.().then((r: any) => showToast(r?.success ? 'Done!' : r?.message, r?.success ? 'success' : 'error')); }},
                       { label: 'Clear Cache', desc: 'Clean temp files', icon: Trash, color: colors.red, action: () => bridge.clearCache?.().then((r: any) => showToast(r?.success ? 'Cleared!' : r?.message, r?.success ? 'success' : 'error'))},
                       { label: 'Scan New Manifests', desc: 'Check for new game manifests', icon: Search, color: colors.cyan, action: () => { bridge.scanNewManifests?.().then((r: any) => showToast(r?.success ? 'Scan complete!' : r?.message, r?.success ? 'success' : 'error')); }},
-                      { label: 'Check for Updates', desc: 'Check AHG Unlocker updates', icon: RefreshCw, color: colors.pink, action: () => { bridge.checkForUpdates?.().then((r: any) => showToast(r?.success ? 'Update available!' : 'Up to date', r?.success ? 'success' : 'info')); }},
+                      { label: 'Check for Updates', desc: 'Check AHG Unlocker updates', icon: RefreshCw, color: colors.pink, action: () => { bridge.checkForUpdates?.().then((r: any) => {
+                        if (!r?.success) { showToast(r?.message || 'Could not check for updates', 'error'); return; }
+                        // r.success only means the check itself worked — branch on hasUpdate.
+                        showToast(r.hasUpdate ? `Update available: v${r.latestVersion}` : "You're on the latest version", r.hasUpdate ? 'info' : 'success');
+                      }); }},
                     ].map((tool) => (
                       <button
                         key={tool.label}
@@ -464,7 +482,7 @@ const SettingsPage = memo(function SettingsPage({ colors, accentColor, soundEnab
                               <p className="text-xs uppercase tracking-wider font-bold" style={{ color: colors.textMuted }}>Games</p>
                             </div>
                             <div className="flex-1 text-center p-3 rounded-xl" style={{ background: 'rgba(236,72,153,0.08)' }}>
-                              <p className="text-lg font-bold" style={{ color: colors.pink }}>v1.2.1</p>
+                              <p className="text-lg font-bold" style={{ color: colors.pink }}>v1.2.2</p>
                               <p className="text-xs uppercase tracking-wider font-bold" style={{ color: colors.textMuted }}>Version</p>
                             </div>
                             <div className="flex-1 text-center p-3 rounded-xl" style={{ background: 'rgba(245,158,11,0.08)' }}>
