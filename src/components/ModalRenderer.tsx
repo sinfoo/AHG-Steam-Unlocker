@@ -72,7 +72,7 @@ export interface ModalRendererProps {
   openPortalModal: (game: any) => Promise<void>
   processDownloadQueue: () => Promise<void>
   removeFromDownloadQueue: (appid: string) => void
-  cancelDownload: () => void
+  cancelDownload: (appid?: string) => void
   restartSteam: () => void
 
   // Utils
@@ -145,7 +145,7 @@ const ModalRenderer = memo(function ModalRenderer({ modalProps }: { modalProps: 
     showToast, bridge,
   } = modalProps
 
-  const currentVersion = "1.2.1"
+  const currentVersion = "1.2.2"
 
   return (
     <>
@@ -168,7 +168,7 @@ const ModalRenderer = memo(function ModalRenderer({ modalProps }: { modalProps: 
         onRestartSteam={() => { setInstallModalOpen(false); restartSteam(); showToast('Restarting Steam...', 'info'); }}
         onClose={() => setInstallModalOpen(false)}
         onDismiss={() => setInstallModalOpen(false)}
-        onCancel={() => { cancelDownload() }}
+        onCancel={() => { cancelDownload(installGameInfo?.appid) }}
       />
       </Suspense>
 

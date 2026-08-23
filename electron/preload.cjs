@@ -517,7 +517,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getSearchHistory: () => ipcRenderer.invoke('get-search-history'),
   saveSearchHistory: (searches) => ipcRenderer.invoke('save-search-history', searches),
   fixNoGamesStream: () => ipcRenderer.invoke('fix-no-games-stream'),
-  cancelDownload: () => ipcRenderer.invoke('cancel-download'),
+  cancelDownload: (appid) => ipcRenderer.invoke('cancel-download', appid),
   launchGame: (appId) => ipcRenderer.invoke('launch-game', appId),
   showMainWindow: () => ipcRenderer.invoke('show-main-window'),
   refreshSteam: () => ipcRenderer.invoke('refresh-steam'),

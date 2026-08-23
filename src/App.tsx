@@ -597,7 +597,7 @@ function App() {
       // Check for first launch or new version
       try {
         const lastSeen = await bridge.getLastSeenVersion()
-        const currentVersion = '1.2.1'
+        const currentVersion = '1.2.2'
         if (!lastSeen || lastSeen.version !== currentVersion) {
           // Changelog auto-open disabled — was appearing as "second splash screen"
           await bridge.setLastSeenVersion(currentVersion)
@@ -880,7 +880,7 @@ function App() {
     addToDownloadQueue, contextMenuShareCard, contextMenuCopyAppId,
     contextMenuRemoveGame, openPortalModal,
     processDownloadQueue, removeFromDownloadQueue,
-    cancelDownload: () => window.electronAPI?.cancelDownload?.(),
+    cancelDownload: (appid?: string) => window.electronAPI?.cancelDownload?.(appid),
     restartSteam: () => window.electronAPI?.restartSteam?.(),
 
     showToast: showToast as (msg: string, type: string) => void,
