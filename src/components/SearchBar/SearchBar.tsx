@@ -136,9 +136,15 @@ export default function SearchBar({ onSearch, accentColor, colors }: SearchBarPr
       setSelectedIndex(prev => Math.max(prev - 1, -1))
     } else if (e.key === 'Enter') {
       e.preventDefault()
-      if (selectedIndex >= 0 && selectedIndex < results.length) {
-        // Navigate to browse with the current query as context
-        handleSubmit(query)
+      const picked = selectedIndex >= 0 && selectedIndex < results.length ? results[selectedIndex] : null
+      if (picked) {
+        // Enter on a highlighted result opens THAT game — its exact name pins it to
+        // the top of browse — instead of re-submitting the raw typed query.
+        const target = (picked.name || query).trim()
+        setShowDropdown(false)
+        setQuery(target)
+        saveToHistory(target)
+        onSearch(target)
       } else {
         handleSubmit(query)
       }
@@ -146,7 +152,7 @@ export default function SearchBar({ onSearch, accentColor, colors }: SearchBarPr
       setShowDropdown(false)
       inputRef.current?.blur()
     }
-  }, [selectedIndex, results.length, handleSubmit, query])
+  }, [selectedIndex, results, handleSubmit, query, saveToHistory, onSearch])
 
   const clearQuery = useCallback(() => {
     setQuery('')
