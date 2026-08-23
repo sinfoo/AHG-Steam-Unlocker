@@ -143,10 +143,13 @@ export function useInstallGame() {
         showToast('Added to Steam successfully!', 'success')
         addLog(`✓ ${gameName} added!`, 'success')
         const installedGames = useGameStore.getState().installedGames
-        if (game && !installedGames.find(g => g.appid === appid)) {
-          const newInstalled = [...installedGames, game]
+        const appidStr = String(appid)
+        // Normalize to string appid + dedup on string — mixed number/string appids
+        // otherwise defeat the dedup, double-listing the game or failing to flip its card.
+        if (game && !installedGames.some(g => String(g.appid) === appidStr)) {
+          const newInstalled = [...installedGames, { ...game, appid: appidStr }]
           useGameStore.getState().setInstalledGames(newInstalled)
-          window.electronAPI?.saveInstalled?.(newInstalled.map(g => g.appid))
+          window.electronAPI?.saveInstalled?.(newInstalled.map(g => String(g.appid)))
         }
         useUserStore.getState().setRecentGames((prev: string[]) => [appid, ...prev.filter(id => id !== appid)].slice(0, 20))
         useInstallStore.getState().setInstallFailedAppid(null)
