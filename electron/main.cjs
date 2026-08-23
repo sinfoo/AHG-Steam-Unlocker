@@ -2368,12 +2368,26 @@ ipcMain.handle('fetch-dlcs', async (event, appid, gameName) => {
     if (appData.data.dlc && Array.isArray(appData.data.dlc)) {
       dlcIds = appData.data.dlc.map(String);
     }
-    
-    // NOTE: do NOT merge `appData.data.packages` — those are store *package*
-    // (sub) IDs, not app IDs. addappid(<packageId>) unlocks nothing and only
-    // pollutes the DLC list with junk entries whose covers 404. Only the real
-    // `dlc` array (Steam app IDs) is used.
-    console.log('[MAIN] Found ' + dlcIds.length + ' DLCs for ' + appid);
+
+    // Steam's appdetails `dlc` array is unreliable — it comes back EMPTY for many
+    // games (GTA V, RDR2, …) that clearly have DLC. Merge the local catalogue's dlc
+    // map (real DLC app IDs from the Ryuu games feed), which covers games the API
+    // misses; its values are names, so they also pre-fill dlcNames with no extra
+    // API calls. Store `packages` sub-IDs are still excluded — they aren't app IDs.
+    const catalogNames = {};
+    try {
+      const g = db.getGame(appid);
+      const catDlc = (g && g.dlc && typeof g.dlc === 'object') ? g.dlc : null;
+      if (catDlc) {
+        for (const [id, nm] of Object.entries(catDlc)) {
+          const sid = String(id);
+          if (!/^\d+$/.test(sid)) continue;
+          if (!dlcIds.includes(sid)) dlcIds.push(sid);
+          if (nm && !String(nm).startsWith('App ')) catalogNames[sid] = String(nm);
+        }
+      }
+    } catch (e) { console.log('[MAIN] catalogue DLC merge error:', e.message); }
+    console.log('[MAIN] Found ' + dlcIds.length + ' DLCs for ' + appid + ' (Steam API + catalogue)');
     
     // Fetch DLC names — check cache FIRST, only hit API for uncached DLCs
     const dlcNames = {};
@@ -2389,6 +2403,12 @@ ipcMain.handle('fetch-dlcs', async (event, appid, gameName) => {
         const cached = dlcInfoCache.get(id);
         dlcNames[id] = cached.name || ('App ' + id);
         dlcDetails[id] = { name: cached.name, header_image: cached.header_image };
+      } else if (catalogNames[id]) {
+        // Name already known from the catalogue — skip the per-DLC Steam API call.
+        const header_image = `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/header.jpg`;
+        dlcNames[id] = catalogNames[id];
+        dlcDetails[id] = { name: catalogNames[id], header_image };
+        dlcInfoCache.set(id, { name: catalogNames[id], header_image });
       } else {
         uncachedIds.push(id);
       }
@@ -2638,8 +2658,10 @@ ipcMain.handle('register-dlcs', async (event, appid, dlcIds, dlcDetails, sourceR
       if (ok > 0) console.log('[MAIN] Pre-fetched', ok, 'DLC names after registration');
     }).catch(e => console.log('[MAIN] DLC name fetch after register error:', e.message));
     
-    // Best-effort background DLC manifest download — prioritize sourceRepo, then top repos
-    tryDlcManifests(dlcIds, depotCache, sourceRepo).catch(e => 
+    // Best-effort background DLC manifest + key-lua download — prioritize sourceRepo, then top repos.
+    // luaPath lets it upgrade each DLC's ownership-only stub to a key-bearing lua so
+    // content-depot DLCs actually mount.
+    tryDlcManifests(dlcIds, depotCache, sourceRepo, luaPath).catch(e =>
       console.log('[MAIN] DLC manifest background download error:', e.message)
     );
     

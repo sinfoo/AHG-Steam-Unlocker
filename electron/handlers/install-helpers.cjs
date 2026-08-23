@@ -924,7 +924,44 @@ async function extractBundledLua(repo, appid, luaPath) {
 
 // Background DLC manifest downloader — best-effort, never blocks registration
 // Tries top-N repos (by manifest count) to find and download existing manifests for DLCs
-async function tryDlcManifests(dlcIds, depotCache, sourceRepo) {
+// Fetch a DLC's own key-bearing lua (addappid(depot,1,"key") lines) from a repo,
+// like the base game does. A DLC with real content depots needs these decryption
+// keys — a bare addappid(dlcId) only flags ownership and never mounts the files,
+// which is why some DLCs "don't actually get added". Writes {dlcId}.lua on success,
+// overwriting the ownership-only stub register-dlcs wrote. Returns true if written.
+async function fetchDlcLua(dlcId, repo, luaPath) {
+  if (!/^\d+$/.test(String(dlcId))) return false;
+  const urls = [
+    `https://raw.githubusercontent.com/${repo}/main/${dlcId}.lua`,
+    `https://raw.githubusercontent.com/${repo}/master/${dlcId}.lua`,
+    `https://raw.githubusercontent.com/${repo}/main/stplug-in/${dlcId}.lua`,
+    `https://raw.githubusercontent.com/${repo}/master/stplug-in/${dlcId}.lua`,
+  ];
+  for (const url of urls) {
+    try {
+      const data = await new Promise((resolve, reject) => {
+        const req = https.get(url, { headers: { 'User-Agent': 'AHG-Steam-Unlocker' } }, (res) => {
+          if (res.statusCode !== 200) { reject(new Error('HTTP ' + res.statusCode)); return; }
+          const chunks = [];
+          res.on('data', c => chunks.push(c));
+          res.on('end', () => resolve(Buffer.concat(chunks)));
+        });
+        req.on('error', reject);
+        req.setTimeout(state.REPO_TIMEOUT_MS, () => { req.destroy(); reject(new Error('Timeout')); });
+      });
+      // Only accept a real unlock lua (must contain addappid) — repos sometimes serve
+      // a 200 HTML 404 page.
+      if (data && data.includes('addappid')) {
+        fs.writeFileSync(path.join(luaPath, dlcId + '.lua'), data);
+        console.log(`[MAIN] DLC lua (with keys): ${dlcId}.lua from ${repo}`);
+        return true;
+      }
+    } catch (_) { /* try next url */ }
+  }
+  return false;
+}
+
+async function tryDlcManifests(dlcIds, depotCache, sourceRepo, luaPath) {
   if (!dlcIds || dlcIds.length === 0) return 0;
 
   // Build repo list: sourceRepo first (same repo that found the game), then top repos
@@ -939,6 +976,7 @@ async function tryDlcManifests(dlcIds, depotCache, sourceRepo) {
   console.log(`[MAIN] Searching ${repos.length} repos for ${dlcIds.length} DLC manifests (sourceRepo: ${sourceRepo || 'none'})...`);
 
   let totalFound = 0;
+  const luaWritten = new Set();
 
   for (const repo of repos) {
     if (totalFound >= dlcIds.length) break; // already found all DLC manifests
@@ -951,6 +989,11 @@ async function tryDlcManifests(dlcIds, depotCache, sourceRepo) {
         const appData = depotKeys[dlcId];
         const depots = appData.depots || {};
         const depotIds = Object.keys(depots);
+
+        // Grab the DLC's key-bearing lua so content depots actually decrypt/mount.
+        if (luaPath && !luaWritten.has(dlcId)) {
+          if (await fetchDlcLua(dlcId, repo, luaPath)) luaWritten.add(dlcId);
+        }
 
         const urlFormats = [
           `https://raw.githubusercontent.com/${repo}/main/depotcache/%depotid%_%manifestid%.manifest`,
