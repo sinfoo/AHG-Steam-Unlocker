@@ -530,7 +530,7 @@ const AnimatedLoadingScreen = memo(function AnimatedLoadingScreen({
   appName = 'AHG',
   appSubtitle = 'STEAM UNLOCKER',
   statBadges = DEFAULT_BADGES,
-  versionString = 'v1.2.1 \u2022 Developed by sinfo',
+  versionString = 'v1.2.2 \u2022 Developed by sinfo',
 }: AnimatedLoadingScreenProps) {
   if (!isLoading) return null
 
