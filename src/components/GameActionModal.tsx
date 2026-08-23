@@ -248,8 +248,10 @@ export const GameActionModal = memo(function GameActionModal({ game, isOpen, onC
                   Install Zip
                 </motion.button>
 
-                {/* Manage DLCs — shown when game has DLC data */}
-                {hasDLC && onOpenDLCManager && (
+                {/* Manage DLCs — the manager fetches DLCs itself (Steam API + catalogue),
+                    so offer it for any game rather than only when the catalog row already
+                    has a dlc map (which is empty for many games that do have DLC). */}
+                {onOpenDLCManager && (
                   <motion.button
                     onClick={() => onOpenDLCManager(game)}
                     whileHover={{ scale: 1.02 }}
