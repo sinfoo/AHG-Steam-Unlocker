@@ -667,3 +667,73 @@ rejected with a clear reason. Ready to rebuild.
   AHG.Steam.Unlocker.v1.1.zip (213.5 MB), clean notes (no AI attribution), uploader
   sinfoo. Auth: sinfoo added as collaborator (the secrets.json ahg-team token is
   gist-scoped only and can't create releases).
+
+---
+
+## 2026-08-22 — UI version, strict search, DLC display, image retry
+
+1. UI version 1.0/1.1 → 1.2.0 everywhere: AnimatedLoadingScreen, SettingsPage (badge + stat), ModalRenderer (update modal), App.tsx changelog check. (package.json already 1.2.0.)
+2. Search made strict + symbol-aware:
+   - Worker (searchWorker.ts): dropped mid-word substring, dev/publisher, and Levenshtein fuzzy tiers (the irrelevant-result sources); kept exact/starts-with/acronym/word-exact/word-prefix. starts-with now also matches on the squashed name so ":" / "™" / "-" are ignored ("spiderman"→"Spider-Man"). Removed levenshtein/wordSimilarity.
+   - SQLite instant dropdown (db.cjs buildGameQuery/queryGames): replaced `name LIKE %q%` + `tags LIKE` substring match with prefix + word-prefix, and rank true prefix matches first.
+3. DLCs added to Steam: fetch-dlcs no longer merges store *package* IDs into the DLC list (they aren't app IDs, unlock nothing, and 404 covers). register-dlcs lua-write path was already correct.
+4. DLCs "added but not shown": DLCManager only checked installedGames (which excludes DLCs). Added get-dlc-registry IPC (installed.cjs readDlcRegistry: dlc_registry.json + {appid}_dlcs.lua scan) → preload → bridge.getDlcRegistry → DLCManager marks registered DLCs as Installed.
+5. Images "many don't load": GameCover now retries a failed load (bounded, 3× backoff) instead of latching a permanent placeholder on the first transient CDN miss; img-decode errors invalidate the cache key and refetch.
+
+Verified: tsc clean, node --check on all .cjs, search-scorer sanity check, /ahgrebuild + smoke 7/7. Build ready in dev-release\win-unpacked (1.2.0). NOT released — v1.2 already public; a new build needs v1.2.1.
+
+---
+
+## 2026-08-23 — DLC "not found" regression + UX pass (pending release as v1.2.2)
+
+### DLC detection (root cause of "DLCs now not found")
+- Steam's appdetails `dlc` array is unreliable — empty for many games (GTA V, RDR2…). Last release removed the (bogus) `packages` fallback, which exposed this as "no DLCs found".
+- fetch-dlcs now MERGES the local catalogue's dlc map (real DLC app IDs from games.db) with the Steam API list; catalogue names pre-fill dlcNames (fewer API calls). Verified: GTA V 0→6 (catalogue), Witcher 3 keeps 22 (API).
+
+### DLCs "added but don't actually install" (some games)
+- Root cause: DLCs only got `addappid(dlcId)` (ownership) + manifests, never the depot DECRYPTION KEYS, so content-depot DLCs never mount. Base games get keys from the repo's {appid}.lua.
+- tryDlcManifests now also fetches each DLC's key-bearing {dlcId}.lua from the repos (mirrors the base-game path), overwriting the ownership-only stub. Limitation: DLCs with no repo lua/key anywhere still can't mount content (data gap, not a code bug).
+
+### UX / bug fixes (from focused scan)
+- Settings "Refresh Games" dead button → reloads catalogue into the store + toast.
+- Settings "Check for Updates" always said "Update available!" → now branches on hasUpdate (+ error on failed check).
+- Search: Enter on a keyboard-highlighted result now opens THAT game (was submitting raw query).
+- Manage DLCs entry point shown for any game (the manager fetches its own DLCs).
+- Install Cancel now truly aborts the running install (preload forwards appid → cancel-download aborts install-<appid>) instead of silently completing.
+- ZIP-install: normalize appid to string so the card flips to Installed / no duplicate.
+
+Skipped (noted): fake Notifications/Auto-Updates toggles + Settings cache-size readout (need real backing systems).
+Checks: tsc clean, node --check all cjs, rebuild + smoke 7/7. NOT yet released — pending v1.2.2 ship decision.
+
+---
+
+## 2026-09-01 — custom depot/stplugin paths: finish the job (v1.2.3)
+
+Review of `1601321` ("honor custom depotcache/stplugin paths"). The diagnosis was right
+and the edits were correct, but two things left the fix unable to actually take effect.
+
+1. **`main.cjs` read a frozen config snapshot.** `main.cjs:22` destructured
+   `customSteamConfig` from `utils/config.cjs`, which resolves it once at module load.
+   Saving paths in Settings goes through `handlers/config.cjs` →
+   `state.setCustomSteamConfig()` — a different store. So every
+   `getCustomDepotCachePath(customSteamConfig)` the commit added read a value frozen at
+   app launch: set a custom path in Settings, install without restarting, and the files
+   still went to the defaults. All 18 sites now read `state.customSteamConfig` (the live
+   store, already required at `main.cjs:16`); `steamUtils.cjs:47` seeds it from the same
+   `steam_custom_paths.json` at load, so startup behaviour is unchanged.
+
+2. **`install-helpers.cjs` `downloadManifest()` was missed.** Line 31 still hardcoded
+   `path.join(steamPath, 'depotcache')`. It is the shared choke point for
+   `scan-new-manifests` (`misc.cjs:241`) and mirror-single downloads
+   (`install-helpers.cjs:89`), so the scanner *listed* the custom folder but *wrote* to
+   the default one — re-downloading the same manifests forever into a folder SteamTools
+   never reads. The commit fixed the `main.cjs` copy of this function but not this one.
+
+Note for triage: this whole bug class only fires when custom paths are configured.
+On a default install (`steam_custom_paths.json` == `{}`) every one of these call sites
+already resolved to `<steamPath>/depotcache` and `<steamPath>/config/stplug-in`, so it
+cannot explain a "game missing from library" report on a stock setup. If that symptom
+recurs, reproduce once and read the `[INSTALL-DIAG]` lines — they already print
+`foundRepo`, `manifestCount` and `hasLua`.
+
+Checks: `node --check` on both changed .cjs, tsc clean, rebuild + smoke.

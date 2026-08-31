@@ -28,7 +28,7 @@ async function downloadManifest(appid, depotid, manifestid, repo, steamPath) {
   // written file path. Steam IDs are always numeric — reject anything else so a
   // hostile mirror can't use "..\\..\\" to write outside depotcache.
   if (!/^\d+$/.test(String(depotid)) || !/^\d+$/.test(String(manifestid))) return false;
-  const depotCache = path.join(steamPath, 'depotcache');
+  const depotCache = getCustomDepotCachePath() || path.join(steamPath, 'depotcache');
   fs.mkdirSync(depotCache, { recursive: true });
 
   // Try different URL formats for manifests

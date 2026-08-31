@@ -145,7 +145,7 @@ const ModalRenderer = memo(function ModalRenderer({ modalProps }: { modalProps: 
     showToast, bridge,
   } = modalProps
 
-  const currentVersion = "1.2.2"
+  const currentVersion = "1.2.3"
 
   return (
     <>

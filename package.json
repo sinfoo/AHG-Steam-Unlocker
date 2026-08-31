@@ -1,7 +1,7 @@
 {
   "name": "ahg-unlocker",
   "productName": "AHG Unlocker",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "AHG Steam Unlocker - Professional Game Manager",
   "author": "AHG Team",
   "private": true,
@@ -98,12 +98,23 @@
       "node_modules/sql.js/dist/*.wasm"
     ],
     "extraResources": [
-      { "from": "games.db", "to": "games.db" },
-      { "from": "fixes.db", "to": "fixes.db" },
-      { "from": "resources/cover-seed", "to": "cover-seed" }
+      {
+        "from": "games.db",
+        "to": "games.db"
+      },
+      {
+        "from": "fixes.db",
+        "to": "fixes.db"
+      },
+      {
+        "from": "resources/cover-seed",
+        "to": "cover-seed"
+      }
     ],
     "win": {
-      "target": ["dir"],
+      "target": [
+        "dir"
+      ],
       "icon": "AHG Unlocker Icon.ico"
     }
   }

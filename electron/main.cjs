@@ -19,7 +19,7 @@ const APP_VERSION = require('../package.json').version;
 const { DiskCacheManager } = require('./services/imageDiskCache.cjs');
 const { preloader } = require('./services/imagePreloader.cjs');
 const nativeImageAddon = require('../native');
-const { customSteamConfig, dlcInfoCache, DLC_CACHE_FILE, getCustomSteamConfig, saveCustomSteamConfig, loadDlcInfoCache, saveDlcInfoCache, fetchDlcInfos } = require('./utils/config.cjs');
+const { dlcInfoCache, DLC_CACHE_FILE, getCustomSteamConfig, saveCustomSteamConfig, loadDlcInfoCache, saveDlcInfoCache, fetchDlcInfos } = require('./utils/config.cjs');
 const { getDepotDownloaderPath, DEPOT_DOWNLOADER_PATH, DEFAULT_STEAM_PATH, getResourcePath, findSteamPath, getCustomDepotCachePath, getCustomStPluginPath } = require('./utils/paths.cjs');
 
 // ── ipcMain.handle uses the original Electron binding ──
@@ -764,7 +764,7 @@ ipcMain.handle('install-game-with-logs', async (event, appid) => {
   const controller = new AbortController();
   downloadControllers.set(controllerId, controller);
   try {
-    const steamPath = findSteamPath(customSteamConfig);
+    const steamPath = findSteamPath(state.customSteamConfig);
     if (!steamPath || !fs.existsSync(steamPath)) {
       return { success: false, message: 'Steam not found. Configure path in Settings.' };
     }
@@ -939,7 +939,7 @@ async function getSteamAppData(appid) {
 
 // Download actual manifest files
 async function downloadManifest(appid, depotid, manifestid, repo, steamPath) {
-  const depotCache = getCustomDepotCachePath(customSteamConfig) || path.join(steamPath, 'depotcache');
+  const depotCache = getCustomDepotCachePath(state.customSteamConfig) || path.join(steamPath, 'depotcache');
   fs.mkdirSync(depotCache, { recursive: true });
   
   // Try different URL formats for manifests
@@ -997,7 +997,7 @@ async function downloadFromMirrorSingle(appid, repo) {
         for (const depotId in depots) {
           const depotData = depots[depotId];
           if (depotData.manifestid) {
-            await downloadManifest(appid, depotId, depotData.manifestid, repo, findSteamPath(customSteamConfig));
+            await downloadManifest(appid, depotId, depotData.manifestid, repo, findSteamPath(state.customSteamConfig));
           }
         }
         
@@ -1045,8 +1045,8 @@ async function downloadFromMirrorSingle(appid, repo) {
 
 // Copy manifest to Steam depotcache
 async function copyManifestToSteam(manifestData, appid, steamPath) {
-  const depotCache = getCustomDepotCachePath(customSteamConfig) || path.join(steamPath, 'depotcache');
-  const luaPath = getCustomStPluginPath(customSteamConfig) || path.join(steamPath, 'config', 'stplug-in');
+  const depotCache = getCustomDepotCachePath(state.customSteamConfig) || path.join(steamPath, 'depotcache');
+  const luaPath = getCustomStPluginPath(state.customSteamConfig) || path.join(steamPath, 'config', 'stplug-in');
   
   fs.mkdirSync(depotCache, { recursive: true });
   fs.mkdirSync(luaPath, { recursive: true });
@@ -1527,8 +1527,8 @@ async function installSteamGame(appid, steamPath, sendLog, signal) {
   // so when those custom paths were configured the game's manifest + lua landed
   // in the wrong folder and SteamTools never mounted it → game absent from the
   // Steam library. Root-cause fix: resolve the same way the siblings do.
-  const depotCache = getCustomDepotCachePath(customSteamConfig) || path.join(steamPath, 'depotcache');
-  const luaPath = getCustomStPluginPath(customSteamConfig) || path.join(steamPath, 'config', 'stplug-in');
+  const depotCache = getCustomDepotCachePath(state.customSteamConfig) || path.join(steamPath, 'depotcache');
+  const luaPath = getCustomStPluginPath(state.customSteamConfig) || path.join(steamPath, 'config', 'stplug-in');
   
   try {
     fs.mkdirSync(depotCache, { recursive: true });
@@ -2134,14 +2134,14 @@ ipcMain.handle('add-to-steam', async (event, appid) => {
   const controller = new AbortController();
   downloadControllers.set(controllerId, controller);
   try {
-    const steamPath = findSteamPath(customSteamConfig);
-    console.log('[MAIN] add-to-steam: steamPath=' + steamPath + ' exists=' + fs.existsSync(steamPath) + ' customSteamConfig=' + JSON.stringify(customSteamConfig));
+    const steamPath = findSteamPath(state.customSteamConfig);
+    console.log('[MAIN] add-to-steam: steamPath=' + steamPath + ' exists=' + fs.existsSync(steamPath) + ' state.customSteamConfig=' + JSON.stringify(state.customSteamConfig));
     if (!steamPath || !fs.existsSync(steamPath)) {
       return { success: false, message: 'Steam not found. Configure path in Settings.' };
     }
     
-    const depotCache = getCustomDepotCachePath(customSteamConfig) || path.join(steamPath, 'depotcache');
-    const luaPath = getCustomStPluginPath(customSteamConfig) || path.join(steamPath, 'config', 'stplug-in');
+    const depotCache = getCustomDepotCachePath(state.customSteamConfig) || path.join(steamPath, 'depotcache');
+    const luaPath = getCustomStPluginPath(state.customSteamConfig) || path.join(steamPath, 'config', 'stplug-in');
     
     // Create folders
     fs.mkdirSync(depotCache, { recursive: true });
@@ -2257,13 +2257,13 @@ ipcMain.handle('add-to-steam', async (event, appid) => {
 // Install game from local ZIP file
 ipcMain.handle('install-game-from-zip', async (event, appid) => {
   try {
-    const steamPath = findSteamPath(customSteamConfig);
+    const steamPath = findSteamPath(state.customSteamConfig);
     if (!steamPath || !fs.existsSync(steamPath)) {
       return { success: false, message: 'Steam not found. Configure path in Settings.' };
     }
     
-    const depotCache = getCustomDepotCachePath(customSteamConfig) || path.join(steamPath, 'depotcache');
-    const luaPath = getCustomStPluginPath(customSteamConfig) || path.join(steamPath, 'config', 'stplug-in');
+    const depotCache = getCustomDepotCachePath(state.customSteamConfig) || path.join(steamPath, 'depotcache');
+    const luaPath = getCustomStPluginPath(state.customSteamConfig) || path.join(steamPath, 'config', 'stplug-in');
     fs.mkdirSync(depotCache, { recursive: true });
     fs.mkdirSync(luaPath, { recursive: true });
     
@@ -2616,9 +2616,9 @@ async function tryDlcManifests(dlcIds, depotCache, sourceRepo) {
 ipcMain.handle('register-dlcs', async (event, appid, dlcIds, dlcDetails, sourceRepo) => {
   try {
     console.log('[MAIN] register-dlcs for appid:', appid, 'dlcs:', dlcIds.length, 'sourceRepo:', sourceRepo || '(none)');
-    const steamPath = findSteamPath(customSteamConfig);
-    const depotCache = getCustomDepotCachePath(customSteamConfig) || path.join(steamPath, 'depotcache');
-    const luaPath = getCustomStPluginPath(customSteamConfig) || path.join(steamPath, 'config', 'stplug-in');
+    const steamPath = findSteamPath(state.customSteamConfig);
+    const depotCache = getCustomDepotCachePath(state.customSteamConfig) || path.join(steamPath, 'depotcache');
+    const luaPath = getCustomStPluginPath(state.customSteamConfig) || path.join(steamPath, 'config', 'stplug-in');
     
     fs.mkdirSync(depotCache, { recursive: true });
     fs.mkdirSync(luaPath, { recursive: true });
@@ -3123,7 +3123,7 @@ app.whenReady().then(async () => {
   } catch (_) {}
   setInterval(async () => {
     try {
-      const steamPath = findSteamPath(customSteamConfig);
+      const steamPath = findSteamPath(state.customSteamConfig);
       if (!steamPath || !fs.existsSync(steamPath)) return;
 
       const libraryFolders = [];

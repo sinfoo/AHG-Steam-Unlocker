@@ -153,7 +153,7 @@ const SettingsPage = memo(function SettingsPage({ colors, accentColor, soundEnab
                 border: `1px solid ${colors[accentColor as keyof typeof colors]}25`,
               }}
             >
-              v1.2.2
+              v1.2.3
             </span>
           </div>
           <p className="text-sm font-medium" style={{ color: colors.textMuted }}>
@@ -482,7 +482,7 @@ const SettingsPage = memo(function SettingsPage({ colors, accentColor, soundEnab
                               <p className="text-xs uppercase tracking-wider font-bold" style={{ color: colors.textMuted }}>Games</p>
                             </div>
                             <div className="flex-1 text-center p-3 rounded-xl" style={{ background: 'rgba(236,72,153,0.08)' }}>
-                              <p className="text-lg font-bold" style={{ color: colors.pink }}>v1.2.2</p>
+                              <p className="text-lg font-bold" style={{ color: colors.pink }}>v1.2.3</p>
                               <p className="text-xs uppercase tracking-wider font-bold" style={{ color: colors.textMuted }}>Version</p>
                             </div>
                             <div className="flex-1 text-center p-3 rounded-xl" style={{ background: 'rgba(245,158,11,0.08)' }}>
