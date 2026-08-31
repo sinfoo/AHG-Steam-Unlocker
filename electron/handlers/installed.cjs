@@ -10,7 +10,7 @@ const { withCache } = require('../utils/ttlCache.cjs');
 
 const getInstalledGamesImpl = withCache(async () => {
   const steamPath = findSteamPath();
-  const luaPath = path.join(steamPath, 'config', 'stplug-in');
+  const luaPath = getCustomStPluginPath() || path.join(steamPath, 'config', 'stplug-in');
   let gamesData = {};
   try {
     const result = db.queryGames({ limit: 999999 });

@@ -939,7 +939,7 @@ async function getSteamAppData(appid) {
 
 // Download actual manifest files
 async function downloadManifest(appid, depotid, manifestid, repo, steamPath) {
-  const depotCache = path.join(steamPath, 'depotcache');
+  const depotCache = getCustomDepotCachePath(customSteamConfig) || path.join(steamPath, 'depotcache');
   fs.mkdirSync(depotCache, { recursive: true });
   
   // Try different URL formats for manifests
@@ -1045,8 +1045,8 @@ async function downloadFromMirrorSingle(appid, repo) {
 
 // Copy manifest to Steam depotcache
 async function copyManifestToSteam(manifestData, appid, steamPath) {
-  const depotCache = path.join(steamPath, 'depotcache');
-  const luaPath = path.join(steamPath, 'config', 'stplug-in');
+  const depotCache = getCustomDepotCachePath(customSteamConfig) || path.join(steamPath, 'depotcache');
+  const luaPath = getCustomStPluginPath(customSteamConfig) || path.join(steamPath, 'config', 'stplug-in');
   
   fs.mkdirSync(depotCache, { recursive: true });
   fs.mkdirSync(luaPath, { recursive: true });
@@ -1521,8 +1521,14 @@ async function tryLuaToolsApis(appid, depotCache, luaPath, sendLog, signal) {
 
 // Install game - checks GitHub mirrors (Warden/SteamAutoCracks priority) first, then LuaTools APIs
 async function installSteamGame(appid, steamPath, sendLog, signal) {
-  const depotCache = path.join(steamPath, 'depotcache');
-  const luaPath = path.join(steamPath, 'config', 'stplug-in');
+  // Honor custom depot/stplugin folders from Settings. Every other install path
+  // (install-helpers, install.cjs, installed.cjs) resolves these; this copy
+  // previously hardcoded <steamPath>/depotcache + <steamPath>/config/stplug-in,
+  // so when those custom paths were configured the game's manifest + lua landed
+  // in the wrong folder and SteamTools never mounted it → game absent from the
+  // Steam library. Root-cause fix: resolve the same way the siblings do.
+  const depotCache = getCustomDepotCachePath(customSteamConfig) || path.join(steamPath, 'depotcache');
+  const luaPath = getCustomStPluginPath(customSteamConfig) || path.join(steamPath, 'config', 'stplug-in');
   
   try {
     fs.mkdirSync(depotCache, { recursive: true });
@@ -2134,8 +2140,8 @@ ipcMain.handle('add-to-steam', async (event, appid) => {
       return { success: false, message: 'Steam not found. Configure path in Settings.' };
     }
     
-    const depotCache = path.join(steamPath, 'depotcache');
-    const luaPath = path.join(steamPath, 'config', 'stplug-in');
+    const depotCache = getCustomDepotCachePath(customSteamConfig) || path.join(steamPath, 'depotcache');
+    const luaPath = getCustomStPluginPath(customSteamConfig) || path.join(steamPath, 'config', 'stplug-in');
     
     // Create folders
     fs.mkdirSync(depotCache, { recursive: true });
@@ -2256,8 +2262,8 @@ ipcMain.handle('install-game-from-zip', async (event, appid) => {
       return { success: false, message: 'Steam not found. Configure path in Settings.' };
     }
     
-    const depotCache = path.join(steamPath, 'depotcache');
-    const luaPath = path.join(steamPath, 'config', 'stplug-in');
+    const depotCache = getCustomDepotCachePath(customSteamConfig) || path.join(steamPath, 'depotcache');
+    const luaPath = getCustomStPluginPath(customSteamConfig) || path.join(steamPath, 'config', 'stplug-in');
     fs.mkdirSync(depotCache, { recursive: true });
     fs.mkdirSync(luaPath, { recursive: true });
     
@@ -2611,8 +2617,8 @@ ipcMain.handle('register-dlcs', async (event, appid, dlcIds, dlcDetails, sourceR
   try {
     console.log('[MAIN] register-dlcs for appid:', appid, 'dlcs:', dlcIds.length, 'sourceRepo:', sourceRepo || '(none)');
     const steamPath = findSteamPath(customSteamConfig);
-    const depotCache = path.join(steamPath, 'depotcache');
-    const luaPath = path.join(steamPath, 'config', 'stplug-in');
+    const depotCache = getCustomDepotCachePath(customSteamConfig) || path.join(steamPath, 'depotcache');
+    const luaPath = getCustomStPluginPath(customSteamConfig) || path.join(steamPath, 'config', 'stplug-in');
     
     fs.mkdirSync(depotCache, { recursive: true });
     fs.mkdirSync(luaPath, { recursive: true });

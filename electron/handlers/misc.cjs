@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { ipcMain, app, shell, dialog } = require('electron');
 const state = require('../utils/state.cjs');
-const { findSteamPath } = require('../utils/steamUtils.cjs');
+const { findSteamPath, getCustomDepotCachePath } = require('../utils/steamUtils.cjs');
 const { getOrderedRepos, downloadDepotKeys } = require('../utils/repoUtils.cjs');
 const { downloadManifest } = require('./install-helpers.cjs');
 const { wrapHandler } = require('../utils/rateLimiter.cjs');
@@ -215,7 +215,7 @@ function registerMiscHandlers() {
   ipcMain.handle('scan-new-manifests', wrapHandler('scan-new-manifests', async () => {
     try {
       const steamPath = findSteamPath();
-      const depotCache = path.join(steamPath, 'depotcache');
+      const depotCache = getCustomDepotCachePath() || path.join(steamPath, 'depotcache');
 
       let newCount = 0;
 
