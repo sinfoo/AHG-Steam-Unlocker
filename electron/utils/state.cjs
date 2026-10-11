@@ -76,9 +76,6 @@ const DLC_CACHE_FILE = 'dlc_info_cache.json';
 let customSteamConfig = {};
 let apiConfig = {};
 
-// Discord auth state
-let discordAuthData = null;
-
 // Module-level promise for repo indexing
 let repoIndexPromise = null;
 let dlcCacheLoaded = false;
@@ -198,8 +195,6 @@ module.exports = {
   setCustomSteamConfig(c) { customSteamConfig = c; },
   get apiConfig() { return apiConfig; },
   setApiConfig(c) { apiConfig = c; },
-  get discordAuthData() { return discordAuthData; },
-  setDiscordAuthData(d) { discordAuthData = d; },
   get repoIndexPromise() { return repoIndexPromise; },
   setRepoIndexPromise(p) { repoIndexPromise = p; },
   get dlcCacheLoaded() { return dlcCacheLoaded; },

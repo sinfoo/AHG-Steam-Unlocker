@@ -10,13 +10,13 @@
 
 export const DARK_COLORS = {
   // Background scale
-  bgDeep: '#0d0d1a',
-  bgDark: '#12122a',
-  bgMid: '#18183a',
-  bgCard: '#1e1e40',
-  bgCardGlass: 'rgba(26, 26, 48, 0.7)',
-  bgHover: '#222240',
-  bgActive: '#2e2e50',
+  bgDeep: '#0a0a14',
+  bgDark: '#0f0f1b',
+  bgMid: '#151524',
+  bgCard: '#151524',
+  bgCardGlass: 'rgba(21, 21, 36, 0.72)',
+  bgHover: '#1c1c30',
+  bgActive: '#26263c',
 
   // Primary accent
   violet: '#a77dff',
@@ -40,14 +40,14 @@ export const DARK_COLORS = {
   purple: '#a855f7',
 
   // Text
-  text: '#ffffff',
-  textSecondary: '#e2e8f0',
-  textMuted: '#b0bed0',
-  textDim: '#8892a6',
+  text: '#f3f2fa',
+  textSecondary: '#c9c8da',
+  textMuted: '#a6a5bb',
+  textDim: '#8b8aa3',
 
   // Borders
-  border: '#3a3a66',
-  borderLight: '#505090',
+  border: '#232336',
+  borderLight: '#34344e',
 
   // Misc
   white: '#ffffff',

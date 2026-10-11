@@ -21,7 +21,6 @@ import {
   useFixGamesStore,
   useScanStore,
   useUserStore,
-  useDiscordStore,
 } from '../store'
 // ── Render-critical state shapes (what JSX actually depends on) ──
 
@@ -74,7 +73,6 @@ export interface AppUIRenderState {
   activationOpen: boolean
   isActivated: boolean
   thankYouOpen: boolean
-  startupDiscordModal: boolean
   showExportModal: boolean
   showImportModal: boolean
   importResult: any
@@ -89,7 +87,6 @@ export interface AppSettingsRenderState {
   batchMode: boolean
   quickToolsOpen: boolean
   pureBlack: boolean
-  gameSharingEnabled: boolean
   reducedMotion: boolean
   hideSearchBars: boolean
   showOnlyOwned: boolean
@@ -156,12 +153,6 @@ export interface AppUserRenderState {
   showSearchSuggestions: boolean
 }
 
-export interface AppDiscordRenderState {
-  discordModalOpen: boolean
-  discordConnected: boolean
-  discordUser: any
-}
-
 // ── Batched hooks with shallow comparison ──
 
 export function useAppGameState(): AppGameRenderState {
@@ -226,7 +217,6 @@ export function useAppUIState(): AppUIRenderState {
         activationOpen: s.activationOpen,
         isActivated: s.isActivated,
         thankYouOpen: s.thankYouOpen,
-        startupDiscordModal: s.startupDiscordModal,
         showExportModal: s.showExportModal,
         showImportModal: s.showImportModal,
         importResult: s.importResult,
@@ -250,7 +240,6 @@ export function useAppSettingsState(): AppSettingsRenderState {
         batchMode: s.batchMode,
         quickToolsOpen: s.quickToolsOpen,
         pureBlack: s.pureBlack,
-        gameSharingEnabled: s.gameSharingEnabled,
         reducedMotion: s.reducedMotion,
         hideSearchBars: s.hideSearchBars,
         showOnlyOwned: s.showOnlyOwned,
@@ -380,24 +369,9 @@ export function useAppUserState(): AppUserRenderState {
   )
 }
 
-export function useAppDiscordState(): AppDiscordRenderState {
-  return useDiscordStore(
-    useShallow(
-      useCallback(
-      (s: any) => ({
-        discordModalOpen: s.discordModalOpen,
-        discordConnected: s.discordConnected,
-        discordUser: s.discordUser,
-      }),
-      []
-    )
-    )
-  )
-}
-
 // ── Combined app state for convenience ──
 
-export interface AppRenderState extends AppGameRenderState, AppUIRenderState, AppSettingsRenderState, AppInstallRenderState, AppUserRenderState, AppDiscordRenderState {}
+export interface AppRenderState extends AppGameRenderState, AppUIRenderState, AppSettingsRenderState, AppInstallRenderState, AppUserRenderState {}
 
 export function useAppState(): AppRenderState {
   const gameState = useAppGameState()
@@ -405,7 +379,6 @@ export function useAppState(): AppRenderState {
   const settingsState = useAppSettingsState()
   const installState = useAppInstallState()
   const userState = useAppUserState()
-  const discordState = useAppDiscordState()
 
   return useMemo(
     () => ({
@@ -414,8 +387,7 @@ export function useAppState(): AppRenderState {
       ...settingsState,
       ...installState,
       ...userState,
-      ...discordState,
     }),
-    [gameState, uiState, settingsState, installState, userState, discordState]
+    [gameState, uiState, settingsState, installState, userState]
   )
 }

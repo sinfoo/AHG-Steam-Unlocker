@@ -330,8 +330,6 @@ Loaded by `electron/utils/secrets.cjs`, which checks several fallback paths in o
 {
   "licenseGistId":      "<GIST_ID>",
   "githubToken":        "<GITHUB_PERSONAL_ACCESS_TOKEN>",
-  "discordClientId":    "<DISCORD_CLIENT_ID>",
-  "discordClientSecret":"<DISCORD_CLIENT_SECRET>",
   "discordBotToken":    "<DISCORD_BOT_TOKEN>",
   "discordInvite":      "<INVITE_CODE>"
 }

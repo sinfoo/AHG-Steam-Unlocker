@@ -1,3 +1,4 @@
+import { useT, t as tNow } from '../i18n'
 import React, { memo,  useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Download, CheckCircle, AlertCircle, RefreshCw, ExternalLink, Github, Package, ArrowDown, Sparkles, Terminal, FileArchive, Loader2 } from 'lucide-react'
@@ -18,7 +19,7 @@ function parseMarkdown(text: string) {
   const flushList = () => {
     if (listItems.length > 0) {
       elements.push(
-        <ul key={key++} className="ml-5 my-2 space-y-1 list-disc marker:text-violet-400">
+        <ul key={key++} className="ms-5 my-2 space-y-1 list-disc marker:text-violet-400">
           {listItems.map((item, i) => (
             <li key={i} className="text-sm" style={{ color: COLORS.textSecondary }}>{item}</li>
           ))}
@@ -88,6 +89,7 @@ function parseMarkdown(text: string) {
 }
 
 export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentVersion }: UpdateModalProps) {
+  const t = useT()
   const [checking, setChecking] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [installing, setInstalling] = useState(false)
@@ -126,14 +128,14 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
         setResult({
           hasUpdate: data.hasUpdate,
           latestVersion: data.latestVersion,
-          releaseNotes: data.releaseNotes || 'No release notes available.',
+          releaseNotes: data.releaseNotes || tNow('ui.upd.noNotes'),
           releaseUrl: data.releaseUrl,
           downloadUrl: data.downloadUrl,
           downloadSize: data.downloadSize,
         })
       }
     } catch (e: any) {
-      setError(e.message || 'Failed to check for updates')
+      setError(e.message || tNow('ui.upd.failCheck'))
     } finally {
       setChecking(false)
     }
@@ -168,28 +170,28 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
     try {
       const api = (window as any).electronAPI
       if (api && api.downloadUpdate) {
-        addLog(`Starting download of v${result.latestVersion}...`)
+        addLog(tNow('ui.upd.logStart', { v: result.latestVersion }))
         
         const res = await api.downloadUpdate(result.downloadUrl, '')
         
         if (res.success) {
-          addLog('Download complete!')
+          addLog(tNow('ui.upd.logDlDone'))
           setProgress(100)
           setDownloadComplete(true)
           if (res.filesCopied) {
             setInstallComplete(true)
             setInstallFilesCount(res.filesCopied)
             setRestartNeeded(true)
-            addLog(`Installed ${res.filesCopied} files!`)
+            addLog(tNow('ui.upd.logInstalled', { n: res.filesCopied }))
           }
         } else {
-          setError(res.message || 'Download failed')
-          addLog(`Error: ${res.message}`)
+          setError(res.message || tNow('ui.upd.dlFailed'))
+          addLog(tNow('ui.fx.err', { err: res.message }))
         }
       }
     } catch (e: any) {
-      setError(e.message || 'Download failed')
-      addLog(`Error: ${e.message}`)
+      setError(e.message || tNow('ui.upd.dlFailed'))
+      addLog(tNow('ui.fx.err', { err: e.message }))
     } finally {
       setDownloading(false)
     }
@@ -199,7 +201,7 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
     setInstalling(true)
     setError(null)
     setProgress(0)
-    addLog('Installing update from downloaded file...')
+    addLog(tNow('ui.upd.logInstalling'))
     
     try {
       const api = (window as any).electronAPI
@@ -207,19 +209,19 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
         const res = await api.installUpdate()
         
         if (res.success) {
-          addLog('Installation complete!')
+          addLog(tNow('ui.upd.logInstallDone'))
           setProgress(100)
           setInstallComplete(true)
           setInstallFilesCount(res.filesCopied || 0)
           setRestartNeeded(true)
         } else {
-          setError(res.message || 'Installation failed')
-          addLog(`Error: ${res.message}`)
+          setError(res.message || tNow('ui.upd.installFailed'))
+          addLog(tNow('ui.fx.err', { err: res.message }))
         }
       }
     } catch (e: any) {
-      setError(e.message || 'Installation failed')
-      addLog(`Error: ${e.message}`)
+      setError(e.message || tNow('ui.upd.installFailed'))
+      addLog(tNow('ui.fx.err', { err: e.message }))
     } finally {
       setInstalling(false)
     }
@@ -251,8 +253,8 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ 
-            background: 'rgba(0,0,0,0.85)', 
-            backdropFilter: 'blur(20px)',
+            background: 'rgba(4,4,10,0.6)', 
+            backdropFilter: 'blur(10px)',
           }}
           onClick={onClose}
         >
@@ -261,11 +263,11 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.95, opacity: 0, y: 20 }}
             transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-            className="relative w-[850px] max-w-full h-[80vh] rounded-3xl overflow-hidden flex flex-col"
+            className="relative w-[850px] max-w-full h-[80vh] rounded-[24px] overflow-hidden flex flex-col"
             style={{ 
-              background: `linear-gradient(180deg, ${COLORS.bgCard} 0%, ${COLORS.bgDeep} 100%)`,
-              border: `1px solid ${COLORS.border}`,
-              boxShadow: `0 25px 100px rgba(0,0,0,0.7), 0 0 60px ${COLORS.violet}20`
+              background: '#0f0f1b',
+              border: '1px solid rgba(255,255,255,0.09)',
+              boxShadow: '0 60px 120px -30px rgba(0,0,0,1)'
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -275,7 +277,8 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
                 whileHover={{ scale: 1.1, rotate: 90 }}
                 whileTap={{ scale: 0.9 }}
                 onClick={onClose}
-                className="absolute top-4 right-4 w-9 h-9 rounded-full flex items-center justify-center cursor-pointer transition-colors"
+                aria-label={t('ui.common.close')}
+                className="absolute top-4 end-4 w-9 h-9 rounded-full flex items-center justify-center cursor-pointer transition-colors"
                 style={{ background: COLORS.bgHover }}
               >
                 <X size={18} style={{ color: COLORS.textMuted }} />
@@ -289,8 +292,8 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
                   <Package size={28} style={{ color: COLORS.white }} />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold text-white">Software Update</h2>
-                  <p className="text-sm mt-1" style={{ color: COLORS.textMuted }}>Current version: v{currentVersion}</p>
+                  <h2 className="text-2xl font-bold text-white">{t('ui.upd.title')}</h2>
+                  <p className="text-sm mt-1" style={{ color: COLORS.textMuted }}>{t('ui.upd.current', { v: currentVersion })}</p>
                 </div>
               </div>
             </div>
@@ -305,8 +308,8 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
                     className="w-16 h-16 rounded-full border-3 border-t-transparent"
                     style={{ borderColor: COLORS.violet, borderTopColor: 'transparent' }}
                   />
-                  <p className="mt-6 text-lg font-medium text-white">Checking for updates...</p>
-                  <p className="text-sm mt-2" style={{ color: COLORS.textMuted }}>Connecting to GitHub</p>
+                  <p className="mt-6 text-lg font-medium text-white">{t('ui.upd.checking')}</p>
+                  <p className="text-sm mt-2" style={{ color: COLORS.textMuted }}>{t('ui.upd.connecting')}</p>
                 </div>
               )}
 
@@ -335,14 +338,14 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
                           <Sparkles size={24} style={{ color: COLORS.green }} />
                         </div>
                         <div className="flex-1">
-                          <p className="text-lg font-bold text-white">Update Available!</p>
+                          <p className="text-lg font-bold text-white">{t('ui.upd.available')}</p>
                           <p className="text-sm mt-1" style={{ color: COLORS.textMuted }}>
-                            Version <span className="font-semibold" style={{ color: COLORS.green }}>v{result.latestVersion}</span> is ready to download
+                            {t('ui.upd.readyToDownload').split('{ver}').map((part, i) => i === 0 ? part : <span key={i}><span className="font-semibold" style={{ color: COLORS.green }}>v{result.latestVersion}</span>{part}</span>)}
                           </p>
                         </div>
                         {result.downloadSize > 0 && (
-                          <div className="text-right">
-                            <p className="text-xs" style={{ color: COLORS.textMuted }}>Download size</p>
+                          <div className="text-end">
+                            <p className="text-xs" style={{ color: COLORS.textMuted }}>{t('ui.upd.dlSize')}</p>
                             <p className="text-sm font-semibold" style={{ color: COLORS.text }}>{formatSize(result.downloadSize)}</p>
                           </div>
                         )}
@@ -351,7 +354,7 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
                       {/* Release Notes */}
                       <div className="flex-1 overflow-hidden flex flex-col rounded-2xl" style={{ background: COLORS.bgDark, border: `1px solid ${COLORS.border}` }}>
                         <div className="px-5 py-3 flex-shrink-0" style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-                          <p className="text-xs font-bold uppercase tracking-wider" style={{ color: COLORS.textMuted }}>Release Notes</p>
+                          <p className="text-xs font-bold uppercase tracking-wider" style={{ color: COLORS.textMuted }}>{t('ui.upd.notes')}</p>
                         </div>
                         <div className="flex-1 overflow-y-auto px-6 py-4">
                           <div className="space-y-1">
@@ -367,7 +370,7 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
                           <div className="space-y-3 p-4 rounded-2xl" style={{ background: COLORS.bgDark, border: `1px solid ${COLORS.border}` }}>
                             <div className="relative h-3 rounded-full overflow-hidden" style={{ background: COLORS.bgHover }}>
                               <motion.div
-                                className="absolute inset-y-0 left-0 rounded-full"
+                                className="absolute inset-y-0 start-0 rounded-full"
                                 style={{ 
                                   background: downloadComplete 
                                     ? COLORS.green 
@@ -379,7 +382,7 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
                             </div>
                             <div className="flex items-center justify-between">
                               <p className="text-sm" style={{ color: COLORS.textMuted }}>
-                                {downloadComplete ? 'Update ready!' : `Downloading... ${progress}%`}
+                                {downloadComplete ? t('ui.upd.readyShort') : t('ui.upd.downloadingPct', { n: progress })}
                               </p>
                               {downloading && (
                                 <motion.div
@@ -396,7 +399,7 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
                               <div className="mt-3 p-3 rounded-xl font-mono text-xs" style={{ background: COLORS.bgDeep, border: `1px solid ${COLORS.border}` }}>
                                 <div className="flex items-center gap-2 mb-2" style={{ color: COLORS.textMuted }}>
                                   <Terminal size={12} />
-                                  <span>Progress Log</span>
+                                  <span>{t('ui.upd.log')}</span>
                                 </div>
                                 <div className="space-y-1 max-h-24 overflow-y-auto">
                                   {logs.map((log, i) => (
@@ -429,9 +432,9 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
                               >
                                 <CheckCircle size={32} style={{ color: COLORS.green }} />
                               </motion.div>
-                              <p className="text-lg font-bold" style={{ color: COLORS.green }}>Update Ready!</p>
+                              <p className="text-lg font-bold" style={{ color: COLORS.green }}>{t('ui.upd.readyTitle')}</p>
                               <p className="text-sm mt-1" style={{ color: COLORS.textMuted }}>
-                                v{result.latestVersion} staged — {installFilesCount} files will be applied on restart
+                                {t('ui.upd.staged', { v: result.latestVersion, n: installFilesCount })}
                               </p>
                             </div>
                             
@@ -441,16 +444,16 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
                               onClick={handleRestart}
                               className="w-full py-4 rounded-xl flex items-center justify-center gap-3 cursor-pointer"
                               style={{ 
-                                background: `linear-gradient(135deg, ${COLORS.green} 0%, ${COLORS.green}cc 100%)`, // intentional gradient variation
+                                background: 'var(--acc,#a77dff)',
                                 boxShadow: `0 4px 20px ${COLORS.green}40`
                               }}
                             >
-                              <RefreshCw size={20} style={{ color: COLORS.white }} />
-                              <span className="font-bold text-white text-lg">Restart App Now</span>
+                              <RefreshCw size={20} style={{ color: '#0b0614' }} />
+                              <span className="font-bold  text-lg">{t('ui.upd.restartNow')}</span>
                             </motion.button>
                             
                             <p className="text-xs text-center" style={{ color: COLORS.textMuted }}>
-                              The new version will launch automatically
+                              {t('ui.upd.autoLaunch')}
                             </p>
                           </motion.div>
                         ) : downloadComplete && !installComplete ? (
@@ -465,8 +468,8 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
                             }}>
                               <FileArchive size={20} style={{ color: COLORS.amber }} />
                               <div className="flex-1">
-                                <p className="font-bold" style={{ color: COLORS.amber }}>Download Complete!</p>
-                                <p className="text-sm" style={{ color: COLORS.textMuted }}>Click install to apply the update</p>
+                                <p className="font-bold" style={{ color: COLORS.amber }}>{t('ui.upd.dlComplete')}</p>
+                                <p className="text-sm" style={{ color: COLORS.textMuted }}>{t('ui.upd.clickInstall')}</p>
                               </div>
                             </div>
                             
@@ -479,19 +482,19 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
                               style={{ 
                                 background: installing 
                                   ? COLORS.violet + '60' 
-                                  : `linear-gradient(135deg, ${COLORS.violet} 0%, ${COLORS.blue} 100%)`,
+                                  : 'var(--acc,#a77dff)',
                                 boxShadow: `0 4px 20px ${COLORS.violet}40`
                               }}
                             >
                               {installing ? (
                                 <>
-                                  <Loader2 size={20} style={{ color: COLORS.white }} className="animate-spin" />
-                                  <span className="font-bold text-white">Installing...</span>
+                                  <Loader2 size={20} style={{ color: '#0b0614' }} className="animate-spin" />
+                                  <span className="font-bold ">{t('ui.common.installing')}</span>
                                 </>
                               ) : (
                                 <>
-                                  <Package size={20} style={{ color: COLORS.white }} />
-                                  <span className="font-bold text-white text-lg">Install Update</span>
+                                  <Package size={20} style={{ color: '#0b0614' }} />
+                                  <span className="font-bold  text-lg">{t('ui.upd.installUpdate')}</span>
                                 </>
                               )}
                             </motion.button>
@@ -506,20 +509,20 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
                             style={{ 
                               background: downloading
                                 ? COLORS.violet + '80'
-                                : `linear-gradient(135deg, ${COLORS.violet} 0%, ${COLORS.blue} 100%)`,
+                                : 'var(--acc,#a77dff)',
                               boxShadow: `0 4px 20px ${COLORS.violet}40`
                             }}
                           >
                             {downloading ? (
                               <>
-                                <Loader2 size={20} style={{ color: COLORS.white }} className="animate-spin" />
-                                <span className="font-bold text-white">Downloading...</span>
+                                <Loader2 size={20} style={{ color: '#0b0614' }} className="animate-spin" />
+                                <span className="font-bold ">{t('ui.upd.downloading')}</span>
                               </>
                             ) : (
                               <>
-                                <Download size={20} style={{ color: COLORS.white }} />
-                                <span className="font-bold text-white text-lg">Download & Install Update</span>
-                                <ArrowDown size={16} style={{ color: COLORS.white }} />
+                                <Download size={20} style={{ color: '#0b0614' }} />
+                                <span className="font-bold  text-lg">{t('ui.upd.dlInstall')}</span>
+                                <ArrowDown size={16} style={{ color: '#0b0614' }} />
                               </>
                             )}
                           </motion.button>
@@ -537,7 +540,7 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
                           }}
                         >
                           <Github size={18} style={{ color: COLORS.textMuted }} />
-                          <span className="text-sm font-medium" style={{ color: COLORS.textMuted }}>View on GitHub</span>
+                          <span className="text-sm font-medium" style={{ color: COLORS.textMuted }}>{t('ui.upd.github')}</span>
                           <ExternalLink size={14} style={{ color: COLORS.textMuted }} />
                         </motion.a>
                       </div>
@@ -556,8 +559,8 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
                       >
                         <CheckCircle size={48} style={{ color: COLORS.green }} />
                       </motion.div>
-                      <p className="text-2xl font-bold text-white">You're up to date!</p>
-                      <p className="text-sm mt-3" style={{ color: COLORS.textMuted }}>Version v{currentVersion} is the latest version</p>
+                      <p className="text-2xl font-bold text-white">{t('ui.upd.upToDate')}</p>
+                      <p className="text-sm mt-3" style={{ color: COLORS.textMuted }}>{t('ui.upd.latest', { v: currentVersion })}</p>
                       
                       <motion.button
                         whileHover={{ scale: 1.02, backgroundColor: COLORS.violet + '20' }}
@@ -571,7 +574,7 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
                         }}
                       >
                         <RefreshCw size={16} style={{ color: COLORS.textMuted }} className={checking ? 'animate-spin' : ''} />
-                        <span className="text-sm font-medium" style={{ color: COLORS.textSecondary }}>Check Again</span>
+                        <span className="text-sm font-medium" style={{ color: COLORS.textSecondary }}>{t('ui.upd.checkAgain')}</span>
                       </motion.button>
                     </div>
                   )}

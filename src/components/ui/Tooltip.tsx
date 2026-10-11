@@ -123,10 +123,10 @@ export const Tooltip = memo(function Tooltip({
               fontSize: '12px',
               fontWeight: 500,
               color: COLORS.white,
-              background: COLORS.bgDeep,
-              border: `1px solid ${COLORS.border}`,
-              borderRadius: '0.5rem',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+              background: '#1b1b2e',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '10px',
+              boxShadow: '0 20px 50px -10px rgba(0,0,0,0.9)',
               pointerEvents: 'none',
               whiteSpace: 'nowrap',
               lineHeight: 1.4,
@@ -161,7 +161,7 @@ function arrowPosition(
         left: '50%',
         marginLeft: -size,
         borderWidth: `${size}px ${size}px 0 ${size}px`,
-        borderColor: `${COLORS.bgDeep} transparent transparent transparent`,
+        borderColor: `#1b1b2e transparent transparent transparent`,
       }
     case 'bottom':
       return {
@@ -169,7 +169,7 @@ function arrowPosition(
         left: '50%',
         marginLeft: -size,
         borderWidth: `0 ${size}px ${size}px ${size}px`,
-        borderColor: `transparent transparent ${COLORS.bgDeep} transparent`,
+        borderColor: `transparent transparent #1b1b2e transparent`,
       }
     case 'left':
       return {
@@ -177,7 +177,7 @@ function arrowPosition(
         top: '50%',
         marginTop: -size,
         borderWidth: `${size}px 0 ${size}px ${size}px`,
-        borderColor: `transparent transparent transparent ${COLORS.bgDeep}`,
+        borderColor: `transparent transparent transparent #1b1b2e`,
       }
     case 'right':
       return {
@@ -185,7 +185,7 @@ function arrowPosition(
         top: '50%',
         marginTop: -size,
         borderWidth: `${size}px ${size}px ${size}px 0`,
-        borderColor: `transparent ${COLORS.bgDeep} transparent transparent`,
+        borderColor: `transparent #1b1b2e transparent transparent`,
       }
   }
 }

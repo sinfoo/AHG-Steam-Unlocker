@@ -1,6 +1,7 @@
+import { t } from '../i18n'
 import { useRef, useCallback } from 'react'
 import { bridge } from '../bridge'
-import { useInstallStore, useGameStore, useSettingsStore, useDiscordStore, useUserStore } from '../store'
+import { useInstallStore, useGameStore, useSettingsStore, useUserStore } from '../store'
 import { useToastNotifications } from './useToastNotifications'
 import { achievementRefs } from './achievementRefs'
 import { useDLCFetching } from './useDLCFetching'
@@ -8,7 +9,6 @@ import { useDLCFetching } from './useDLCFetching'
 export function useInstallGame() {
   const { addLog, showToast } = useToastNotifications()
   const { fetchDLCs } = useDLCFetching()
-  const dlcCountRef = useRef(0)
 
   const handleInstallGameRef = useRef<((gameOverride?: any) => Promise<void>) | null>(null)
 
@@ -25,23 +25,24 @@ export function useInstallGame() {
     useInstallStore.getState().setInstallGameInfo({ name: targetGame.name || '', appid: targetGame.appid, cover: targetGame.header_image || null })
     useInstallStore.getState().setInstallModalOpen(true)
     useUserStore.getState().setLogs([])
-    addLog(`Installing ${targetGame.name}...`, 'info')
+    addLog(t('ui.log.installing', { name: targetGame.name }), 'info')
     useInstallStore.getState().setInstallProgress(20)
     try {
       // Game flagged as updated in the catalog: ask Ryuu to regenerate its manifests
       // first (Update Game API) so the install pulls fresh files, not stale ones.
       const appidKey = String(targetGame.appid)
       if (useGameStore.getState().gamesWithUpdates.has(appidKey)) {
-        addLog('Refreshing game files on Ryuu...', 'info')
+        addLog(t('ui.log.refreshing'), 'info')
         try { await bridge.ryuuUpdateGame(targetGame.appid) } catch { /* best-effort */ }
       }
       const result = await bridge.installGame(targetGame.appid)
       useInstallStore.getState().setInstallProgress(70)
       if (result.success) {
+        if (!result.alreadyInstalled) useUserStore.getState().logActivity(targetGame.appid, 'added')
         if (result.alreadyInstalled) {
-          addLog(`${targetGame.name} was already installed. Try restarting Steam.`, 'info')
+          addLog(t('ui.log.already', { name: targetGame.name }), 'info')
         } else {
-          addLog(`✓ ${targetGame.name} added!`, 'success')
+          addLog('✓ ' + t('ui.log.added', { name: targetGame.name }), 'success')
         }
         // Optimistically mark installed — string-normalized appid + dedup so the card
         // flips to "Installed" immediately and matches the grid's string appids.
@@ -67,14 +68,14 @@ export function useInstallGame() {
         if (includeDLC) {
           useInstallStore.getState().setInstallStatus('dlc')
           useInstallStore.getState().setInstallProgress(80)
-          addLog('Adding DLCs...', 'info')
+          addLog(t('ui.gi.addingDlcDots'), 'info')
           const dlcCountResult = await fetchDLCs(targetGame.appid, targetGame.name)
           if (dlcCountResult > 0) {
             useInstallStore.getState().setDlcCount((prev: number) => prev + dlcCountResult)
-            addLog(`${dlcCountResult} DLC(s) added`, 'success')
+            addLog(t('ui.log.dlcAdded', { n: dlcCountResult }), 'success')
             achievementRefs.trackDLCInstalled()
           } else {
-            addLog('No DLCs found for this game', 'info')
+            addLog(t('ui.dlc.none'), 'info')
           }
         }
 
@@ -82,17 +83,6 @@ export function useInstallGame() {
         useInstallStore.getState().setInstallStatus('done')
 
         achievementRefs.trackGameInstalled()
-
-        // Share to Discord if enabled
-        const { discordConnected } = useDiscordStore.getState()
-        const { gameSharingEnabled } = useSettingsStore.getState()
-        if (gameSharingEnabled && discordConnected) {
-          try {
-            await bridge.shareGameToDiscord(targetGame.appid, targetGame.name, targetGame.header_image || undefined, dlcCountRef.current)
-          } catch (e) {
-            if (import.meta.env.DEV) console.log('Discord share error:', e)
-          }
-        }
       } else if ((result as any).requested) {
         // Game wasn't on any source, but Ryuu accepted an add request for it.
         useInstallStore.getState().setInstallStatus('error')
@@ -111,7 +101,7 @@ export function useInstallGame() {
       }
     } catch (e) {
       useInstallStore.getState().setInstallStatus('error')
-      addLog(`✗ Error: ${e}`, 'error')
+      addLog('✗ ' + t('ui.fx.err', { err: String(e) }), 'error')
     } finally {
       useInstallStore.getState().setInstallingGame(null)
     }
@@ -135,13 +125,14 @@ export function useInstallGame() {
     useInstallStore.getState().setInstallGameInfo({ name: gameName, appid: appid, cover: game?.header_image || null })
     useInstallStore.getState().setInstallModalOpen(true)
     useUserStore.getState().setLogs([])
-    addLog(`Adding the game...`, 'info')
+    addLog(t('ui.log.addingGame'), 'info')
 
     try {
       const result = await bridge.installGameFromZip(appid)
       if (result.success) {
-        showToast('Added to Steam successfully!', 'success')
-        addLog(`✓ ${gameName} added!`, 'success')
+        useUserStore.getState().logActivity(appid, 'added')
+        showToast(t('ui.toast.addedSteam'), 'success')
+        addLog('✓ ' + t('ui.log.added', { name: gameName }), 'success')
         const installedGames = useGameStore.getState().installedGames
         const appidStr = String(appid)
         // Normalize to string appid + dedup on string — mixed number/string appids
@@ -156,20 +147,9 @@ export function useInstallGame() {
         useInstallStore.getState().setInstallProgress(100)
         useInstallStore.getState().setInstallStatus('done')
         achievementRefs.trackGameInstalled()
-
-        // Share to Discord if enabled
-        const { discordConnected } = useDiscordStore.getState()
-        const { gameSharingEnabled } = useSettingsStore.getState()
-        if (gameSharingEnabled && discordConnected) {
-          try {
-            await bridge.shareGameToDiscord(appid, gameName, game?.header_image || undefined, dlcCountRef.current)
-          } catch (e) {
-            if (import.meta.env.DEV) console.log('Discord share error:', e)
-          }
-        }
       } else {
         if (result.message !== 'Cancelled') {
-          showToast(result.message || 'Failed to install from ZIP', 'error')
+          showToast(result.message || t('ui.toast.zipFail'), 'error')
           addLog(`✗ ${result.message}`, 'error')
           useInstallStore.getState().setInstallStatus('error')
         } else {
@@ -177,8 +157,8 @@ export function useInstallGame() {
         }
       }
     } catch (e) {
-      showToast('Error: ' + e, 'error')
-      addLog(`✗ Error: ${e}`, 'error')
+      showToast(t('ui.fx.err', { err: String(e) }), 'error')
+      addLog('✗ ' + t('ui.fx.err', { err: String(e) }), 'error')
       useInstallStore.getState().setInstallStatus('error')
     } finally {
       useInstallStore.getState().setInstallingGame(null)

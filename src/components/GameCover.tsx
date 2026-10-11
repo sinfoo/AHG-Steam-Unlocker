@@ -1,12 +1,8 @@
 import { memo, useState, useRef, useEffect, useCallback } from 'react'
-import { loadGameImage, getLqipData, getCachedImageSync, invalidateCacheKey, IMAGE_TYPES } from '../services/imageCache'
+import { loadGameImage, getLqipData, getCachedImageSync, invalidateCacheKey, IMAGE_TYPES, steamCdnUrl, directCoverTypes, rememberCover } from '../services/imageCache'
 import { WebGLRenderer } from '../services/webglRenderer'
 import { generatePlaceholderGradient } from '../services/placeholderGenerator'
 import { COLORS } from '../constants/colors'
-
-// Global stagger counter — distributes loadGameImage calls across a 500ms window
-// when many GameCover components fire simultaneously (e.g. window restore from minimize)
-let loadStaggerCounter = 0
 
 interface GameCoverProps {
   appid: string
@@ -43,10 +39,9 @@ const GameCover = memo(function GameCover({
   const [webglFailed, setWebglFailed] = useState(false)
 
   // Detect WebGL support once per component instance
-  const [supportsWebgl] = useState(() => {
-    if (webglDisabled) return false
-    return WebGLRenderer.isSupported()
-  })
+  // ponytail: WebGL cover rendering dropped — one GL context per card hit browser limits and its
+  // crossfade only delayed paint; the plain <img> path below paints as soon as bytes arrive.
+  const [supportsWebgl] = useState(() => false && !webglDisabled && WebGLRenderer.isSupported())
 
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -64,6 +59,11 @@ const GameCover = memo(function GameCover({
   const contextLostRef = useRef(false)
   const urlRef = useRef<string | null>(null)
   const loadedAppidRef = useRef<string | null>(null)
+  // Direct path: <img src=Steam CDN> starts the instant the card mounts (browser HTTP cache + HTTP/2);
+  // on 404 it walks the preferred types, then falls back to the full loadGameImage pipeline.
+  const directActiveRef = useRef(false)
+  const directIdxRef = useRef(0)
+  const directTypesRef = useRef<string[]>([])
 
   // ── LQIP → Full crossfade animation ─────────────────────────────
 
@@ -310,47 +310,14 @@ const GameCover = memo(function GameCover({
     // Expose to handleImgError so a failed <img> decode can re-attempt too.
     loadImageRef.current = loadImage
 
-    // Staggered load to prevent thundering herd on window restore from minimize.
-    // Tightened to a ~250ms window (14ms/increment) so a search's on-screen results
-    // pop in promptly while still avoiding a simultaneous-fetch spike.
-    const startStaggered = () => {
-      const slot = loadStaggerCounter++ % 18
-      if (slot === 0) {
-        loadImage()
-      } else {
-        setTimeout(loadImage, slot * 14)
-      }
-    }
-
-    if (eager) {
-      loadImage()
-      return () => { mounted = false }
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]!.isIntersecting || entries[0]!.intersectionRatio > 0) {
-          observer.unobserve(entries[0]!.target)
-          startStaggered()
-        }
-      },
-      { rootMargin: '800px', threshold: 0 },
-    )
-
-    if (containerRef.current) {
-      observer.observe(containerRef.current)
-      const rect = containerRef.current.getBoundingClientRect()
-      if (rect.top < window.innerHeight && rect.bottom > 0) {
-        observer.unobserve(containerRef.current)
-        startStaggered()
-      }
-    }
-
-    return () => {
-      mounted = false
-      if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current)
-      observer.disconnect()
-    }
+    // ── Direct CDN path: no observer, no stagger, no IPC — the browser schedules + caches ──
+    const types = directCoverTypes(preferredImageTypes)
+    directTypesRef.current = types
+    directIdxRef.current = 0
+    directActiveRef.current = true
+    hasLoadedRef.current = true
+    setState({ url: steamCdnUrl(appid, types[0]!), loaded: false, error: false })
+    return () => { mounted = false; if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current) }
   }, [appid, localHeader, name, eager, preferredImageTypes, supportsWebgl, startCrossfade])
 
   // ── Fallback img: handle load/error events ───────────────────────
@@ -358,6 +325,7 @@ const GameCover = memo(function GameCover({
   const handleImgLoad = useCallback(
     (e: React.SyntheticEvent<HTMLImageElement>) => {
       setState(prev => ({ ...prev, loaded: true }))
+      if (directActiveRef.current) { rememberCover(appid, preferredImageTypes, e.currentTarget.currentSrc || e.currentTarget.src); return }
 
       // Orientation validation: if portrait expected but got landscape, retry with header
       if (
@@ -383,6 +351,17 @@ const GameCover = memo(function GameCover({
   )
 
   const handleImgError = useCallback(() => {
+    if (directActiveRef.current) {
+      const next = ++directIdxRef.current
+      const types = directTypesRef.current
+      if (next < types.length) { setState({ url: steamCdnUrl(appid, types[next]!), loaded: false, error: false }); return }
+      // CDN has none of the types → hand over to the full pipeline (mirrors, SteamGridDB, local header)
+      directActiveRef.current = false
+      hasLoadedRef.current = false
+      setState({ url: null, loaded: false, error: false })
+      loadImageRef.current?.()
+      return
+    }
     // The resolved URL failed to decode (revoked blob, corrupt/half-written disk
     // cache entry, 404). Invalidate the cached entry and re-run the loader so it
     // refetches from the network instead of stranding a broken cover.
@@ -425,18 +404,6 @@ const GameCover = memo(function GameCover({
       className={`relative overflow-hidden ${className || ''}`}
       style={{ ...style, background: gradient, transform: 'translateZ(0)' }}
     >
-      {/* Shimmer keyframes injected once */}
-      <style>{`
-        @keyframes shimmer-sweep {
-          0% { background-position: 200% 0; }
-          100% { background-position: -200% 0; }
-        }
-        .shimmer-overlay {
-          background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.07) 50%, transparent 70%);
-          background-size: 200% 100%;
-          animation: shimmer-sweep 3s ease-in-out infinite;
-        }
-      `}</style>
       {state.url ? (
         <>
           {/* ── Image path: image is always in DOM once URL is known ── */}
@@ -462,7 +429,8 @@ const GameCover = memo(function GameCover({
             alt={name}
             className="w-full h-full object-cover"
             decoding="async"
-            fetchPriority="auto"
+            loading={eager ? 'eager' : 'lazy'}
+            fetchPriority={eager ? 'high' : 'auto'}
             style={{
               opacity: state.loaded ? 1 : lqip ? 0 : 0,
               transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -480,10 +448,11 @@ const GameCover = memo(function GameCover({
           )}
           <span
             style={{
-              color: `hsl(${activeHue}, 70%, 70%)`,
-              fontSize: className?.includes('h-36') ? 36 : 16,
-              fontWeight: 'bold',
-              textShadow: `0 2px 12px hsla(${activeHue}, 70%, 50%, 0.5)`,
+              color: `hsl(${activeHue}, 45%, 78%)`,
+              fontSize: className?.includes('h-36') ? 36 : 22,
+              fontWeight: 600,
+              letterSpacing: '-.02em',
+              opacity: 0.8,
             }}
           >
             {initial}

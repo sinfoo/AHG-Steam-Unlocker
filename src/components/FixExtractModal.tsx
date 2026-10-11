@@ -1,3 +1,4 @@
+import { useT, t as tNow } from '../i18n'
 import { memo, useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Package, Loader2, FolderOpen, FileArchive, CheckCircle2, AlertCircle, X } from 'lucide-react'
@@ -14,6 +15,7 @@ interface FixExtractModalProps {
 }
 
 export const FixExtractModal = memo(function FixExtractModal({ isOpen, fileName, filePath, onClose, onDismiss }: FixExtractModalProps) {
+  const t = useT()
   const [extractStatus, setExtractStatus] = useState<'idle' | 'extracting' | 'done' | 'error'>('idle')
   const [extractMessage, setExtractMessage] = useState('')
   const [extractedDir, setExtractedDir] = useState('')
@@ -23,7 +25,7 @@ export const FixExtractModal = memo(function FixExtractModal({ isOpen, fileName,
     const controller = new AbortController()
     abortControllerRef.current = controller
     setExtractStatus('extracting')
-    setExtractMessage('Extracting files...')
+    setExtractMessage(tNow('ui.fx.extractingFiles'))
     try {
       const result = await Promise.race([
         (window as any).electronAPI?.extractFix?.(filePath),
@@ -34,11 +36,11 @@ export const FixExtractModal = memo(function FixExtractModal({ isOpen, fileName,
       ])
       if (result?.success) {
         setExtractStatus('done')
-        setExtractMessage(result.message || 'Extraction complete!')
+        setExtractMessage(result.message || tNow('ui.fx.msgDone'))
         setExtractedDir(result.extractedDir || '')
       } else {
         setExtractStatus('error')
-        setExtractMessage(result?.message || 'Extraction failed')
+        setExtractMessage(result?.message || tNow('ui.fx.msgFail'))
         if (result?.extractedDir) setExtractedDir(result.extractedDir)
       }
     } catch (e: any) {
@@ -48,7 +50,7 @@ export const FixExtractModal = memo(function FixExtractModal({ isOpen, fileName,
         return
       }
       setExtractStatus('error')
-      setExtractMessage('Error: ' + e.message)
+      setExtractMessage(tNow('ui.fx.err', { err: e.message }))
     }
   }
 
@@ -76,7 +78,7 @@ export const FixExtractModal = memo(function FixExtractModal({ isOpen, fileName,
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
           className="fixed inset-0 z-[310] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)' }}
+          style={{ background: 'rgba(4,4,10,0.6)', backdropFilter: 'blur(10px)' }}
           onClick={(e) => { if (e.target === e.currentTarget && !isActive) onDismiss() }}
         >
           <motion.div
@@ -84,11 +86,11 @@ export const FixExtractModal = memo(function FixExtractModal({ isOpen, fileName,
             animate={{ scale: 1, y: 0, opacity: 1 }}
             exit={{ scale: 0.92, y: 30, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 350, damping: 28 }}
-            className="w-full max-w-md rounded-3xl overflow-hidden"
+            className="w-full max-w-md rounded-[24px] overflow-hidden"
             style={{
-              background: COLORS.bgCard,
+              background: '#0f0f1b',
               border: `1px solid ${extractStatus === 'done' ? COLORS.green + '40' : extractStatus === 'error' ? COLORS.red + '40' : COLORS.blue + '40'}`,
-              boxShadow: `0 32px 100px rgba(0,0,0,0.6), 0 0 80px ${extractStatus === 'done' ? COLORS.green + '20' : extractStatus === 'error' ? COLORS.red + '20' : blueGlow}`
+              boxShadow: '0 60px 120px -30px rgba(0,0,0,1)'
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -152,10 +154,10 @@ export const FixExtractModal = memo(function FixExtractModal({ isOpen, fileName,
                 </motion.div>
                 <div className="flex-1 min-w-0">
                   <h3 className="text-lg font-bold text-white truncate">
-                    {extractStatus === 'done' ? 'Extraction Complete'
-                      : extractStatus === 'error' ? 'Extraction Failed'
-                      : extractStatus === 'extracting' ? 'Extracting...'
-                      : 'Extract Fix'}
+                    {extractStatus === 'done' ? t('ui.fx.done')
+                      : extractStatus === 'error' ? t('ui.fx.fail')
+                      : extractStatus === 'extracting' ? t('ui.fx.ing')
+                      : t('ui.fx.title')}
                   </h3>
                   <p className="text-sm truncate" style={{ color: COLORS.textSecondary }}>{fileName}</p>
                 </div>
@@ -164,6 +166,7 @@ export const FixExtractModal = memo(function FixExtractModal({ isOpen, fileName,
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
                     onClick={onClose}
+                    aria-label={t('ui.common.close')}
                     className="w-8 h-8 rounded-xl flex items-center justify-center"
                     style={{ background: COLORS.bgHover }}
                   >
@@ -211,10 +214,10 @@ export const FixExtractModal = memo(function FixExtractModal({ isOpen, fileName,
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={handleExtract}
-                      className="w-full py-4 rounded-2xl font-bold text-white text-base flex items-center justify-center gap-3 relative overflow-hidden cursor-pointer"
+                      className="w-full py-4 rounded-2xl font-bold  text-base flex items-center justify-center gap-3 relative overflow-hidden cursor-pointer"
                       style={{
-                        background: `linear-gradient(135deg, ${COLORS.blue}, ${COLORS.violet})`,
-                        boxShadow: `0 8px 32px ${blueGlow}`
+                        background: 'var(--acc,#a77dff)',
+                        boxShadow: '0 16px 40px -14px var(--acc,#a77dff)'
                       }}
                     >
                       <motion.div
@@ -224,7 +227,7 @@ export const FixExtractModal = memo(function FixExtractModal({ isOpen, fileName,
                         transition={{ duration: 1.5, repeat: Infinity }}
                       />
                       <Package size={18} />
-                      Extract Files
+                      {t('ui.fx.extractBtn')}
                     </motion.button>
                     <motion.button
                       whileHover={{ scale: 1.02 }}
@@ -238,7 +241,7 @@ export const FixExtractModal = memo(function FixExtractModal({ isOpen, fileName,
                       }}
                     >
                       <FolderOpen size={16} />
-                      Open Download Folder
+                      {t('ui.fx.openDl')}
                     </motion.button>
                   </>
                 )}
@@ -254,7 +257,7 @@ export const FixExtractModal = memo(function FixExtractModal({ isOpen, fileName,
                       }}
                     >
                       <Loader2 size={16} className="animate-spin" />
-                      Extracting files...
+                      {t('ui.fx.extractingFiles')}
                     </div>
                     <motion.button
                       whileHover={{ scale: 1.02 }}
@@ -270,7 +273,7 @@ export const FixExtractModal = memo(function FixExtractModal({ isOpen, fileName,
                         color: COLORS.textDim
                       }}
                     >
-                      Cancel
+                      {t('ui.common.cancel')}
                     </motion.button>
                   </div>
                 )}
@@ -281,10 +284,10 @@ export const FixExtractModal = memo(function FixExtractModal({ isOpen, fileName,
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={handleOpenFolder}
-                      className="w-full py-4 rounded-2xl font-bold text-white text-base flex items-center justify-center gap-3 relative overflow-hidden cursor-pointer"
+                      className="w-full py-4 rounded-2xl font-bold  text-base flex items-center justify-center gap-3 relative overflow-hidden cursor-pointer"
                       style={{
-                        background: `linear-gradient(135deg, ${COLORS.green}, ${COLORS.green}cc)`,
-                        boxShadow: `0 8px 32px ${COLORS.green}40`
+                        background: 'var(--acc,#a77dff)',
+                        boxShadow: '0 16px 40px -14px var(--acc,#a77dff)'
                       }}
                     >
                       <motion.div
@@ -294,7 +297,7 @@ export const FixExtractModal = memo(function FixExtractModal({ isOpen, fileName,
                         transition={{ duration: 1.5, repeat: Infinity }}
                       />
                       <FolderOpen size={18} />
-                      Open Extracted Folder
+                      {t('ui.fx.openExtracted')}
                     </motion.button>
                     <motion.button
                       whileHover={{ scale: 1.02 }}
@@ -307,7 +310,7 @@ export const FixExtractModal = memo(function FixExtractModal({ isOpen, fileName,
                         color: COLORS.textSecondary
                       }}
                     >
-                      Close
+                      {t('ui.common.close')}
                     </motion.button>
                   </>
                 )}
@@ -318,14 +321,14 @@ export const FixExtractModal = memo(function FixExtractModal({ isOpen, fileName,
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={handleExtract}
-                      className="w-full py-4 rounded-2xl font-bold text-white text-base flex items-center justify-center gap-3 cursor-pointer"
+                      className="w-full py-4 rounded-2xl font-bold  text-base flex items-center justify-center gap-3 cursor-pointer"
                       style={{
-                        background: `linear-gradient(135deg, ${COLORS.blue}, ${COLORS.violet})`,
-                        boxShadow: `0 8px 32px ${blueGlow}`
+                        background: 'var(--acc,#a77dff)',
+                        boxShadow: '0 16px 40px -14px var(--acc,#a77dff)'
                       }}
                     >
                       <Package size={18} />
-                      Try Again
+                      {t('ui.fx.tryAgain')}
                     </motion.button>
                     <motion.button
                       whileHover={{ scale: 1.02 }}
@@ -339,7 +342,7 @@ export const FixExtractModal = memo(function FixExtractModal({ isOpen, fileName,
                       }}
                     >
                       <FolderOpen size={16} />
-                      Open Download Folder (Extract Manually)
+                      {t('ui.fx.openDlManual')}
                     </motion.button>
                   </>
                 )}

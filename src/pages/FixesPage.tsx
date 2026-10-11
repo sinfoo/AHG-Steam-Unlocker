@@ -1,18 +1,19 @@
 import { useEffect, useCallback, useMemo, memo, useState, useRef, useDeferredValue } from 'react'
-import { motion, useScroll, useTransform } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { useGameStore } from '../store'
 import { useShallow } from 'zustand/react/shallow'
-import { Fix } from '../types'
+import { Fix, Game } from '../types'
 import { fuzzySearch } from '../hooks/useFuzzySearch'
 import { PageProps } from '../types/pages'
 import popularIdsData from '../../data/popular_ids.json'
 import freeToPlayIdsData from '../../data/free_to_play_ids.json'
-import { loadGameImage } from '../services/imageCache'
+import { useReducedMotion } from '../store'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useImagePrefetch } from '../hooks/useImagePrefetch'
 import { useDirectionalCoverPrefetch } from '../hooks/useDirectionalCoverPrefetch'
 import { useVirtualKeyboardNav } from '../hooks/useVirtualKeyboardNav'
 import { FixesHero, FixesToolbar, FixesGrid, COL_GAP, ROW_GAP } from '../components/fixes'
+import { useFixState } from '../components/fixes/fixState'
 
 // ── Module-level constants ──
 
@@ -30,17 +31,16 @@ function isF2PGame(g: any, dynamicFreeIds: Set<string>): boolean {
 
 export const FixesPage = memo(function FixesPage({ handlers, colors }: PageProps) {
   // ── Store selectors ──
-  const { fixes: rawFixes, fixSearchQuery, fixFilter, viewMode, dynamicFreeIds, games } = useGameStore(
+  const { fixes: rawFixes, fixSearchQuery, fixFilter, dynamicFreeIds, games } = useGameStore(
     useShallow(s => ({
       fixes: s.fixes, fixSearchQuery: s.fixSearchQuery, fixFilter: s.fixFilter,
-      viewMode: s.viewMode, dynamicFreeIds: s.dynamicFreeIds, games: s.games
+      dynamicFreeIds: s.dynamicFreeIds, games: s.games
     }))
   )
   const fixes = rawFixes ?? []
   const deferredFixSearchQuery = useDeferredValue(fixSearchQuery)
   const setFixSearchQuery = useGameStore(s => s.setFixSearchQuery)
   const setFixFilter = useGameStore(s => s.setFixFilter)
-  const setViewMode = useGameStore(s => s.setViewMode)
 
   // ── Skeleton visible for at least 200ms to prevent flash ──
   const [showSkeleton, setShowSkeleton] = useState(true)
@@ -52,20 +52,9 @@ export const FixesPage = memo(function FixesPage({ handlers, colors }: PageProps
   // ── Source filter: show only AHG-installable fixes by default ──
   const [fixSourceFilter, setFixSourceFilter] = useState<'all' | 'ryuu' | 'online'>('ryuu')
 
-  // ── Parallax ──
-  const heroRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const [isHeroVisible, setIsHeroVisible] = useState(true)
-  useEffect(() => {
-    const el = heroRef.current
-    if (!el) return
-    const observer = new IntersectionObserver(
-      ([entry]) => setIsHeroVisible(entry!.isIntersecting),
-      { rootMargin: '100px 0px' }
-    )
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [])
+  const reduced = useReducedMotion()
+  const appliedCount = useFixState(st => Object.keys(st.applied).length)
 
   // ── Popular order index for sorting fixes ──
   const popularOrder = useMemo(() => {
@@ -144,27 +133,14 @@ export const FixesPage = memo(function FixesPage({ handlers, colors }: PageProps
     return result as Fix[]
   }, [fixes, deferredFixSearchQuery, fixFilter, popularOrder, dynamicFreeIds, fixSourceFilter])
 
-  // ── Featured fix game for hero background ──
-  const heroGame = useMemo(() => {
-    const fixAppids = new Set(fixes.map(f => f.appid))
-    return games.find(g => fixAppids.has(g.appid) && g.header_image) || null
-  }, [fixes, games])
+  // ── Header cover strip: first few fixes (real header images via GameCover) ──
+  const covers = useMemo(() => filteredFixes.slice(0, 4).map(f => ({ appid: f.appid, name: f.name }) as Game), [filteredFixes])
 
-  // ── Image caching via loadGameImage ──
-  const [heroImgUrl, setHeroImgUrl] = useState<string | null>(null)
-  useEffect(() => {
-    if (!heroGame) return
-    let mounted = true
-    loadGameImage(heroGame.appid, heroGame.header_image || undefined, heroGame.name || undefined, ['library_hero.jpg', 'hero.jpg', 'library_600x900.jpg', 'portrait.jpg', 'header.jpg']).then(url => {
-      if (mounted) setHeroImgUrl(url)
-    }).catch(() => {})
-    return () => { mounted = false }
-  }, [heroGame?.appid, heroGame?.header_image, heroGame?.name])
-
-  // ── Scroll Parallax ──
-  const { scrollY } = useScroll({ container: scrollRef })
-  const heroBgY = useTransform(scrollY, [0, 400], [0, 120])
-  const heroContentY = useTransform(scrollY, [0, 400], [0, -40])
+  // Fix card image → open the game page when the catalogue knows the game.
+  const onOpenFix = useCallback((fix: Fix) => {
+    const g = games.find(x => x.appid === fix.appid)
+    if (g) handlers.handleGameClick(g)
+  }, [games, handlers])
 
   // ── Toggle fix filter ──
   const toggleFixFilter = useCallback((id: string) => {
@@ -197,16 +173,10 @@ export const FixesPage = memo(function FixesPage({ handlers, colors }: PageProps
     return () => ro.disconnect()
   }, [])
 
-  const MIN_COL_WIDTH = 300
+  const MIN_COL_WIDTH = 410
   const cols = Math.max(1, Math.floor((containerWidth + COL_GAP) / (MIN_COL_WIDTH + COL_GAP)))
-  const effectiveColumns = viewMode === 'grid' ? cols : 1
-  const columnWidth = containerWidth > 0
-    ? Math.max(200, (containerWidth - COL_GAP * (effectiveColumns - 1)) / effectiveColumns)
-    : 300
-  // Cover (16:9) + compact action panel (~108px). Real heights are measured per row
-  // via measureElement in FixesGrid, so this is only the initial estimate.
-  const cardHeight = viewMode === 'grid' ? Math.ceil(columnWidth * 9 / 16 + 108) : 88
-  const estimateRowHeight = cardHeight + ROW_GAP
+  const effectiveColumns = cols
+  const estimateRowHeight = 96 + ROW_GAP // 70px cover + padding + border; real heights measured in FixesGrid
   const rowCount = Math.ceil(filteredFixes.length / effectiveColumns)
 
   const virtualizer = useVirtualizer({
@@ -246,22 +216,10 @@ export const FixesPage = memo(function FixesPage({ handlers, colors }: PageProps
       transition={{ duration: 0.15 }}
       ref={scrollRef}
       {...keyboardProps}
-      className="lg:pl-8 px-5 pt-2 pb-6 flex flex-col h-full overflow-auto"
+      className="flex flex-col h-full overflow-auto"
+      style={{ padding: 24, gap: 22, maxWidth: 1680, margin: '0 auto', width: '100%' }}
     >
-      <FixesHero
-        heroRef={heroRef}
-        isHeroVisible={isHeroVisible}
-        heroBgY={heroBgY}
-        heroContentY={heroContentY}
-        colors={colors}
-        heroGame={heroGame}
-        heroImgUrl={heroImgUrl}
-        viewMode={viewMode}
-        setViewMode={setViewMode}
-        fixesCount={fixes.length}
-        filteredFixesCount={filteredFixes.length}
-        fixSourceFilter={fixSourceFilter}
-      />
+      <FixesHero covers={covers} total={fixes.length} applied={appliedCount} reduced={reduced} />
 
       <FixesToolbar
         colors={colors}
@@ -280,9 +238,9 @@ export const FixesPage = memo(function FixesPage({ handlers, colors }: PageProps
         virtualizer={virtualizer}
         filteredFixes={filteredFixes}
         effectiveColumns={effectiveColumns}
-        viewMode={viewMode}
         focusedIndex={focusedIndex}
         handleApplyFix={handlers.handleApplyFix}
+        onOpenFix={onOpenFix}
         setFixSearchQuery={setFixSearchQuery}
         setFixFilter={setFixFilter}
         fixFilter={fixFilter}

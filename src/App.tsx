@@ -1,3 +1,4 @@
+import { t as tToast } from './i18n'
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { bridge } from './bridge'
@@ -42,12 +43,13 @@ import { Download, RefreshCw, FolderPlus, RotateCw, Upload, FolderOpen } from 'l
 import { DARK_COLORS } from './constants/colors'
 
 // ── Zustand Stores ──
-import { useUIStore, useGameStore, useInstallStore } from './store'
-import { useAppGameState, useAppUIState, useAppSettingsState, useAppUserState, useAppDiscordState } from './hooks/useAppState'
+import { useUIStore, useGameStore, useInstallStore, useSettingsStore } from './store'
+import { useAppGameState, useAppUIState, useAppSettingsState, useAppUserState } from './hooks/useAppState'
 
 // ── Extracted Domain Hooks ──
 import { useSound } from './hooks/useSound'
 import { useToastNotifications } from './hooks/useToastNotifications'
+import { useT as useQuickT } from './i18n'
 import { useGameFilters as useGameFiltersHook, isF2PGame } from './hooks/useGameFilters'
 import { useAchievements } from './hooks/useAchievements'
 import { useAppSetters } from './hooks/useAppSetters'
@@ -57,15 +59,16 @@ import { useFixApplication } from './hooks/useFixApplication'
 import { useInstallGame } from './hooks/useInstallGame'
 import { useScanGames } from './hooks/useScanGames'
 import { useLicense } from './hooks/useLicense'
-import { useDiscordAuth } from './hooks/useDiscordAuth'
 import { achievementRefs } from './hooks/achievementRefs'
 import ModalRenderer from './components/ModalRenderer'
 import PageRouter from './components/PageRouter'
 import type { ModalRendererProps } from './components/ModalRenderer'
 
 import AppHeader from './components/AppHeader'
+import CommandPalette from './components/CommandPalette'
 import type { Game } from './types'
 import { getHeroUrl, prefetchImages } from './services/steamGridDb'
+import { warmCovers } from './services/imageCache'
 
 // GameCover moved to ./components/GameCover
 
@@ -75,6 +78,7 @@ import { getHeroUrl, prefetchImages } from './services/steamGridDb'
 
 function App() {
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const [paletteOpen, setPaletteOpen] = useState(false)
 
   // ── Batched Store Hooks (single subscriptions per store) ──
   const {
@@ -86,7 +90,6 @@ function App() {
     currentPage, pageHistory, forwardHistory,
     windowWidth,
     isActivated,
-    startupDiscordModal,
   } = useAppUIState()
   const {
     compactMode, accentColor, soundEnabled,
@@ -96,9 +99,6 @@ function App() {
   const {
     favorites, recentGames, featuredGame,
   } = useAppUserState()
-  const {
-    discordConnected,
-  } = useAppDiscordState()
 
   const {
     setLoading, setProgress, setGames, setDynamicFreeIds,
@@ -121,17 +121,14 @@ function App() {
     setFavorites, setRecentGames, setFeaturedGame,
     setPinnedGames, setShowAchievements,
     setOwnedGameIds, setSearchHistory: _setSearchHistory,
-    setDiscordModalOpen, setRecentlyAddedGames,
-    setStartupDiscordModal,
+    setRecentlyAddedGames,
   } = useAppSetters()
   const [showMainApp, setShowMainApp] = useState(false)
   const [splashDone, setSplashDone] = useState(false)
   const [gameActionModalOpen, setGameActionModalOpen] = useState(false)
-  // startupDiscordModal moved to uiStore (useAppUIState / useAppSetters)
   const [gameActionModalGame, setGameActionModalGame] = useState<Game | null>(null)
   const [dlcManagerOpen, setDlcManagerOpen] = useState(false)
   const [dlcManagerGame, setDlcManagerGame] = useState<Game | null>(null)
-  const [discordSuccessOpen, setDiscordSuccessOpen] = useState(false)
   // Lazy chunks will load on demand via React.lazy — no eager preload
 
   useEffect(() => {
@@ -181,7 +178,7 @@ function App() {
     const check = async () => {
       try {
         const api = (window as any).electronAPI
-        if (!api?.checkForUpdates) return
+        if (!api?.checkForUpdates || !useSettingsStore.getState().autoUpdates) return
         const data = await api.checkForUpdates()
         if (!cancelled && data?.hasUpdate) {
           useUIStore.getState().setUpdateModalOpen(true)
@@ -218,7 +215,7 @@ function App() {
     gamesWithCover,
   } = gameFilters
   const achievementsData = useAchievements((msg: string, type: string) => showToast(msg, type as 'success' | 'error' | 'info'), playSound, currentPage, searchQuery, loading)
-  const { achievements, setAchievements, userLevel, trackGameClicked, trackFavoriteAdded, trackQuickToolUsed, trackFixGamesScript: _trackFixGamesScript, trackGameInstalled, trackDLCInstalled, trackFixApplied, trackScanCompleted, trackCollectionCreated, trackDiscordConnected, trackBatchInstall } = achievementsData
+  const { achievements, setAchievements, userLevel, trackGameClicked, trackFavoriteAdded, trackQuickToolUsed, trackFixGamesScript: _trackFixGamesScript, trackGameInstalled, trackDLCInstalled, trackFixApplied, trackScanCompleted, trackCollectionCreated, trackBatchInstall } = achievementsData
 
   // Wire achievement tracker refs for hooks that don't receive callbacks via DI
   useEffect(() => {
@@ -227,8 +224,7 @@ function App() {
     achievementRefs.trackFixApplied = trackFixApplied
     achievementRefs.trackScanCompleted = trackScanCompleted
     achievementRefs.trackCollectionCreated = trackCollectionCreated
-    achievementRefs.trackDiscordConnected = trackDiscordConnected
-  }, [trackGameInstalled, trackDLCInstalled, trackFixApplied, trackScanCompleted, trackCollectionCreated, trackDiscordConnected])
+  }, [trackGameInstalled, trackDLCInstalled, trackFixApplied, trackScanCompleted, trackCollectionCreated])
 
   const downloadQueueRunningRef = useRef(false)
   // Guards post-load IPC listener registration so onScanProgress/onDownloadProgress/onInstallLog
@@ -238,7 +234,6 @@ function App() {
   useDLCFetching()
   useContentSync()
   useLicense()
-  useDiscordAuth()
   const { handleApplyFix, handleDeleteGame } = useFixApplication()
   const { handleInstallGame, handleInstallFromZip, handleInstallGameRef } = useInstallGame()
   const { startScanGames, reloadGamesList } = useScanGames()
@@ -246,14 +241,14 @@ function App() {
   const handleBatchInstall = useCallback(async () => {
     const ids = Array.from(selectedGames)
     if (ids.length === 0) {
-      showToast('No games selected', 'info')
+      showToast(tToast('ui.toast.noneSel'), 'info')
       return
     }
     trackBatchInstall()
     const gameById = new Map(gamesWithCover.map((g: Game) => [String(g.appid), g]))
-    showToast(`Installing ${ids.length} game${ids.length > 1 ? 's' : ''}…`, 'info')
+    showToast(ids.length > 1 ? tToast('ui.toast.batchMany', { n: ids.length }) : tToast('ui.toast.batchOne'), 'info')
     let ok = 0, fail = 0
-    // Sequential install — reuses the single-install flow (modal, DLCs, Discord share,
+    // Sequential install — reuses the single-install flow (modal, DLCs,
     // state updates) per game so batch behaves exactly like clicking install N times,
     // without hammering the mirror/Ryuu backends concurrently.
     for (const id of ids) {
@@ -268,7 +263,7 @@ function App() {
     useGameStore.getState().setSelectedGames(new Set())
     setBatchMode(false)
     playSound(fail === 0 ? 'success' : 'error')
-    showToast(`Batch install finished — ${ok} added${fail ? `, ${fail} failed` : ''}`, fail === 0 ? 'success' : 'error')
+    showToast(fail ? tToast('ui.toast.batchDoneFail', { ok, fail }) : tToast('ui.toast.batchDone', { ok }), fail === 0 ? 'success' : 'error')
   }, [selectedGames, gamesWithCover, handleInstallGame, showToast, trackBatchInstall, setBatchMode, playSound])
 
   const COLORS = useMemo((): typeof DARK_COLORS => {
@@ -320,6 +315,11 @@ function App() {
     }
   }, [loading, popularGamesWithCover])
 
+  // ── Warm the first screenful of cover images (home hero/rails) as soon as the catalogue is ready ──
+  useEffect(() => {
+    if (!loading && popularGamesWithCover.length > 0) warmCovers(popularGamesWithCover)
+  }, [loading, popularGamesWithCover])
+
   // ── Prefetch SGDB image metadata for first visible games during idle time (I4) ──
   useEffect(() => {
     if (!loading && games.length > 0 && typeof requestIdleCallback === 'function') {
@@ -366,7 +366,7 @@ function App() {
   // ── Keyboard Shortcuts: Focus search ──
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'k')) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
         e.preventDefault()
         const searchInput = document.querySelector<HTMLInputElement>('input[placeholder*="Search"]')
         searchInput?.focus()
@@ -382,7 +382,7 @@ function App() {
     handleInstallGameRef, handleInstallFromZip,
     downloadQueueRunningRef,
     setGameActionModalOpen, setGameActionModalGame,
-    setDiscordSuccessOpen, setContextMenu,
+    setContextMenu,
     games: gamesWithCover,
     trackGameClicked, trackFavoriteAdded, trackQuickToolUsed,
   })
@@ -606,8 +606,6 @@ function App() {
         if (import.meta.env.DEV) console.log('Changelog check error:', e)
       }
 
-      // Discord auth check moved to useDiscordAuth hook
-
       // ── Start background image preloader ──
       // Priority: user's installed games fetched inline, then preloader processes
       // all remaining from _gamesCache automatically.
@@ -762,15 +760,16 @@ function App() {
 
   // startScanGames, reloadGamesList, runUpdateCheck moved to useScanGames hook
 
+  const tq = useQuickT()
   const quickTools = useMemo(() => [
-    { name: 'AHG Script', desc: 'Run AHG maintenance script & restart Steam',     icon: RefreshCw, color: COLORS.green, action: () => {
+    { name: tq('app.tools.script'), desc: tq('app.tools.scriptDesc'),     icon: RefreshCw, color: COLORS.green, action: () => {
       setFixGamesModalOpen(true)
       setFixGamesStatus('idle')
       setFixGamesOutput('')
       setFixGamesScriptProgress(0)
       setFixGamesContactOpen(false)
     }},
-    { name: 'Scan for New Games', desc: 'Check repos for new manifests', icon: FolderPlus, color: COLORS.cyan, action: () => {
+    { name: tq('app.tools.scan'), desc: tq('app.tools.scanDesc'), icon: FolderPlus, color: COLORS.cyan, action: () => {
       setScanGamesModalOpen(true)
       setScanGamesStatus('scanning')
       setScanGamesProgress(10)
@@ -778,20 +777,21 @@ function App() {
       startScanGames()
       trackQuickToolUsed()
     }},
-    { name: 'Restart Steam', desc: 'Close and relaunch Steam', icon: RotateCw, color: COLORS.amber, action: async () => {
+    { name: tq('app.tools.restart'), desc: tq('app.tools.restartDesc'), icon: RotateCw, color: COLORS.amber, action: async () => {
       addLog('Restarting Steam...', 'info')
       try {
         await window.electronAPI?.restartSteam?.()
         addLog('✓ Steam restarted', 'success')
-        showToast('Steam restarted!', 'success')
+        showToast(tToast('ui.toast.steamRestarted'), 'success')
       } catch (e) { addLog('✗ ' + e, 'error') }
       trackQuickToolUsed()
     }},
-    { name: 'Download Queue', desc: 'Manage download queue', icon: Download, color: COLORS.violet, action: () => setShowDownloadQueue(true) },
-    { name: 'Export Library', desc: 'Export games to file', icon: Download, color: COLORS.pink, action: () => setShowExportModal(true) },
-    { name: 'Import Library', desc: 'Import games from file', icon: Upload, color: COLORS.red, action: () => setShowImportModal(true) },
-    { name: 'Install from ZIP', desc: 'Select a local ZIP file with manifests and Lua', icon: FolderOpen, color: COLORS.violet, action: () => { handleInstallFromZip(); trackQuickToolUsed(); } },
+    { name: tq('app.tools.queue'), desc: tq('app.tools.queueDesc'), icon: Download, color: COLORS.violet, action: () => setShowDownloadQueue(true) },
+    { name: tq('app.tools.export'), desc: tq('app.tools.exportDesc'), icon: Download, color: COLORS.pink, action: () => setShowExportModal(true) },
+    { name: tq('app.tools.import'), desc: tq('app.tools.importDesc'), icon: Upload, color: COLORS.red, action: () => setShowImportModal(true) },
+    { name: tq('app.tools.zip'), desc: tq('app.tools.zipDesc'), icon: FolderOpen, color: COLORS.violet, action: () => { handleInstallFromZip(); trackQuickToolUsed(); } },
   ], [
+    tq,
     COLORS,
     startScanGames,
     addLog,
@@ -843,9 +843,7 @@ function App() {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault()
-        if (['browse', 'favourites', 'recent'].includes(currentPage)) {
-          searchInputRef.current?.focus()
-        }
+        setPaletteOpen(o => !o)
       }
       if (e.key === 'Escape' && searchQuery) {
         setSearchQuery('')
@@ -858,18 +856,15 @@ function App() {
 
   // ── ModalRenderer props: only local state + action callbacks.
   // Store-based state is now read internally by ModalRenderer itself
-  // (install progress, modal visibility, discord state, etc.)
+  // (install progress, modal visibility, etc.)
   // This prevents App.tsx from re-rendering every time install progress or modal
   // toggles — ModalRenderer subscribes independently.
   const modalProps = useMemo<ModalRendererProps>(() => ({
     COLORS,
     bridge,
-    startupDiscordModal, discordSuccessOpen,
     gameActionModalOpen, gameActionModalGame,
     dlcManagerOpen, dlcManagerGame,
     achievements, setAchievements,
-    setStartupDiscordModal: setStartupDiscordModal as (v: boolean) => void,
-    setDiscordSuccessOpen: setDiscordSuccessOpen as (v: boolean) => void,
     setGameActionModalOpen: setGameActionModalOpen as (v: boolean) => void,
     setDlcManagerOpen: setDlcManagerOpen as (v: boolean) => void,
     setDlcManagerGame: setDlcManagerGame as (v: any) => void,
@@ -887,11 +882,9 @@ function App() {
   }), [
     // Only props — store-based values no longer in deps (read internally)
     bridge, COLORS,
-    startupDiscordModal, discordSuccessOpen,
     gameActionModalOpen, gameActionModalGame,
     dlcManagerOpen, dlcManagerGame,
     achievements, setAchievements,
-    setStartupDiscordModal, setDiscordSuccessOpen,
     setGameActionModalOpen, setDlcManagerOpen, setDlcManagerGame,
     handleInstallGame, handleInstallFromZip,
     handleGoToBrowse, handleGoToFixes,
@@ -927,14 +920,12 @@ function App() {
         quickTools={quickTools}
         colors={COLORS}
         navigateTo={navigateTo}
+        onOpenGame={handleGameClick}
         sidebarCollapsed={sidebarCollapsed}
         isOverlay={windowWidth < 1100 && sidebarOverlayOpen}
         onCloseOverlay={() => setSidebarOverlayOpen(false)}
-        discordConnected={discordConnected}
         quickToolsOpen={quickToolsOpen}
         setQuickToolsOpen={setQuickToolsOpen}
-        setDiscordModalOpen={setDiscordModalOpen}
-        setDiscordSuccessOpen={setDiscordSuccessOpen}
         setUpdateModalOpen={setUpdateModalOpen}
       />
 
@@ -967,6 +958,7 @@ function App() {
             setShowAchievements={setShowAchievements}
             userLevel={userLevel}
             achievements={achievements}
+            onOpenPalette={() => setPaletteOpen(true)}
           />
 
         {/* Page Content */}
@@ -1014,6 +1006,15 @@ function App() {
 
       </div>
 
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        games={games}
+        navItems={navItems}
+        quickTools={quickTools}
+        navigateTo={navigateTo}
+        onOpenGame={handleGameClick}
+      />
       <ModalRenderer modalProps={modalProps} />
 
 

@@ -1,5 +1,5 @@
-// ── Bot API client — the Discord bot holds every server-side secret ──
-// (GitHub gist token, Discord client secret, bot token). The desktop app only
+// ── Bot API client — the bot holds every server-side secret ──
+// (GitHub gist token, bot token). The desktop app only
 // needs the bot's public HTTPS URL: secrets.licenseApiUrl when set (fixed domain),
 // otherwise the URL the bot publishes to a public gist (free Cloudflare quick
 // tunnel whose address changes on every bot restart).

@@ -1,3 +1,4 @@
+import { useT } from '../i18n'
 import { memo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronRight, Sparkles, Zap, Clock, Wrench } from 'lucide-react'
@@ -51,6 +52,7 @@ const typeColors: Record<string, { bg: string; icon: any; color: string }> = {
 }
 
 export const ChangelogModal = memo(function ChangelogModal({ isOpen, onClose, newVersion }: ChangelogModalProps) {
+  const t = useT()
   const [showFullChangelog, setShowFullChangelog] = useState(false)
   
   const getChangelog = () => {
@@ -68,8 +70,8 @@ export const ChangelogModal = memo(function ChangelogModal({ isOpen, onClose, ne
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-50 flex"
           style={{ 
-            background: 'rgba(0,0,0,0.85)', 
-            backdropFilter: 'blur(20px)',
+            background: 'rgba(4,4,10,0.6)', 
+            backdropFilter: 'blur(10px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center'
@@ -81,11 +83,11 @@ export const ChangelogModal = memo(function ChangelogModal({ isOpen, onClose, ne
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.9, opacity: 0, y: 30 }}
             transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-            className="relative mx-4 w-[580px] max-w-[95vw] max-h-[80vh] rounded-3xl overflow-hidden flex flex-col"
+            className="relative mx-4 w-[580px] max-w-[95vw] max-h-[80vh] rounded-[24px] overflow-hidden flex flex-col"
             style={{ 
-              background: `linear-gradient(180deg, ${COLORS.bgCard} 0%, ${COLORS.bgDeep} 100%)`,
-              border: `1px solid ${COLORS.border}`,
-              boxShadow: `0 25px 80px ${COLORS.violet}30, 0 0 100px rgba(0,0,0,0.5)`
+              background: '#0f0f1b',
+              border: '1px solid rgba(255,255,255,0.09)',
+              boxShadow: '0 60px 120px -30px rgba(0,0,0,1)'
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -118,7 +120,7 @@ export const ChangelogModal = memo(function ChangelogModal({ isOpen, onClose, ne
                 transition={{ delay: 0.2 }}
                 className="text-2xl font-bold text-white relative"
               >
-                Welcome to v{newVersion}!
+                {t('ui.cl.welcome', { v: newVersion })}
               </motion.h2>
               
               <motion.p
@@ -128,7 +130,7 @@ export const ChangelogModal = memo(function ChangelogModal({ isOpen, onClose, ne
                 className="text-sm mt-1 relative"
                 style={{ color: COLORS.textMuted }}
               >
-                Here's what's new in this update
+                {t('ui.cl.whatsNew')}
               </motion.p>
             </div>
 
@@ -175,8 +177,8 @@ export const ChangelogModal = memo(function ChangelogModal({ isOpen, onClose, ne
                         border: `1px solid ${COLORS.border}`
                       }}
                     >
-                      <span className="text-sm font-medium" style={{ color: COLORS.textSecondary }}>View Full Changelog</span>
-                      <ChevronRight size={16} style={{ color: COLORS.textMuted }} />
+                      <span className="text-sm font-medium" style={{ color: COLORS.textSecondary }}>{t('ui.cl.viewFull')}</span>
+                      <ChevronRight size={16} style={{ color: COLORS.textMuted }} className="rtl-flip" />
                     </motion.button>
                   )}
                 </>
@@ -191,8 +193,8 @@ export const ChangelogModal = memo(function ChangelogModal({ isOpen, onClose, ne
                     className="flex items-center gap-2 py-2 px-3 rounded-xl cursor-pointer mb-2"
                     style={{ background: 'transparent' }}
                   >
-                    <ChevronRight size={16} style={{ color: COLORS.textMuted }} className="rotate-180" />
-                    <span className="text-sm font-medium" style={{ color: COLORS.textMuted }}>Back to latest</span>
+                    <ChevronRight size={16} style={{ color: COLORS.textMuted }} className="rotate-180 rtl-flip" />
+                    <span className="text-sm font-medium" style={{ color: COLORS.textMuted }}>{t('ui.cl.back')}</span>
                   </motion.button>
                   
                   {CHANGELOGS.map((changelog, ci) => (
@@ -204,7 +206,7 @@ export const ChangelogModal = memo(function ChangelogModal({ isOpen, onClose, ne
                         </span>
                         {ci === 0 && (
                           <span className="text-xs px-2 py-0.5 rounded-lg" style={{ background: COLORS.green + '20', color: COLORS.green }}>
-                            Latest
+                            {t('ui.cl.latest')}
                           </span>
                         )}
                       </div>
@@ -238,17 +240,17 @@ export const ChangelogModal = memo(function ChangelogModal({ isOpen, onClose, ne
             {/* Footer */}
             <div className="p-5 shrink-0" style={{ borderTop: `1px solid ${COLORS.border}50` }}>
               <motion.button
-                whileHover={{ scale: 1.02, boxShadow: `0 4px 20px ${COLORS.violet}40` }}
+                whileHover={{ scale: 1.02, boxShadow: '0 16px 40px -14px var(--acc,#a77dff)' }}
                 whileTap={{ scale: 0.98 }}
                 onClick={onClose}
                 className="w-full py-3.5 px-5 rounded-xl flex items-center justify-center gap-2 cursor-pointer"
                 style={{ 
-                  background: `linear-gradient(135deg, ${COLORS.violet} 0%, ${COLORS.violetLight} 100%)`,
+                  background: 'var(--acc,#a77dff)',
                   boxShadow: `0 4px 15px ${COLORS.violet}30`
                 }}
               >
-                <span className="font-semibold text-white">Get Started</span>
-                <ChevronRight size={18} style={{ color: COLORS.white }} />
+                <span className="font-semibold ">{t('ui.cl.getStarted')}</span>
+                <ChevronRight size={18} style={{ color: '#0b0614' }} className="rtl-flip" />
               </motion.button>
             </div>
           </motion.div>

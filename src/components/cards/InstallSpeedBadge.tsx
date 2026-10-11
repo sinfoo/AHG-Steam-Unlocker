@@ -1,4 +1,5 @@
 import { Zap } from 'lucide-react'
+import { useT } from '../../i18n'
 
 interface InstallSpeedBadgeProps {
   sizeBytes: number | string | undefined | null
@@ -6,17 +7,18 @@ interface InstallSpeedBadgeProps {
   size?: 'sm' | 'md'
 }
 
-function estimateInstallTime(bytes: number): string {
+function estimateInstallTime(bytes: number, t: ReturnType<typeof useT>): string {
   // Rough estimate: ~50MB/s for decompression + write
   const seconds = bytes / (50 * 1024 * 1024)
-  if (seconds < 60) return '<1 min'
-  if (seconds < 120) return '~1 min'
+  if (seconds < 60) return t('app.time.lt1min')
+  if (seconds < 120) return t('app.time.min', { n: 1 })
   const mins = Math.ceil(seconds / 60)
-  if (mins >= 60) return `~${Math.floor(mins / 60)}h ${mins % 60}m`
-  return `~${mins} min`
+  if (mins >= 60) return t('app.time.hm', { h: Math.floor(mins / 60), m: mins % 60 })
+  return t('app.time.min', { n: mins })
 }
 
 export function InstallSpeedBadge({ sizeBytes, className = '', size = 'sm' }: InstallSpeedBadgeProps) {
+  const t = useT()
   if (sizeBytes === undefined || sizeBytes === null) return null
   const bytes = typeof sizeBytes === 'string' ? parseInt(sizeBytes) : sizeBytes
   if (!bytes || bytes <= 0) return null
@@ -30,12 +32,11 @@ export function InstallSpeedBadge({ sizeBytes, className = '', size = 'sm' }: In
         background: 'rgba(250,204,21,0.12)',
         color: '#facc15',
         border: '1px solid rgba(250,204,21,0.20)',
-        backdropFilter: 'blur(4px)',
         WebkitBackdropFilter: 'blur(4px)',
       }}
     >
       <Zap size={size === 'sm' ? 9 : 11} />
-      <span>{estimateInstallTime(bytes)}</span>
+      <span>{estimateInstallTime(bytes, t)}</span>
     </div>
   )
 }

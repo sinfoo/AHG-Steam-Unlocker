@@ -4,10 +4,12 @@ import { loadGameImage } from '../../services/imageCache'
 import type { ColorScheme } from '../../types/colors'
 import type { Game } from '../../types'
 import { useUserStore, useFavorites } from '../../store'
+import { useT } from '../../i18n'
 
 export const FeaturedCarousel = memo(function FeaturedCarousel({ title, subtitle, icon: Icon, color, games, onGameClick, colors, onToggleFavorite }: {
   title: string; subtitle: string; icon: any; color: string; games: Game[]; onGameClick: (g: Game) => void; colors: ColorScheme; onToggleFavorite?: (appid: string) => void
 }) {
+  const t = useT()
   const trackRef = useRef<HTMLDivElement>(null)
   const carouselRef = useRef<HTMLDivElement>(null)
   const storeToggleFavorite = useUserStore(s => s.toggleFavorite)
@@ -87,6 +89,7 @@ export const FeaturedCarousel = memo(function FeaturedCarousel({ title, subtitle
         <div className="flex gap-2">
           <button
             onClick={() => handleScroll('l')}
+            aria-label={t('app.scroll.left')}
             className="w-9 h-9 rounded-full flex items-center justify-center feat-btn-hover"
             style={{ background: colors.bgHover, border: `1px solid ${colors.border}` }}
           >
@@ -94,6 +97,7 @@ export const FeaturedCarousel = memo(function FeaturedCarousel({ title, subtitle
           </button>
           <button
             onClick={() => handleScroll('r')}
+            aria-label={t('app.scroll.right')}
             className="w-9 h-9 rounded-full flex items-center justify-center feat-btn-hover"
             style={{ background: colors.bgHover, border: `1px solid ${colors.border}` }}
           >
@@ -167,14 +171,14 @@ export const FeaturedCarousel = memo(function FeaturedCarousel({ title, subtitle
                   style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.3) 60%, transparent 100%)' }}
                 >
                   <p className="text-sm font-bold truncate" style={{ color: colors.text }}>{game.name}</p>
-                  <p className="text-xs truncate mt-0.5" style={{ color: colors.textSecondary }}>{(game as any).genre || 'Game'}</p>
+                  <p className="text-xs truncate mt-0.5" style={{ color: colors.textSecondary }}>{(game as any).genre || t('app.card.game')}</p>
                   <div className="flex gap-2 mt-2">
                     <button
                       onClick={(e) => { e.stopPropagation(); onGameClick(game) }}
                       className="flex-1 text-[10px] font-bold py-2 rounded-lg feat-btn-view"
                       style={{ background: color, color: 'white' }}
                     >
-                      View
+                      {t('app.card.view')}
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); toggleFavorite(game.appid) }}

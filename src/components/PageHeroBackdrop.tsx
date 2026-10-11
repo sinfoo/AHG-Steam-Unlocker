@@ -35,8 +35,8 @@ export function PageHeroBackdrop({ game, accent }: { game?: Game | null; accent:
         className="w-full h-full object-cover"
         style={{ objectPosition: 'center 28%' }}
         initial={{ scale: 1.08, opacity: 0 }}
-        animate={{ scale: [1.08, 1.16, 1.08], opacity: 1 }}
-        transition={{ scale: { duration: 26, repeat: Infinity, ease: 'easeInOut' }, opacity: { duration: 1.1, ease: 'easeOut' } }}
+        animate={{ scale: 1.15, opacity: 1 }}
+        transition={{ scale: { duration: 26, ease: 'linear' }, opacity: { duration: 1.1, ease: 'easeOut' } }}
       />
       {/* Diagonal darken + accent wash keeps the title crisp over any art */}
       <div className="absolute inset-0" style={{ background: `linear-gradient(118deg, rgba(3,3,8,0.94) 0%, rgba(3,3,8,0.72) 42%, ${accent}26 100%)` }} />

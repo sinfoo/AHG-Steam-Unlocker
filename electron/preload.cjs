@@ -489,18 +489,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getDlcRegistry: () => ipcRenderer.invoke('get-dlc-registry'),
   registerDlcs: (appid, dlcIds, dlcDetails, sourceRepo) => ipcRenderer.invoke('register-dlcs', appid, dlcIds, dlcDetails, sourceRepo),
 
-  // Discord Integration
-  discordLogin: () => ipcRenderer.invoke('discord-login'),
-  checkDiscordAuth: () => ipcRenderer.invoke('check-discord-auth'),
-  discordLogout: () => ipcRenderer.invoke('discord-logout'),
-  setGameSharing: (enabled) => ipcRenderer.invoke('set-game-sharing', enabled),
-  getGameSharing: () => ipcRenderer.invoke('get-game-sharing'),
-  shareGameToDiscord: (appid, gameName, coverUrl, dlcCount) => ipcRenderer.invoke('share-game-to-discord', appid, gameName, coverUrl, dlcCount),
-  getDiscordStartupPref: () => ipcRenderer.invoke('get-discord-startup-pref'),
-  setDiscordStartupPref: (pref) => ipcRenderer.invoke('set-discord-startup-pref', pref),
-  // Secrets diagnostics + manual config (for Discord login troubleshooting)
-  getSecretsDiag: () => ipcRenderer.invoke('get-secrets-diag'),
-
   // Restart app after update
   restartApp: () => ipcRenderer.invoke('restart-app'),
 

@@ -1,11 +1,10 @@
-// ── Secrets loading — shared by discord, license, and main.cjs orchestrator ──
+// ── Secrets loading — shared by license, and main.cjs orchestrator ──
 const path = require('path');
 const fs = require('fs');
 const { app } = require('electron');
 
 let secrets = {};
 let secretsDiag = {};
-let DISCORD_CLIENT_ID;
 
 (function loadSecrets() {
   try {
@@ -65,7 +64,7 @@ let DISCORD_CLIENT_ID;
   }
 
   // Packaged-mode fallback
-  if (!secrets.discordClientSecret) {
+  if (!Object.keys(secrets).length) {
     try {
       if (app.isPackaged) {
         const rpSafe = (typeof process.resourcesPath !== 'undefined' && process.resourcesPath)
@@ -83,7 +82,7 @@ let DISCORD_CLIENT_ID;
   }
 
   // Dev-mode fallback
-  if (!secrets.discordClientSecret) {
+  if (!Object.keys(secrets).length) {
     try {
       const devPath = path.join(__dirname, '..', '..', 'config', 'secrets.json');
       if (fs.existsSync(devPath)) {
@@ -95,7 +94,7 @@ let DISCORD_CLIENT_ID;
   }
 
   // Last-resort: exe-relative
-  if (!secrets.discordClientSecret) {
+  if (!Object.keys(secrets).length) {
     try {
       const exeDir = path.dirname(app.getPath('exe'));
       const lastResortPath = path.join(exeDir, 'resources', 'config', 'secrets.json');
@@ -107,16 +106,11 @@ let DISCORD_CLIENT_ID;
     }
   }
 
-  // Derive DISCORD_CLIENT_ID from loaded secrets (or fallback for backward compat)
-  DISCORD_CLIENT_ID = secrets.discordClientId || '1491071254206353580';
-
   // Build diagnostics
   let userDataStr = '';
   try { userDataStr = app.getPath('userData'); } catch(e) { userDataStr = 'unavailable'; }
   secretsDiag = {
-    loaded: !!secrets.discordClientSecret,
-    hasDiscordClientSecret: !!secrets.discordClientSecret,
-    discordClientSecretLen: secrets.discordClientSecret ? secrets.discordClientSecret.length : 0,
+    loaded: Object.keys(secrets).length > 0,
     keysFound: Object.keys(secrets).join(', ') || 'none',
     __dirname: __dirname,
     cwd: process.cwd(),
@@ -129,5 +123,4 @@ let DISCORD_CLIENT_ID;
 module.exports = {
   secrets,
   secretsDiag,
-  DISCORD_CLIENT_ID,
 };

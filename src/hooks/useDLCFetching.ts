@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import { useCallback } from 'react'
 import { bridge } from '../bridge'
 import { useInstallStore, useGameStore } from '../store'
@@ -8,7 +9,7 @@ export function useDLCFetching() {
   const { addLog } = useToastNotifications()
 
   const fetchDLCs = useCallback(async (appid: string, gameName: string, sourceRepo?: string) => {
-    addLog('Fetching DLCs...', 'info')
+    addLog(t('ui.log.fetchingDlc'), 'info')
     let installedCount = 0
 
     try {
@@ -17,14 +18,14 @@ export function useDLCFetching() {
       if (result && result.dlcs && result.dlcs.length > 0) {
         const dlcNames = result.dlcNames || {}
         const dlcDetails = result.dlcDetails || {}
-        addLog('DLCs found', 'success')
+        addLog(t('ui.log.dlcFound'), 'success')
 
         const registerResult = await bridge.registerDlcs(appid, result.dlcs, result.dlcDetails, sourceRepo)
         if (registerResult?.success) {
           installedCount = registerResult.count || result.dlcs.length
-          addLog('DLCs registered', 'success')
+          addLog(t('ui.log.dlcRegistered'), 'success')
         } else {
-          addLog('DLC registration had issues, retrying...', 'warn')
+          addLog(t('ui.log.dlcRetry'), 'warn')
           for (const dlcId of result.dlcs) {
             try {
               const installResult = await bridge.installGame(String(dlcId))
@@ -50,9 +51,9 @@ export function useDLCFetching() {
           (prev: Array<{ appid: string; name: string; header_image?: string }>) => [...prev, ...dlcsToShow]
         )
 
-        addLog('DLC install complete', installedCount > 0 ? 'success' : 'info')
+        addLog(t('ui.log.dlcDone'), installedCount > 0 ? 'success' : 'info')
       } else {
-        addLog('No DLCs found', 'info')
+        addLog(t('ui.log.noDlc'), 'info')
       }
 
       useInstallStore.getState().setLastAddedDLCCount(installedCount)
@@ -76,7 +77,7 @@ export function useDLCFetching() {
 
       return installedCount
     } catch (e) {
-      addLog(`Error fetching DLCs: ${e}`, 'error')
+      addLog(t('ui.log.dlcErr', { err: String(e) }), 'error')
       return 0
     }
   }, [addLog])

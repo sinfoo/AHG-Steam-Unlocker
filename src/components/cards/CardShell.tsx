@@ -1,8 +1,5 @@
 import { useState, type ReactNode } from 'react'
 
-// Transition constant — DESIGN.md: 80ms cubic-bezier(0.4, 0, 0.2, 1)
-const T = '0.08s cubic-bezier(0.4, 0, 0.2, 1)'
-
 export interface CardShellProps {
   /** Children can be a render function receiving isHovered, or a ReactNode */
   children: ReactNode | ((isHovered: boolean) => ReactNode)
@@ -40,26 +37,21 @@ export function CardShell({
         '--ghue': genreHue,
         animationDelay: Math.min(index * 30, 80) + 'ms',
         aspectRatio: getAspectRatio(variant, aspectRatio),
-        background: variant === 'list'
-          ? (isHovered
-              ? `linear-gradient(135deg, hsla(${genreHue}, 50%, 25%, 0.12), rgba(18,18,31,0.30))`
-              : 'rgba(18,18,31,0.30)')
-          : `linear-gradient(160deg, rgba(18,18,31,0.40) 0%, rgba(12,12,24,0.55) 100%)`,
-        backdropFilter: 'blur(20px) saturate(1.3)',
-        WebkitBackdropFilter: 'blur(20px) saturate(1.3)',
-        borderRadius: '1rem',
+        // v2: flat surface + hairline; hover lifts and tints border/shadow with the user accent
+        background: variant === 'list' && isHovered ? 'rgba(255,255,255,0.04)' : 'var(--s1, #0f0f1b)',
+        borderRadius: variant === 'list' ? '14px' : '16px',
         zIndex: isHovered ? 20 : 1,
         border: isHovered
-          ? `1px solid hsla(${genreHue}, 55%, 55%, 0.35)`
-          : '1px solid rgba(255,255,255,0.06)',
+          ? '1px solid color-mix(in oklch, var(--acc) 55%, transparent)'
+          : '1px solid rgba(255,255,255,0.07)',
         boxShadow: isHovered
-          ? `0 16px 48px hsla(${genreHue}, 50%, 15%, 0.50), 0 0 80px hsla(${genreHue}, 60%, 35%, 0.08), 0 0 0 1px hsla(${genreHue}, 60%, 50%, 0.10)`
-          : '0 2px 4px rgba(0,0,0,0.20), 0 8px 24px rgba(0,0,0,0.12)',
+          ? '0 30px 50px -22px color-mix(in oklch, var(--acc) 60%, transparent)'
+          : '0 12px 30px -18px rgba(0,0,0,0.9)',
         transform: variant === 'list'
           ? (isHovered ? 'translateX(4px)' : 'translateX(0)')
-          : (isHovered ? 'translateY(-4px) scale(1.02)' : 'translateY(0) scale(1)'),
+          : (isHovered ? 'translateY(-5px) scale(1.015)' : 'translateY(0) scale(1)'),
         willChange: 'transform',
-        transition: `transform ${T}, box-shadow ${T}`,
+        transition: 'transform .5s var(--ease-out), box-shadow .5s, border-color .3s, background .15s',
         ...style,
       } as React.CSSProperties}
       onClick={onClick}
@@ -67,19 +59,9 @@ export function CardShell({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Ambient genre glow */}
-      <div
-        className={`card-ambient-glow ${isHovered ? 'active' : ''}`}
-        style={{ '--ghue': genreHue } as React.CSSProperties}
-      />
 
       {typeof children === 'function' ? children(isHovered) : children}
 
-      {/* Animated hover border glow */}
-      <div
-        className={`card-border-glow ${isHovered ? 'active' : ''}`}
-        style={{ '--ghue': genreHue } as React.CSSProperties}
-      />
     </div>
   )
 }

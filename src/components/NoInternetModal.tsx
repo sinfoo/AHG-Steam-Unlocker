@@ -2,26 +2,31 @@ import { memo, useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { WifiOff, AlertTriangle, RefreshCw, Globe } from 'lucide-react'
 import { COLORS } from '../constants/colors'
+import { useT } from '../i18n'
 
 const redGlow = 'rgba(239, 68, 68, 0.3)'
 
 export const NoInternetModal = memo(function NoInternetModal() {
+  const t = useT()
   const [isOpen, setIsOpen] = useState(false)
   const [checking, setChecking] = useState(false)
 
   useEffect(() => {
-    const checkConnection = async () => {
-      try {
-        const api = (window as any).electronAPI
-        if (api?.checkConnectivity) {
-          const online = await api.checkConnectivity()
-          if (!online) setIsOpen(true)
-        }
-      } catch {
-        setIsOpen(true)
-      }
+    // Only open after TWO failed probes ~4s apart, started after the app settles; a thrown IPC
+    // error is not proof of being offline. Browser `offline` events trigger a fresh check.
+    let cancelled = false
+    const probe = async () => {
+      try { return (await (window as any).electronAPI?.checkConnectivity?.()) ?? true } catch { return true }
     }
-    checkConnection()
+    const check = async () => {
+      if (await probe()) return
+      await new Promise(r => setTimeout(r, 4000))
+      if (!cancelled && !(await probe())) setIsOpen(true)
+    }
+    const t = setTimeout(check, 5000)
+    const onOffline = () => { void check() }
+    window.addEventListener('offline', onOffline)
+    return () => { cancelled = true; clearTimeout(t); window.removeEventListener('offline', onOffline) }
   }, [])
 
   const handleRetry = async () => {
@@ -47,18 +52,18 @@ export const NoInternetModal = memo(function NoInternetModal() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[999] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(30px)' }}
+          style={{ background: 'rgba(4,4,10,0.6)', backdropFilter: 'blur(10px)' }}
         >
           <motion.div
             initial={{ scale: 0.85, y: 30, opacity: 0 }}
             animate={{ scale: 1, y: 0, opacity: 1 }}
             exit={{ scale: 0.85, y: 30, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            className="w-full max-w-md rounded-3xl overflow-hidden"
+            className="w-full max-w-md rounded-[24px] overflow-hidden"
             style={{
-              background: COLORS.bgCard,
+              background: '#0f0f1b',
               border: `1px solid ${COLORS.red}40`,
-              boxShadow: `0 32px 100px rgba(0,0,0,0.6), 0 0 80px ${redGlow}`
+              boxShadow: '0 60px 120px -30px rgba(0,0,0,1)'
             }}
           >
             <div className="h-1.5" style={{
@@ -80,18 +85,18 @@ export const NoInternetModal = memo(function NoInternetModal() {
                 <WifiOff size={44} style={{ color: COLORS.red }} />
               </motion.div>
 
-              <h2 className="text-2xl font-bold text-white mb-2">No Internet Connection</h2>
+              <h2 className="text-2xl font-bold text-white mb-2">{t('app.net.noInternet')}</h2>
               <p className="text-sm mb-8" style={{ color: COLORS.textMuted }}>
-                AHG Steam Unlocker requires an active internet connection to fetch game data, fixes, and communicate with Steam services.
+                {t('app.net.requires')}
               </p>
 
-              <div className="p-4 rounded-2xl mb-8 text-left" style={{ background: COLORS.bgHover, border: `1px solid ${COLORS.border}` }}>
+              <div className="p-4 rounded-2xl mb-8 text-start" style={{ background: COLORS.bgHover, border: `1px solid ${COLORS.border}` }}>
                 <div className="flex items-start gap-3">
                   <AlertTriangle size={18} style={{ color: COLORS.amber }} className="mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-sm font-semibold" style={{ color: COLORS.text }}>Please check:</p>
+                    <p className="text-sm font-semibold" style={{ color: COLORS.text }}>{t('app.net.pleaseCheck')}</p>
                     <ul className="mt-2 space-y-1.5">
-                      {['Your Wi-Fi or Ethernet connection', 'Firewall settings (allow AHG through)', 'Steam servers status (store.steampowered.com)'].map((item, i) => (
+                      {([t('app.net.check1'), t('app.net.check2'), t('app.net.check3')]).map((item, i) => (
                         <li key={i} className="text-xs flex items-center gap-2" style={{ color: COLORS.textMuted }}>
                           <span className="w-1 h-1 rounded-full" style={{ background: COLORS.red }} />
                           {item}
@@ -112,8 +117,9 @@ export const NoInternetModal = memo(function NoInternetModal() {
                   style={{
                     background: checking
                       ? `${COLORS.violet}80`
-                      : `linear-gradient(135deg, ${COLORS.violet}, ${COLORS.purple})`, // intentional gradient variation
-                    boxShadow: `0 8px 32px ${COLORS.violet}40`
+                      : 'var(--acc,#a77dff)',
+                    color: '#0b0614',
+                    boxShadow: '0 16px 40px -14px var(--acc,#a77dff)'
                   }}
                 >
                   {checking ? (
@@ -123,11 +129,11 @@ export const NoInternetModal = memo(function NoInternetModal() {
                   ) : (
                     <Globe size={18} />
                   )}
-                  {checking ? 'Checking...' : 'Retry Connection'}
+                  {checking ? t('app.net.checking') : t('app.net.retry')}
                 </motion.button>
 
                 <p className="text-xs" style={{ color: COLORS.textMuted }}>
-                  The app will retry automatically every 30 seconds
+                  {t('app.net.autoRetry')}
                 </p>
               </div>
             </div>

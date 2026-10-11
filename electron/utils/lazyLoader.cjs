@@ -1,6 +1,6 @@
 // ── Lazy IPC Handler Loader ──
 // Defers requiring and registering handler modules until the first IPC call
-// to any of their channels. This saves startup parsing of ~1,100 lines (discord + fixes)
+// to any of their channels. This saves startup parsing of ~1,100 lines (fixes)
 // when the user never opens those features.
 //
 // Usage:

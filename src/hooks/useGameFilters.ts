@@ -3,11 +3,12 @@ import { useShallow } from 'zustand/react/shallow'
 import { useGameStore, useUserStore, useUIStore } from '../store'
 import type { Game, Fix } from '../types'
 import { COLORS } from '../constants/colors'
+import { useT } from '../i18n'
 
 // ── Lucide icons for nav items ──
 import {
-  Sparkles, LayoutGrid, FolderHeart, Heart,
-  Clock, Wrench, Settings,
+  House, Compass, Library, Heart,
+  History, Wrench, Settings,
 } from 'lucide-react'
 
 // ── Game ID lists loaded from JSON data files ──
@@ -68,7 +69,7 @@ const F2P_NAME_PATTERNS: RegExp[] = [
 ]
 
 // Home-section category Sets — lifted to module level so they're created once, not on every homeSections recomputation
-const HOME_SECTION_SETS = {
+export const HOME_SECTION_SETS = {
   popular: new Set(POPULAR_IDS),
   veryPopular: new Set(VERY_POPULAR_IDS),
   action: new Set(ACTION_IDS),
@@ -92,6 +93,7 @@ const FIXES_PER_PAGE = 50
 // ══════════════════════════════════════════════════════════════
 
 export function useGameFilters() {
+  const t = useT()
   // ── Store selectors ──
   const { games, searchQuery, sortBy, fixes, fixSearchQuery, fixFilter, installedGames, librarySearchQuery, dynamicFreeIds, fixPage, knownDlcIds } = useGameStore(
     useShallow(s => ({
@@ -324,7 +326,7 @@ export function useGameFilters() {
       aaaGames: aaaResult,
       hotGames: popularFiltered.slice(0, 30),
       popularGames: popularResult,
-      justAddedGames: [...f2pFilteredGames].sort((a, b) => Number(b.appid) - Number(a.appid)).slice(0, 20),
+      justAddedGames: [] as Game[], // unused by any consumer; the full-catalogue sort it did here cost ~100K-element sorts on every Home entry
       hardGames: strategyResult,
       actionGames: actionResult,
       rpgGames: rpgResult,
@@ -546,14 +548,14 @@ export function useGameFilters() {
 
   // Nav items — original structure
   const navItems = useMemo(() => [
-    { id: 'home', label: 'Home', icon: Sparkles, color: COLORS.amber, count: 0 },
-    { id: 'browse', label: 'Catalogue', icon: LayoutGrid, color: COLORS.green, count: games.length },
-    { id: 'library', label: 'My Library', icon: FolderHeart, color: COLORS.violet, count: installedGames.length },
-    { id: 'favourites', label: 'Favourites', icon: Heart, color: COLORS.pink, count: favorites.size },
-    { id: 'recent', label: 'Recently Viewed', icon: Clock, color: COLORS.amber, count: recentGames.length },
-    { id: 'fixes', label: 'Steam Fixes', icon: Wrench, color: COLORS.blue, count: fixes.length },
-    { id: 'settings', label: 'Settings', icon: Settings, color: COLORS.violet, count: 0 },
-  ], [games.length, favorites.size, fixes.length, installedGames.length, recentGames.length])
+    { id: 'home', label: t('app.nav.home'), icon: House, color: COLORS.amber, count: 0 },
+    { id: 'browse', label: t('app.nav.browse'), icon: Compass, color: COLORS.green, count: games.length },
+    { id: 'fixes', label: t('app.nav.fixes'), icon: Wrench, color: COLORS.blue, count: fixes.length },
+    { id: 'library', label: t('app.nav.library'), icon: Library, color: COLORS.violet, count: installedGames.length },
+    { id: 'favourites', label: t('app.nav.favourites'), icon: Heart, color: COLORS.pink, count: favorites.size },
+    { id: 'recent', label: t('app.nav.recent'), icon: History, color: COLORS.amber, count: 0 },
+    { id: 'settings', label: t('app.nav.settings'), icon: Settings, color: COLORS.violet, count: 0 },
+  ], [t, games.length, favorites.size, fixes.length, installedGames.length])
 
   // Lines 1386-1434
   const filteredFixes = useMemo(() => {

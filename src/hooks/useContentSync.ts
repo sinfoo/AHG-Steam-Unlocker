@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import { useEffect } from 'react'
 import { useGameStore } from '../store'
 import { bridge } from '../bridge'
@@ -56,10 +57,10 @@ export function useContentSync() {
       }
 
       const bits: string[] = []
-      if (newGames.length) bits.push(`${newGames.length} new game${newGames.length > 1 ? 's' : ''}`)
+      if (newGames.length) bits.push(newGames.length > 1 ? t('ui.toast.newGameMany', { n: newGames.length }) : t('ui.toast.newGameOne'))
       const fixGames = new Set([...newFixes, ...updatedFixes].map((f: any) => String(f.appid)))
-      if (fixGames.size) bits.push(`${fixGames.size} fix update${fixGames.size > 1 ? 's' : ''}`)
-      if (bits.length) showToast(`Catalogue synced — ${bits.join(', ')}`, 'info')
+      if (fixGames.size) bits.push(fixGames.size > 1 ? t('ui.toast.fixUpdMany', { n: fixGames.size }) : t('ui.toast.fixUpdOne'))
+      if (bits.length) showToast(t('ui.toast.catSynced', { items: bits.join(', ') }), 'info')
     })
     // Remove the listener on unmount so duplicate catalogue merges/toasts can't
     // accumulate if this hook ever re-runs or remounts.

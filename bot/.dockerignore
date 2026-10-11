@@ -1,0 +1,4 @@
+.env
+bot.log
+media_stats.json
+__pycache__

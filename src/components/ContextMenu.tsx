@@ -7,6 +7,7 @@ import {
 import type { ColorScheme, Game } from './shared'
 import { useUIStore, useUserStore, useSettingsStore, useInstalledGames } from '../store'
 import GameCover from './GameCover'
+import { useT } from '../i18n'
 
 interface ContextMenuProps {
   colors: ColorScheme
@@ -29,6 +30,7 @@ export const ContextMenu = memo(function ContextMenu({
   contextMenuCopyAppId,
   onRemoveGame,
 }: ContextMenuProps) {
+  const t = useT()
   const contextMenu = useUIStore(s => s.contextMenu)
   const favorites = useUserStore(s => s.favorites)
   const includeDLC = useSettingsStore(s => s.includeDLC)
@@ -43,130 +45,62 @@ export const ContextMenu = memo(function ContextMenu({
 
   // Different menu items for library games
   const menuItems: (any | null)[] = isLibraryGame ? [
-    { icon: Trash2, label: 'Remove Game', action: () => onRemoveGame?.(game), color: COLORS.red, accent: true },
+    { icon: Trash2, label: t('app.ctx.removeGame'), action: () => onRemoveGame?.(game), color: COLORS.red, accent: true },
     null,
-    { icon: Heart, label: favorites.has(appid) ? 'Remove from Favorites' : 'Add to Favorites', action: () => contextMenuToggleFavorite(game), color: COLORS.pink },
-    { icon: Play, label: 'Open Steam Page', action: () => contextMenuOpenSteam(game), color: COLORS.blue },
+    { icon: Heart, label: favorites.has(appid) ? t('app.ctx.removeFromFav') : t('app.ctx.addToFav'), action: () => contextMenuToggleFavorite(game), color: COLORS.pink },
+    { icon: Play, label: t('app.ctx.openSteam'), action: () => contextMenuOpenSteam(game), color: COLORS.blue },
     null,
-    { icon: Share2, label: 'Share Card', action: () => contextMenuShareCard(game), color: COLORS.cyan },
-    { icon: Copy, label: 'Copy App ID', action: () => contextMenuCopyAppId(game), color: COLORS.textSecondary },
+    { icon: Share2, label: t('app.ctx.shareCard'), action: () => contextMenuShareCard(game), color: COLORS.cyan },
+    { icon: Copy, label: t('app.ctx.copyAppId'), action: () => contextMenuCopyAppId(game), color: COLORS.textSecondary },
   ] : [
-    { icon: DownloadIcon, label: 'Install', action: () => contextMenuInstall(game), color: COLORS.green, accent: true },
+    { icon: DownloadIcon, label: t('app.ctx.install'), action: () => contextMenuInstall(game), color: COLORS.green, accent: true },
     null,
-    { icon: Play, label: 'Open Steam Page', action: () => contextMenuOpenSteam(game), color: COLORS.blue },
-    { icon: Heart, label: favorites.has(appid) ? 'Remove Favorite' : 'Add Favorite', action: () => contextMenuToggleFavorite(game), color: COLORS.pink },
+    { icon: Play, label: t('app.ctx.openSteam'), action: () => contextMenuOpenSteam(game), color: COLORS.blue },
+    { icon: Heart, label: favorites.has(appid) ? t('app.ctx.removeFavorite') : t('app.ctx.addFavorite'), action: () => contextMenuToggleFavorite(game), color: COLORS.pink },
     null,
-    { icon: DownloadIcon, label: 'Add to Queue', action: () => addToDownloadQueue(game), color: COLORS.blue },
-    { icon: Share2, label: 'Share Card', action: () => contextMenuShareCard(game), color: COLORS.cyan },
-    { icon: Copy, label: 'Copy App ID', action: () => contextMenuCopyAppId(game), color: COLORS.textSecondary },
+    { icon: DownloadIcon, label: t('app.ctx.addToQueue'), action: () => addToDownloadQueue(game), color: COLORS.blue },
+    { icon: Share2, label: t('app.ctx.shareCard'), action: () => contextMenuShareCard(game), color: COLORS.cyan },
+    { icon: Copy, label: t('app.ctx.copyAppId'), action: () => contextMenuCopyAppId(game), color: COLORS.textSecondary },
     null,
-    { icon: null as any, label: 'Include DLCs', action: () => setIncludeDLC(!includeDLC), color: includeDLC ? COLORS.amber : COLORS.textMuted, toggle: true },
+    { icon: null as any, label: t('app.ctx.includeDlc'), action: () => setIncludeDLC(!includeDLC), color: includeDLC ? COLORS.amber : COLORS.textMuted, toggle: true },
   ]
 
   const renderItem = (item: any, i: number) => {
     if (item === null) {
-      return <div key={`sep-${i}`} className="mx-3.5 my-1 h-px" style={{ background: `linear-gradient(90deg, ${COLORS.border} 0%, ${COLORS.borderLight} 50%, ${COLORS.border} 100%)` }} />
+      return <div key={`sep-${i}`} style={{ height: 1, background: 'rgba(255,255,255,.07)', margin: '5px 6px' }} />
     }
     const isAccent = item.accent
+    const delay = `${0.02 * i}s`
     if (item.toggle) {
       return (
-        <motion.button
+        <button
           key={i}
-          initial={{ opacity: 0, x: -8 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.03 * i, duration: 0.12 }}
           onClick={item.action}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.97 }}
-          className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left"
-          style={{ borderRadius: 0 }}
+          role="switch"
+          aria-checked={includeDLC}
+          className="w-full flex items-center gap-[11px] px-2.5 text-start hover:bg-white/[.07] active:scale-[.98]"
+          style={{ height: 36, borderRadius: 9, fontSize: 13, color: includeDLC ? COLORS.amber : '#a6a5bb', transition: 'background .08s cubic-bezier(.4,0,.2,1), transform .08s', animation: 'v2-riseIn .18s cubic-bezier(.16,1,.3,1) both', animationDelay: delay }}
         >
-          <motion.div
-            className="flex-1 flex items-center gap-3 px-3 py-1.5 rounded-xl"
-            style={{
-              background: includeDLC
-                ? `linear-gradient(135deg, ${COLORS.amber}20, ${COLORS.amber}08)`
-                : `${COLORS.textMuted}08`,
-              border: `1px solid ${includeDLC ? COLORS.amber + '50' : 'transparent'}`,
-            }}
-            animate={{
-              borderColor: includeDLC ? COLORS.amber + '50' : 'transparent',
-            }}
-          >
-            <motion.div
-              className="w-5 h-5 rounded-md flex items-center justify-center"
-              style={{
-                background: includeDLC ? COLORS.amber : `${COLORS.textMuted}25`,
-              }}
-              animate={{
-                rotate: includeDLC ? [0, -15, 0] : 0,
-                scale: includeDLC ? [1, 1.15, 1] : 1,
-              }}
-              transition={{ duration: 0.08, ease: [0.4, 0, 0.2, 1] }}
-            >
-              {includeDLC ? (
-                <Check size={11} className="text-white" />
-              ) : (
-                <X size={11} style={{ color: COLORS.textMuted }} />
-              )}
-            </motion.div>
-            <span className="flex-1 text-xs font-semibold" style={{ color: includeDLC ? COLORS.amber : COLORS.textMuted }}>
-              Include DLCs
-            </span>
-            {includeDLC && (
-              <motion.span
-                className="text-xs font-bold px-1.5 py-0.5 rounded"
-                style={{ background: `${COLORS.amber}25`, color: COLORS.amber }}
-                initial={{ opacity: 0, scale: 0.5 }}
-                animate={{ opacity: 1, scale: 1 }}
-              >
-                ON
-              </motion.span>
-            )}
-          </motion.div>
-        </motion.button>
+          <span className="flex items-center justify-center" style={{ width: 15, height: 15, borderRadius: 4, background: includeDLC ? COLORS.amber : 'rgba(255,255,255,.1)' }}>
+            {includeDLC ? <Check size={10} style={{ color: '#0b0614' }} strokeWidth={3} /> : <X size={10} style={{ color: '#77768e' }} />}
+          </span>
+          <span className="flex-1">{t('app.ctx.includeDlc')}</span>
+          <span style={{ fontFamily: "'Geist Mono Variable','Geist Mono',monospace", fontSize: 10.5, color: includeDLC ? COLORS.amber : '#6f6e86' }}>{includeDLC ? t('app.ctx.on') : t('app.ctx.off')}</span>
+        </button>
       )
     }
+    const color = isAccent ? COLORS.green : item.color
     return (
-      <motion.button
+      <button
         key={i}
-        initial={{ opacity: 0, x: -8 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ delay: 0.03 * i, duration: 0.12 }}
         onClick={item.action}
-        whileHover={{
-          background: isAccent ? `${COLORS.green}15` : `${item.color}12`,
-          x: 3,
-          scale: 0.98,
-        }}
-        whileTap={{ scale: 0.95 }}
-        className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left relative group"
-        style={{ borderRadius: 0 }}
+        className="w-full flex items-center gap-[11px] px-2.5 text-start hover:bg-white/[.07] active:scale-[.98]"
+        style={{ height: 36, borderRadius: 9, fontSize: 13, color: isAccent ? COLORS.green : '#e4e3f0', transition: 'background .08s cubic-bezier(.4,0,.2,1), transform .08s', animation: 'v2-riseIn .18s cubic-bezier(.16,1,.3,1) both', animationDelay: delay }}
       >
-        <motion.div
-          className="absolute inset-y-1 left-1.5 w-0.5 rounded-full"
-          style={{ background: item.color }}
-          initial={{ opacity: 0, scaleY: 0 }}
-          whileHover={{ opacity: 1, scaleY: 1 }}
-          transition={{ duration: 0.08, ease: [0.4, 0, 0.2, 1] }}
-        />
-        <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 relative" style={{ background: `${item.color}12` }}>
-          <item.icon size={14} style={{ color: isAccent ? COLORS.green : item.color }} />
-        </div>
-        <span className="text-xs font-medium relative z-10" style={{ color: isAccent ? COLORS.green : COLORS.text }}>{item.label}</span>
-        {isAccent && (
-          <motion.div
-            className="absolute right-2.5 px-1.5 py-0.5 rounded text-xs font-bold"
-            style={{ background: `${COLORS.green}25`, color: COLORS.green }}
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.15 }}
-          >
-            GO
-          </motion.div>
-        )}
-
-      </motion.button>
+        <item.icon size={15} style={{ color, opacity: 0.9 }} />
+        <span className="flex-1">{item.label}</span>
+        {isAccent && <span style={{ fontFamily: "'Geist Mono Variable','Geist Mono',monospace", fontSize: 10.5, color: '#6f6e86' }}>{t('app.ctx.go')}</span>}
+      </button>
     )
   }
 
@@ -174,34 +108,31 @@ export const ContextMenu = memo(function ContextMenu({
     <AnimatePresence>
       {contextMenu && (
         <motion.div
-          initial={{ opacity: 0, scale: 0.92, y: -6 }}
+          initial={{ opacity: 0, scale: 0.96, y: -4 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.92, y: -6 }}
-          transition={{ type: 'spring', stiffness: 350, damping: 24 }}
-          className="context-menu fixed z-[200] rounded-2xl overflow-visible py-1.5"
+          exit={{ opacity: 0, scale: 0.96 }}
+          transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+          className="context-menu fixed z-[200]"
           style={{
-            left: Math.max(8, Math.min(contextMenu.x, window.innerWidth - 230)),
-            top: Math.max(8, Math.min(contextMenu.y, window.innerHeight - 480)),
-            background: `linear-gradient(180deg, ${COLORS.bgCard} 0%, ${COLORS.bgDark} 100%)`,
-            border: `1px solid ${COLORS.borderLight}`,
-            backdropFilter: 'blur(24px)',
-            boxShadow: `0 20px 60px rgba(0,0,0,0.6), 0 0 40px ${COLORS.violet}10`,
-            width: 210
+            left: Math.max(8, Math.min(contextMenu.x, window.innerWidth - 244)),
+            top: Math.max(8, Math.min(contextMenu.y, window.innerHeight - 440)),
+            width: 236,
+            padding: 6,
+            borderRadius: 14,
+            background: 'rgba(20,20,34,.97)',
+            backdropFilter: 'blur(22px)',
+            border: '1px solid rgba(255,255,255,.1)',
+            boxShadow: '0 24px 60px -12px rgba(0,0,0,.9)',
+            transformOrigin: 'top left',
           }}
         >
-          {/* Header gradient accent */}
-          <div className="absolute top-0 left-0 right-0 h-16 pointer-events-none" style={{ background: `linear-gradient(180deg, ${COLORS.violet}08 0%, transparent 100%)` }} />
-
-          {/* Game info header with cover art accent */}
-          <div className="relative px-3.5 pt-3 pb-2.5 border-b" style={{ borderColor: COLORS.border }}>
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg overflow-hidden shrink-0">
-                <GameCover appid={contextMenu.game.appid} name={contextMenu.game.name} localHeader={contextMenu.game.header_image} className="w-full h-full" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold truncate" style={{ color: COLORS.text }}>{contextMenu.game.name}</p>
-                <p className="text-xs font-mono" style={{ color: COLORS.textDim }}>#{contextMenu.game.appid}</p>
-              </div>
+          <div className="flex items-center gap-2.5 min-w-0" style={{ padding: '6px 10px 8px' }}>
+            <div className="w-7 h-7 rounded-lg overflow-hidden shrink-0">
+              <GameCover appid={contextMenu.game.appid} name={contextMenu.game.name} localHeader={contextMenu.game.header_image} className="w-full h-full" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="truncate" style={{ fontSize: 12, fontWeight: 600, color: '#c9c8da' }}>{contextMenu.game.name}</p>
+              <p style={{ fontFamily: "'Geist Mono Variable','Geist Mono',monospace", fontSize: 10.5, color: '#6f6e86' }}>#{contextMenu.game.appid}</p>
             </div>
           </div>
 

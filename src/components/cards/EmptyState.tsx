@@ -150,20 +150,13 @@ export const EmptyState = memo(function EmptyState({
         )}
       </div>
 
-      <h3 className="empty-state-text text-2xl font-extrabold text-white mb-2 tracking-tight">{title}</h3>
-      <p className="empty-state-text text-base mb-7" style={{ color: COLORS.textMuted }}>{subtitle}</p>
+      <h3 className="empty-state-text text-[22px] font-semibold text-white mb-2" style={{ letterSpacing: '-.02em' }}>{title}</h3>
+      <p className="empty-state-text text-[13.5px] mb-7" style={{ color: COLORS.textDim }}>{subtitle}</p>
 
       {action && (
         <button
           onClick={action.onClick}
-          className="empty-action-btn px-7 py-3 rounded-xl text-sm font-bold inline-flex items-center gap-2 cursor-pointer"
-          style={{
-            background: `linear-gradient(135deg, ${color}25 0%, ${color}12 100%)`,
-            color,
-            border: `1px solid ${color}45`,
-            boxShadow: `0 4px 16px ${color}20`,
-            transition: 'all 80ms cubic-bezier(0.4, 0, 0.2, 1)',
-          }}
+          className="empty-action-btn v2-btn-acc h-11 px-6 rounded-[13px] text-sm font-semibold inline-flex items-center gap-2"
         >
           {action.label}
         </button>
@@ -172,21 +165,20 @@ export const EmptyState = memo(function EmptyState({
   )
 })
 
-// ── StatCard ──
-export const StatCard = memo(function StatCard({ icon: Icon, value, label, color, onClick }: { icon: any; value: number; label: string; color: string; onClick?: () => void }) {
+// ── StatCard — v2 stat tile (icon, mono value, dim label) ──
+export const StatCard = memo(function StatCard({ icon: Icon, value, label, color, onClick }: { icon: any; value: number | string; label: string; color: string; onClick?: () => void }) {
   return (
-    <div
+    <button
       onClick={onClick}
-      className="flex-shrink-0 px-6 py-4 rounded-2xl cursor-pointer group"
-      style={{
-        background: `linear-gradient(135deg, ${color}15 0%, ${color}08 100%)`,
-        border: `1px solid ${color}30`,
-        boxShadow: `0 4px 20px ${color}10`
-      }}
+      disabled={!onClick}
+      className="text-start border-0 flex flex-col gap-[5px] p-3 rounded-[14px] text-white"
+      style={{ background: 'rgba(255,255,255,.035)', cursor: onClick ? 'pointer' : 'default', transition: 'background .15s, transform .2s var(--ease-out)' }}
+      onMouseEnter={e => { if (onClick) { e.currentTarget.style.background = 'rgba(255,255,255,.07)'; e.currentTarget.style.transform = 'translateY(-2px)' } }}
+      onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,.035)'; e.currentTarget.style.transform = '' }}
     >
-      <Icon size={24} style={{ color }} className="mb-2" />
-      <p className="text-3xl font-bold" style={{ color }}>{value}</p>
-      <p className="text-sm font-medium" style={{ color: COLORS.textMuted }}>{label}</p>
-    </div>
+      <Icon size={16} style={{ color }} />
+      <span className="mono text-[22px] font-semibold leading-[1.1]" style={{ letterSpacing: '-.03em' }}>{typeof value === "number" ? value.toLocaleString() : value}</span>
+      <span className="text-[11.5px]" style={{ color: COLORS.textDim }}>{label}</span>
+    </button>
   )
 })

@@ -4,6 +4,7 @@ import type { Game } from '../types'
 import { COLORS } from '../constants/colors'
 import { GlowCard } from './ui'
 import GameCover from './GameCover'
+import { useT } from '../i18n'
 
 export const POPULAR_RANK = new Map([
   ['730', 1], ['3041230', 2], ['3321460', 3], ['230410', 4], ['578080', 5],
@@ -37,6 +38,7 @@ function getHue(genre: string): number {
 }
 
 function GameCardInner({ game, index, onClick, onAdd, onToggleFavorite, isFavorite }: GameCardProps) {
+  const t = useT()
   const [installing, setInstalling] = useState(false)
   const isFirstBatch = index < 12
   
@@ -107,7 +109,7 @@ function GameCardInner({ game, index, onClick, onAdd, onToggleFavorite, isFavori
         />
         
         {/* ── Badges (top-left) ── */}
-        <div className="absolute top-3 left-3 flex gap-1.5 z-10">
+        <div className="absolute top-3 start-3 flex gap-1.5 z-10">
           {/* HOT indicator for top 10 */}
           {isHot && (
             <span 
@@ -119,7 +121,7 @@ function GameCardInner({ game, index, onClick, onAdd, onToggleFavorite, isFavori
                 animation: 'pulse-opacity 2s ease-in-out infinite',
               }}
             >
-              <Flame size={8} /> HOT
+              <Flame size={8} /> {t('app.card.hot')}
             </span>
           )}
           {popularity && (
@@ -162,7 +164,7 @@ function GameCardInner({ game, index, onClick, onAdd, onToggleFavorite, isFavori
         {/* ── Favorite button (top-right) ── */}
         <button
           onClick={(e) => { e.stopPropagation(); onToggleFavorite() }}
-          className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center z-20 opacity-0 group-hover:opacity-100 transition-all duration-150 hover:scale-[1.15] active:scale-[0.85] active:brightness-[0.85]"
+          className="absolute top-3 end-3 w-8 h-8 rounded-full flex items-center justify-center z-20 opacity-0 group-hover:opacity-100 transition-all duration-150 hover:scale-[1.15] active:scale-[0.85] active:brightness-[0.85]"
           style={{ 
             background: isFavorite 
               ? 'rgba(0,0,0,0.55)' 
@@ -200,9 +202,9 @@ function GameCardInner({ game, index, onClick, onAdd, onToggleFavorite, isFavori
             disabled={installing}
           >
             {installing ? (
-              <><Loader2 size={14} className="animate-spin" /> Installing...</>
+              <><Loader2 size={14} className="animate-spin" /> {t('app.card.installing')}</>
             ) : (
-              <><Plus size={14} strokeWidth={3} /> Add to Steam</>
+              <><Plus size={14} strokeWidth={3} /> {t('app.hero.addToSteam')}</>
             )}
           </button>
         </div>
@@ -214,7 +216,7 @@ function GameCardInner({ game, index, onClick, onAdd, onToggleFavorite, isFavori
       >
         {/* Violet accent border line that scales in on hover */}
         <div 
-          className="absolute top-0 left-0 right-0 h-[1px] scale-x-0 group-hover:scale-x-100 transition-transform duration-200 ease-out origin-left rounded-full pointer-events-none"
+          className="absolute top-0 inset-x-0 h-[1px] scale-x-0 group-hover:scale-x-100 transition-transform duration-200 ease-out origin-left rtl:origin-right rounded-full pointer-events-none"
           style={{ background: `linear-gradient(90deg, ${COLORS.violet}, ${COLORS.violetLight}, transparent)` }}
         />
         
@@ -322,6 +324,7 @@ export const GameGrid = memo(function GameGrid({
   onToggleFavorite,
   onAddGame,
 }: GameGridProps) {
+  const t = useT()
   // Filter games based on title
   const filteredGames = useMemo(() => {
     let result = [...games]
@@ -373,8 +376,8 @@ export const GameGrid = memo(function GameGrid({
             <div className="w-20 h-20 rounded-3xl flex items-center justify-center mb-5" style={{ background: COLORS.violet + '10', border: `1px solid ${COLORS.violet}20` }}>
               <Search size={32} style={{ color: COLORS.violet, opacity: 0.5 }} />
             </div>
-            <p className="text-xl font-bold" style={{ color: COLORS.textMuted }}>No games found</p>
-            <p className="text-sm mt-1" style={{ color: COLORS.textDim }}>Try a different filter or search term</p>
+            <p className="text-xl font-bold" style={{ color: COLORS.textMuted }}>{t('app.grid.noGames')}</p>
+            <p className="text-sm mt-1" style={{ color: COLORS.textDim }}>{t('app.grid.tryDifferent')}</p>
           </div>
         ) : (
           <div className="grid gap-5 responsive-grid">
@@ -402,7 +405,7 @@ export const GameGrid = memo(function GameGrid({
             className="p-2.5 rounded-xl disabled:opacity-50 hover:scale-105 active:scale-95 transition-transform duration-150"
             style={{ background: page === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.1)' }}
           >
-            <ChevronLeft size={18} className="text-gray-400" />
+            <ChevronLeft size={18} className="text-gray-400 rtl-flip" />
           </button>
           
           {Array.from({ length: Math.min(7, totalPages) }, (_, i) => (
@@ -422,10 +425,10 @@ export const GameGrid = memo(function GameGrid({
             className="p-2.5 rounded-xl disabled:opacity-50 hover:scale-105 active:scale-95 transition-transform duration-150"
             style={{ background: page >= totalPages - 1 ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.1)' }}
           >
-            <ChevronRight size={18} className="text-gray-400" />
+            <ChevronRight size={18} className="text-gray-400 rtl-flip" />
           </button>
           
-          <span className="text-xs ml-3" style={{ color: COLORS.textDim }}>Page {page + 1} of {totalPages}</span>
+          <span className="text-xs ms-3" style={{ color: COLORS.textDim }}>{t('app.grid.pageOf', { page: page + 1, total: totalPages })}</span>
         </div>
       )}
     </div>

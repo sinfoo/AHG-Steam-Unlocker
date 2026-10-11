@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import { useCallback } from 'react'
 import { bridge } from '../bridge'
 import { useScanStore, useGameStore, useInstallQueueStore } from '../store'
@@ -29,7 +30,7 @@ export function useScanGames() {
         achievementRefs.trackScanCompleted()
         addLog('✓ Scan complete', 'success')
         if ((result.found || 0) > 0) {
-          showToast(`Found ${result.found} new games!`, 'success')
+          showToast(t('ui.toast.foundNew', { n: result.found ?? 0 }), 'success')
           useInstallQueueStore.getState().setRecentlyAddedGames((prev: Game[]) => {
             const merged = [...addedGames, ...prev]
             return merged.slice(0, 100)
@@ -76,7 +77,7 @@ export function useScanGames() {
       if (normalizedData && normalizedData.length > 0) {
         useGameStore.getState().setGames(normalizedData)
         addLog('✓ Games catalogue reloaded', 'success')
-        showToast(`Catalogue updated: ${filteredData.length} games`, 'success')
+        showToast(t('ui.toast.catUpdated', { n: filteredData.length }), 'success')
       }
     } catch (e) {
       addLog('✗ Reload failed: ' + e, 'error')

@@ -1,3 +1,4 @@
+import { useT } from '../i18n'
 import { memo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, CheckCircle2, AlertCircle, Download as DownloadIcon } from 'lucide-react'
@@ -9,6 +10,7 @@ interface DownloadProgressModalProps {
 }
 
 export const DownloadProgressModal = memo(function DownloadProgressModal({ colors: COLORS }: DownloadProgressModalProps) {
+  const t = useT()
   const downloadModalOpen = useModalStore(s => s.downloadModalOpen)
   const setDownloadModalOpen = useModalStore(s => s.setDownloadModalOpen)
   const downloadProgress = useDownloadStore(s => s.downloadProgress)
@@ -27,7 +29,7 @@ export const DownloadProgressModal = memo(function DownloadProgressModal({ color
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
           className="fixed inset-0 z-[300] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(16px)' }}
+          style={{ background: 'rgba(4,4,10,0.6)', backdropFilter: 'blur(10px)' }}
           onClick={(e) => { if (downloadStatus !== 'downloading') { e.stopPropagation(); setDownloadModalOpen(false); } }}
         >
           <motion.div
@@ -35,8 +37,8 @@ export const DownloadProgressModal = memo(function DownloadProgressModal({ color
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0.9, y: 20 }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
-            className="w-full max-w-md rounded-3xl overflow-hidden"
-            style={{ background: COLORS.bgCard, border: `1px solid ${COLORS.border}`, boxShadow: `0 32px 80px rgba(0,0,0,0.6)` }}
+            className="w-full max-w-md rounded-[24px] overflow-hidden"
+            style={{ background: '#0f0f1b', border: '1px solid rgba(255,255,255,0.09)', boxShadow: '0 60px 120px -30px rgba(0,0,0,1)' }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -57,9 +59,9 @@ export const DownloadProgressModal = memo(function DownloadProgressModal({ color
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="text-lg font-bold truncate" style={{ color: COLORS.text }}>
-                    {downloadStatus === 'done' ? 'Download Complete' 
-                      : downloadStatus === 'error' ? 'Download Failed' 
-                      : 'Downloading Fix'}
+                    {downloadStatus === 'done' ? t('ui.dl.complete')
+                      : downloadStatus === 'error' ? t('ui.dl.failed')
+                      : t('ui.dl.downloading')}
                   </h3>
                   <p className="text-sm truncate" style={{ color: COLORS.textMuted }}>{downloadName}</p>
                 </div>
@@ -68,6 +70,7 @@ export const DownloadProgressModal = memo(function DownloadProgressModal({ color
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
                     onClick={() => setDownloadModalOpen(false)}
+                    aria-label={t('ui.common.close')}
                     className="w-8 h-8 rounded-xl flex items-center justify-center"
                     style={{ background: COLORS.bgHover }}
                   >
@@ -110,11 +113,11 @@ export const DownloadProgressModal = memo(function DownloadProgressModal({ color
                   {downloadDetails && downloadDetails.totalSize > 0 && (
                     <div className="grid grid-cols-2 gap-3">
                       <div className="p-2.5 rounded-xl" style={{ background: COLORS.bgHover, border: `1px solid ${COLORS.border}40` }}>
-                        <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: COLORS.textMuted }}>File Size</p>
+                        <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: COLORS.textMuted }}>{t('ui.dl.fileSize')}</p>
                         <p className="text-sm font-bold" style={{ color: COLORS.text }}>{(downloadDetails.totalSize / (1024 * 1024)).toFixed(1)} MB</p>
                       </div>
                       <div className="p-2.5 rounded-xl" style={{ background: COLORS.bgHover, border: `1px solid ${COLORS.border}40` }}>
-                        <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: COLORS.textMuted }}>Speed</p>
+                        <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: COLORS.textMuted }}>{t('ui.dl.speed')}</p>
                         <p className="text-sm font-bold" style={{ color: COLORS.cyan }}>
                           {downloadDetails.speed > 1048576 
                             ? `${(downloadDetails.speed / (1024 * 1024)).toFixed(1)} MB/s`
@@ -130,13 +133,13 @@ export const DownloadProgressModal = memo(function DownloadProgressModal({ color
                   {downloadDetails && downloadDetails.totalSize > 0 && (
                     <div className="p-2.5 rounded-xl flex items-center justify-between" style={{ background: COLORS.bgHover, border: `1px solid ${COLORS.border}40` }}>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: COLORS.textMuted }}>Downloaded</p>
+                        <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: COLORS.textMuted }}>{t('ui.dl.downloaded')}</p>
                         <p className="text-sm font-bold" style={{ color: COLORS.text }}>
                           {(downloadDetails.downloaded / (1024 * 1024)).toFixed(1)} MB
                         </p>
                       </div>
-                      <div className="text-right">
-                        <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: COLORS.textMuted }}>of</p>
+                      <div className="text-end">
+                        <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: COLORS.textMuted }}>{t('ui.dl.of')}</p>
                         <p className="text-sm font-bold" style={{ color: COLORS.violet }}>
                           {(downloadDetails.totalSize / (1024 * 1024)).toFixed(1)} MB
                         </p>
@@ -163,7 +166,7 @@ export const DownloadProgressModal = memo(function DownloadProgressModal({ color
                         animate={{ scale: [1, 1.5, 1], opacity: [0.5, 1, 0.5] }}
                         transition={{ duration: 1, repeat: Infinity, delay: 0.4 }}
                       />
-                      <span className="text-sm ml-2" style={{ color: COLORS.textMuted }}>Fetching download...</span>
+                      <span className="text-sm ms-2" style={{ color: COLORS.textMuted }}>{t('ui.dl.fetching')}</span>
                     </div>
                   )}
                 </div>
@@ -201,7 +204,7 @@ export const DownloadProgressModal = memo(function DownloadProgressModal({ color
                       }}
                       disabled
                     >
-                      Download in progress...
+                      {t('ui.dl.inProgress')}
                     </button>
                     <motion.button
                       whileHover={{ scale: 1.02 }}
@@ -214,7 +217,7 @@ export const DownloadProgressModal = memo(function DownloadProgressModal({ color
                         border: `1px solid ${COLORS.border}`
                       }}
                     >
-                      Cancel
+                      {t('ui.common.cancel')}
                     </motion.button>
                   </div>
                 ) : (
@@ -223,15 +226,15 @@ export const DownloadProgressModal = memo(function DownloadProgressModal({ color
                     className="w-full py-3 rounded-xl font-semibold text-sm cursor-pointer"
                     style={{ 
                       background: downloadStatus === 'done' 
-                        ? `linear-gradient(135deg, ${COLORS.green}, ${COLORS.green}cc)`
+                        ? 'var(--acc,#a77dff)'
                         : `linear-gradient(135deg, ${COLORS.red}, ${COLORS.red}cc)`,
-                      color: 'white',
+                      color: downloadStatus === 'done' ? '#0b0614' : 'white',
                       boxShadow: `0 4px 16px ${downloadStatus === 'done' ? COLORS.greenDim : COLORS.redDim}`
                     }}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                   >
-                    {downloadStatus === 'done' ? 'Done' : 'Close'}
+                    {downloadStatus === 'done' ? t('ui.common.done') : t('ui.common.close')}
                   </motion.button>
                 )}
               </div>

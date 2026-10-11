@@ -4,97 +4,45 @@
    CSS custom properties driven: set on card container.
    ================================================================ */
 
-/* ─── Premium shine sweep shared by the card action buttons ─── */
+/* ─── v2 card action buttons (accent-filled primary, glass secondary) ─── */
 .gamecard-btn-steam, .gamecard-btn-zip, .gamecard-btn-added, .gamecard-btn-remove {
   position: relative;
-  overflow: hidden;
-  letter-spacing: 0.01em;
-  backdrop-filter: blur(2px);
+  min-height: 34px;
+  border-radius: 10px;
+  font-weight: 600;
+  transition: filter .15s, transform .15s, background .15s, color .15s, border-color .15s;
 }
-.gamecard-btn-steam::after, .gamecard-btn-zip::after,
-.gamecard-btn-added::after, .gamecard-btn-remove::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.25) 50%, transparent 65%);
-  transform: translateX(-130%);
-  transition: transform 0.55s cubic-bezier(0.4, 0, 0.2, 1);
-  pointer-events: none;
-}
-.gamecard-btn-steam:hover::after, .gamecard-btn-zip:hover::after,
-.gamecard-btn-added:hover::after, .gamecard-btn-remove:hover::after {
-  transform: translateX(130%);
-}
-
-/* ─── Button hover: Add to Steam ─── */
 .gamecard-btn-steam {
-  background: linear-gradient(135deg, rgba(34,197,94,0.30), rgba(34,197,94,0.10));
-  color: #22c55e;
-  border: 1px solid rgba(34,197,94,0.30);
-  transition: all 0.08s cubic-bezier(0.4, 0, 0.2, 1);
+  background: var(--acc);
+  color: #0b0614;
+  border: none;
 }
-.gamecard-btn-steam:hover {
-  background: linear-gradient(135deg, #22c55e, #22c55ecc);
-  color: white;
-  border-color: rgba(34,197,94,0.40);
-  box-shadow: 0 4px 16px rgba(34,197,94,0.35), inset 0 1px 0 rgba(255,255,255,0.15);
-  transform: scale(1.02);
-}
-.gamecard-btn-steam:active {
-  transform: scale(0.96);
-}
+.gamecard-btn-steam:hover:not(:disabled) { filter: brightness(1.12); }
+.gamecard-btn-steam:active:not(:disabled) { transform: scale(.96); }
 
-/* ─── Button hover: Install Zip ─── */
 .gamecard-btn-zip {
-  background: linear-gradient(135deg, rgba(139,92,246,0.30), rgba(99,102,241,0.10));
-  color: #a78bfa;
-  border: 1px solid rgba(139,92,246,0.30);
-  transition: all 0.08s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(255,255,255,.06);
+  color: #f3f2fa;
+  border: 1px solid rgba(255,255,255,.12);
 }
-.gamecard-btn-zip:hover {
-  background: linear-gradient(135deg, #8b5cf6, #8b5cf6cc);
-  color: white;
-  border-color: rgba(139,92,246,0.40);
-  box-shadow: 0 4px 16px rgba(139,92,246,0.35), inset 0 1px 0 rgba(255,255,255,0.15);
-  transform: scale(1.02);
-}
-.gamecard-btn-zip:active {
-  transform: scale(0.96);
-}
+.gamecard-btn-zip:hover { background: rgba(255,255,255,.12); }
+.gamecard-btn-zip:active { transform: scale(.96); }
 
-/* ─── Button: Already Added (violet glass) ─── */
 .gamecard-btn-added {
-  background: linear-gradient(135deg, rgba(139,92,246,0.18), rgba(99,102,241,0.08));
-  color: #a78bfa;
-  border: 1px solid rgba(139,92,246,0.25);
-  box-shadow: 0 2px 8px rgba(139,92,246,0.1);
-  transition: all 0.08s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(34,197,94,.1);
+  color: #86efac;
+  border: 1px solid rgba(34,197,94,.3);
   cursor: default;
   user-select: none;
 }
-.gamecard-btn-added:hover {
-  background: linear-gradient(135deg, rgba(139,92,246,0.35), rgba(99,102,241,0.20));
-  border-color: rgba(139,92,246,0.40);
-  box-shadow: 0 4px 20px rgba(139,92,246,0.35), inset 0 1px 0 rgba(255,255,255,0.15);
-  transform: scale(1.02);
-}
 
-/* ─── Button: Remove from library (red glass) ─── */
 .gamecard-btn-remove {
-  color: #ef4444;
-  border: 1px solid rgba(239,68,68,0.25);
-  background: rgba(239,68,68,0.08);
-  transition: all 0.08s cubic-bezier(0.4, 0, 0.2, 1);
+  color: #f87171;
+  border: 1px solid rgba(239,68,68,.25);
+  background: rgba(239,68,68,.07);
 }
-.gamecard-btn-remove:hover {
-  background: rgba(239,68,68,0.15);
-  border-color: rgba(239,68,68,0.40);
-  box-shadow: 0 4px 16px rgba(239,68,68,0.35), inset 0 1px 0 rgba(255,255,255,0.1);
-  transform: scale(1.02);
-}
-.gamecard-btn-remove:active {
-  transform: scale(0.96);
-}
+.gamecard-btn-remove:hover { background: rgba(239,68,68,.15); border-color: rgba(239,68,68,.4); }
+.gamecard-btn-remove:active { transform: scale(.96); }
 
 /* ─── FixGridCard: Apply Fix button ─── */
 .fixcard-btn-apply {
@@ -114,8 +62,6 @@
 /* ─── Glassmorphism card base ─── */
 .card-glass {
   background: linear-gradient(160deg, rgba(18,18,31,0.40) 0%, rgba(12,12,24,0.55) 100%);
-  backdrop-filter: blur(20px) saturate(1.3);
-  -webkit-backdrop-filter: blur(20px) saturate(1.3);
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 1rem;
   box-shadow: 0 2px 4px rgba(0,0,0,0.20), 0 8px 24px rgba(0,0,0,0.12);

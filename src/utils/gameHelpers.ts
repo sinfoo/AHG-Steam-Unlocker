@@ -75,3 +75,14 @@ export function isRecentlyAdded(game: Game, days = 14): boolean {
   const ms = days * 24 * 60 * 60 * 1000
   return (now - added) < ms
 }
+
+/** Steam portrait capsule (2:3). Pair with coverFallback on <img onError>. */
+export const steamPortrait = (appid: string) => `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/library_600x900.jpg`
+export const steamHeader = (appid: string) => `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/header.jpg`
+/** onError handler: swap portrait -> header once, then hide. */
+export function coverFallback(e: { currentTarget: HTMLImageElement }, appid: string) {
+  const img = e.currentTarget
+  if (img.dataset.fb) { img.style.visibility = 'hidden'; return }
+  img.dataset.fb = '1'
+  img.src = steamHeader(appid)
+}

@@ -37,11 +37,11 @@ export const Toggle = memo(function Toggle({ checked, onChange, disabled, label 
       <div
         style={{
           position: 'relative',
-          width: '56px',
-          height: '32px',
+          width: '44px',
+          height: '26px',
           borderRadius: '9999px',
-          background: checked ? COLORS.violet : 'rgba(255,255,255,0.15)',
-          transition: 'background 80ms cubic-bezier(0.4, 0, 0.2, 1)',
+          background: checked ? 'var(--acc,#a77dff)' : 'rgba(255,255,255,0.14)',
+          transition: 'background .25s',
           flexShrink: 0,
         }}
       >
@@ -50,13 +50,13 @@ export const Toggle = memo(function Toggle({ checked, onChange, disabled, label 
           transition={{ type: 'spring', ...springConfig }}
           style={{
             position: 'absolute',
-            top: '4px',
-            left: checked ? '30px' : '4px',
-            width: '24px',
-            height: '24px',
+            top: '3px',
+            insetInlineStart: checked ? '21px' : '3px',
+            width: '20px',
+            height: '20px',
             borderRadius: '50%',
             background: COLORS.white,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
           }}
         />
       </div>

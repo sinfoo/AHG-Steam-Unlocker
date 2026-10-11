@@ -4,11 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AHG Unlocker</title>
+    <script>(function(){try{var l=localStorage.getItem('ahg.lang');if(l&&/^(en|es|fr|de|pt|tr|zh|ar)$/.test(l)){var d=document.documentElement;d.lang=l;d.dir=l==='ar'?'rtl':'ltr'}}catch(e){}})()</script>
     <script>console.log('[HTML] Page loaded at', new Date())</script>
     <!-- Tailwind is compiled at build time via @tailwindcss/postcss (src/index.css). The Play CDN was online-only, v3, and explicitly not for production. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="preconnect" href="https://i.steamstatic.com">
     <link rel="dns-prefetch" href="https://steamcdn-a.akamaihd.net">
     <link rel="dns-prefetch" href="https://shared.akamai.steamstatic.com">
@@ -37,419 +35,131 @@
         --border-accent: #8b5cf6;
         --text-accent: #a78bfa;
       }
-      
+
       * { box-sizing: border-box; }
-      
-      html, body { 
-        margin: 0; 
-        padding: 0; 
-        height: 100%; 
-        width: 100%; 
-        overflow: hidden; 
-        background: #030308;
-        font-family: 'Orbitron', 'Inter', system-ui, sans-serif;
+
+      html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+        background: #0a0a14;
+        font-family: 'Geist Variable', 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
       }
+
+      /* ───────── Splash (pre-React) — AHG v2 boot sequence ───────── */
+      @property --sp-ang { syntax: '<angle>'; inherits: false; initial-value: 0deg }
+      @keyframes sp-spinAng { from { --sp-ang: -30deg } to { --sp-ang: 330deg } } /* head starts top-left */
+      @keyframes sp-wallIn { from { opacity: 0 } to { opacity: .6 } }
+      @keyframes sp-coverIn { from { opacity: 0; transform: translateY(80px) rotateX(-50deg) scale(.85) } to { opacity: 1; transform: none } }
+      @keyframes sp-colUp { from { transform: translateY(0) } to { transform: translateY(-14%) } }
+      @keyframes sp-colDown { from { transform: translateY(-14%) } to { transform: translateY(0) } }
+      @keyframes sp-glowPulse { 0%, 100% { opacity: .55; transform: scale(1) } 50% { opacity: .9; transform: scale(1.08) } }
+      @keyframes sp-scan { from { transform: translateY(-140px) } to { transform: translateY(110vh) } }
+      @keyframes sp-giantIn { from { opacity: 0; letter-spacing: .35em; transform: translateY(-50%) scale(1.08) } to { opacity: 1; letter-spacing: -.04em; transform: translateY(-50%) } }
+      @keyframes sp-beam { 0% { transform: scaleX(0); opacity: 1 } 45% { transform: scaleX(1); opacity: 1 } 100% { transform: scaleX(1); opacity: 0 } }
+      @keyframes sp-burst { from { transform: scale(.4); opacity: 1 } to { transform: scale(3.2); opacity: 0 } }
+      @keyframes sp-ringIn { from { opacity: 0; transform: scale(.6) } to { opacity: 1; transform: none } }
+      @keyframes sp-unfold { from { clip-path: inset(50% -60% 50% -60%); transform: scale(1.18) } to { clip-path: inset(-60% -60% -60% -60%); transform: none } }
+      @keyframes sp-sheen { from { transform: translateX(-140%) skewX(-18deg) } to { transform: translateX(240%) skewX(-18deg) } }
+      @keyframes sp-fadeIn { from { opacity: 0 } to { opacity: 1 } }
+      @keyframes sp-riseIn { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
+      @keyframes sp-blink { 0% { opacity: 1 } 50% { opacity: 0 } }
+      @keyframes sp-flashLine { 0% { transform: scaleX(1); opacity: 0 } 25% { opacity: 1 } 100% { transform: scaleX(0); opacity: 0 } }
 
       #loadingScreen {
+        --acc: #a77dff;
         position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        width: 100vw;
-        height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: linear-gradient(135deg, #030308 0%, #0a0a15 50%, #080812 100%);
+        inset: 36px 0 0 0; /* sits below the 36px title bar region (#spBar) */
         z-index: 9999;
-        pointer-events: none; /* Safety: never block React app behind us */
-        transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.5s;
-      }
-      
-      #loadingScreen.hidden {
-        opacity: 0;
-        visibility: hidden;
-        pointer-events: none;
-        transform: scale(1.04);
-      }
-
-      .bg-grid {
-        position: absolute;
-        inset: 0;
-        background-image: 
-          linear-gradient(rgba(139, 92, 246, 0.06) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(139, 92, 246, 0.06) 1px, transparent 1px);
-        background-size: 60px 60px;
-        animation: gridMove 12s linear infinite;
-      }
-      /* Pans one full tile (60px) so it loops seamlessly — clearly moving, not static. */
-      @keyframes gridMove { 100% { transform: translate(60px, 60px); } }
-      
-      .bg-noise {
-        position: absolute;
-        inset: 0;
-        opacity: 0.03;
-        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-      }
-
-      .orb {
-        position: absolute;
-        border-radius: 50%;
-        filter: blur(40px);
-        opacity: 0.6;
-        animation: orbFloat 12s ease-in-out infinite;
-      }
-      .orb-1 { width: 400px; height: 400px; background: radial-gradient(circle, rgba(139,92,246,0.3) 0%, transparent 70%); top: -15%; left: -10%; animation-delay: 0s; }
-      .orb-2 { width: 300px; height: 300px; background: radial-gradient(circle, rgba(59,130,246,0.25) 0%, transparent 70%); top: 10%; right: -5%; animation-delay: 2s; }
-      .orb-3 { width: 350px; height: 350px; background: radial-gradient(circle, rgba(236,72,153,0.2) 0%, transparent 70%); bottom: -10%; left: 10%; animation-delay: 4s; }
-      .orb-4 { width: 250px; height: 250px; background: radial-gradient(circle, rgba(6,182,212,0.25) 0%, transparent 70%); bottom: 5%; right: 5%; animation-delay: 3s; }
-      .orb-5 { width: 200px; height: 200px; background: radial-gradient(circle, rgba(245,158,11,0.2) 0%, transparent 70%); top: 40%; left: 40%; animation-delay: 5s; }
-      
-      @keyframes orbFloat { 
-        0%, 100% { transform: translate(0, 0) scale(1); } 
-        33% { transform: translate(20px, -30px) scale(1.05); }
-        66% { transform: translate(-20px, 20px) scale(0.95); } 
-      }
-
-      .ring-glow {
-        position: absolute;
-        inset: 0;
-        border: 1px solid rgba(139, 92, 246, 0.1);
-        border-radius: 50%;
-        animation: ringExpand 8s ease-out infinite;
-      }
-      .ring-glow:nth-child(2) { animation-delay: 1s; }
-      .ring-glow:nth-child(3) { animation-delay: 2s; }
-      @keyframes ringExpand { 
-        0% { transform: scale(0.8); opacity: 0.5; } 
-        100% { transform: scale(1.5); opacity: 0; } 
-      }
-
-      .particle {
-        position: absolute;
-        width: 4px;
-        height: 4px;
-        background: white;
-        border-radius: 50%;
-        box-shadow: 0 0 10px currentColor;
-      }
-      @keyframes particleFloat {
-        0%, 100% { transform: translateY(0) scale(1); opacity: 0.2; }
-        50% { transform: translateY(-40px) scale(1.8); opacity: 0.9; }
-      }
-      @keyframes particleSpin {
-        0% { rotate: 0deg; }
-        100% { rotate: 360deg; }
-      }
-
-      .loader-content {
-        position: relative;
-        z-index: 10;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        text-align: center;
-        transform-style: preserve-3d;
-      }
-
-      .logo-box {
-        position: relative;
-        width: 160px;
-        height: 160px;
-        margin-bottom: 48px;
-      }
-      
-      .logo-outer {
-        position: absolute;
-        inset: -15px;
-        border-radius: 36px;
-        background: transparent;
-        box-shadow: 0 0 100px rgba(139, 92, 246, 0.3), inset 0 0 60px rgba(139, 92, 246, 0.1);
-        border: 1px solid rgba(139, 92, 246, 0.2);
-        animation: outerPulse 3s ease-in-out infinite;
-      }
-      @keyframes outerPulse {
-        0%, 100% { transform: scale(1); opacity: 0.5; box-shadow: 0 0 60px rgba(139, 92, 246, 0.3); }
-        50% { transform: scale(1.08); opacity: 0.8; box-shadow: 0 0 100px rgba(139, 92, 246, 0.6); }
-      }
-      /* Rotating conic-gradient "scanning beam" ring around the logo */
-      .logo-outer::before {
-        content: '';
-        position: absolute;
-        inset: -2px;
-        border-radius: 38px;
-        background: conic-gradient(from 0deg, transparent 0%, rgba(139,92,246,0.9) 10%, rgba(6,182,212,0.7) 22%, transparent 38%, transparent 100%);
-        animation: conicSpin 4s linear infinite;
-        -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2.5px));
-        mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2.5px));
-        pointer-events: none;
-      }
-      @keyframes conicSpin { to { transform: rotate(360deg); } }
-      
-      .logo-inner {
-        width: 100%;
-        height: 100%;
-        background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 50%, #3b82f6 100%);
-        border-radius: 36px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 0 50px rgba(139, 92, 246, 0.5);
-        animation: logoFloat 4s ease-in-out infinite, logoGlow 2s ease-in-out infinite alternate;
-      }
-      @keyframes logoFloat { 
-        0%, 100% { transform: translateY(0) rotate(0deg); } 
-        50% { transform: translateY(-10px) rotate(5deg); } 
-      }
-      @keyframes logoGlow { 
-        0% { box-shadow: 0 0 40px rgba(139, 92, 246, 0.5), 0 0 80px rgba(139, 92, 246, 0.3); } 
-        100% { box-shadow: 0 0 60px rgba(139, 92, 246, 0.8), 0 0 120px rgba(139, 92, 246, 0.5); } 
-      }
-      
-      .logo-inner svg {
-        width: 64px;
-        height: 64px;
-        color: white;
-        filter: drop-shadow(0 0 15px rgba(255,255,255,0.5));
-      }
-      
-      .logo-shine {
-        position: absolute;
-        inset: 0;
-        border-radius: 36px;
-        background: linear-gradient(135deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.3) 50%, rgba(255,255,255,0) 100%);
-        animation: shine 3s ease-in-out infinite;
-      }
-      @keyframes shine { 0%, 100% { transform: translateX(-100%); } 50% { transform: translateX(100%); } }
-
-      .logo-ring {
-        position: absolute;
-        width: 220px;
-        height: 220px;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        animation: ringRotate 20s linear infinite;
-      }
-      @keyframes ringRotate { 100% { transform: translate(-50%, -50%) rotate(360deg); } }
-      
-      .ring-dot {
-        position: absolute;
-        width: 8px;
-        height: 8px;
-        background: #8b5cf6;
-        border-radius: 50%;
-        box-shadow: 0 0 15px #8b5cf6;
-      }
-      .ring-dot:nth-child(1) { top: 0; left: 50%; transform: translate(-50%, -50%); background: #8b5cf6; box-shadow: 0 0 15px #8b5cf6; }
-      .ring-dot:nth-child(2) { top: 50%; right: 0; transform: translate(50%, -50%); background: #3b82f6; box-shadow: 0 0 15px #3b82f6; }
-      .ring-dot:nth-child(3) { bottom: 0; left: 50%; transform: translate(-50%, 50%); background: #10b981; box-shadow: 0 0 15px #10b981; }
-      .ring-dot:nth-child(4) { top: 50%; left: 0; transform: translate(-50%, -50%); background: #ec4899; box-shadow: 0 0 15px #ec4899; }
-
-      .title {
-        display: inline-flex;
-        justify-content: center;
-        gap: 0.2em;
-        font-size: 64px;
-        font-weight: 900;
-        letter-spacing: 0;
-        color: white;
-        margin: 0 0 8px 0;
-        filter: drop-shadow(0 0 30px rgba(139, 92, 246, 0.5));
-        perspective: 400px;
-      }
-      
-      .title-char {
-        display: inline-block;
-        background: linear-gradient(135deg, #fff 0%, #8b5cf6 50%, #a78bfa 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        opacity: 0;
-        animation: textReveal 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-      }
-      .title-char:nth-child(1) { animation-delay: 0.1s; }
-      .title-char:nth-child(2) { animation-delay: 0.28s; }
-      .title-char:nth-child(3) { animation-delay: 0.46s; }
-      
-      .subtitle {
-        font-size: 14px;
-        font-weight: 500;
-        letter-spacing: 0.5em;
-        color: rgba(167, 139, 250, 0.8);
-        text-transform: uppercase;
-        margin-bottom: 48px;
-        opacity: 0;
-      }
-
-      .progress-section {
-        width: 400px;
-        opacity: 0;
-      }
-      
-      .progress-track {
-        height: 12px;
-        background: rgba(18, 18, 31, 0.8);
-        border-radius: 12px;
-        border: 1px solid rgba(139, 92, 246, 0.3);
+        background: #04040a;
         overflow: hidden;
-        position: relative;
+        color: #f3f2fa;
+        cursor: pointer; /* click skips once loading has finished (see #loadingScreen click handler) */
+        clip-path: inset(0 0 0 0);
+        transition: clip-path .55s cubic-bezier(.7, 0, .25, 1);
       }
-      
-      .progress-fill {
-        height: 100%;
-        background: linear-gradient(90deg, #8b5cf6 0%, #a78bfa 25%, #3b82f6 55%, #06b6d4 80%, #8b5cf6 100%);
-        background-size: 220% 100%;
-        animation: progressFlow 3s linear infinite;
-        border-radius: 12px;
-        width: 0%;
-        box-shadow: 0 0 30px rgba(139, 92, 246, 0.6), 0 0 60px rgba(139, 92, 246, 0.3);
-        position: relative;
-        overflow: hidden;
-        transition: width 0.3s ease-out, box-shadow 0.3s ease-out;
+      #loadingScreen.closing { clip-path: inset(50% 0 50% 0); }
+      #loadingScreen.closing { pointer-events: none; }
+      #loadingScreen.hidden { display: none; }
+      /* Minimal 36px title bar for the splash — mirrors src/components/TitleBar.tsx */
+      #spBar { position: fixed; top: 0; left: 0; right: 0; height: 36px; z-index: 10000; display: flex; align-items: center; background: #0f0f1b; border-bottom: 1px solid rgba(255,255,255,.06); user-select: none; -webkit-app-region: drag; }
+      #spBar.hidden { display: none; }
+      #spBar .sp-bar-label { display: flex; align-items: center; gap: 9px; margin-left: 14px; font-size: 10.5px; font-weight: 700; letter-spacing: .18em; color: #77768e; }
+      #spBar .sp-bar-label img { width: 18px; height: 18px; object-fit: contain; }
+      #spBar .sp-bar-ctl { margin-left: auto; display: flex; height: 100%; -webkit-app-region: no-drag; }
+      #spBar button { width: 46px; height: 100%; border: 0; background: transparent; color: #77768e; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background .12s; }
+      #spBar button:hover { background: rgba(255,255,255,.06); }
+      #spBar button.x:hover { background: #ef4444; color: #fff; }
+      #loadingScreen .mono { font-family: 'Geist Mono Variable', 'Geist Mono', ui-monospace, Consolas, monospace; }
+      .sp-abs { position: absolute; }
+      .sp-wall-wrap { position: absolute; inset: 0; perspective: 1400px; perspective-origin: 50% 35%; }
+      .sp-wall {
+        position: absolute; inset: -30% -20%; display: flex; gap: 18px;
+        transform: rotateX(24deg) rotateZ(-9deg) scale(1.15);
+        opacity: 0; animation: sp-wallIn 1.2s .1s ease forwards;
       }
-      @keyframes progressFlow { to { background-position: 220% 0; } }
-      /* Diagonal shimmer sweep across the fill */
-      .progress-fill::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.45) 50%, transparent 70%);
-        transform: translateX(-130%);
-        animation: progressShimmer 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      .sp-col { flex: 1; display: flex; flex-direction: column; gap: 18px; }
+      .sp-tile {
+        width: 100%; aspect-ratio: 2/3; border-radius: 14px; display: block;
+        box-shadow: 0 20px 40px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,255,255,.06);
+        animation: sp-coverIn .9s cubic-bezier(.16, 1, .3, 1) both;
       }
-      @keyframes progressShimmer { 0% { transform: translateX(-130%); } 60%, 100% { transform: translateX(130%); } }
-      
-      /* Liquid wave shimmer */
-      .progress-fill::before {
-        content: '';
-        position: absolute;
-        top: -3px;
-        left: -5%;
-        width: 110%;
-        height: 10px;
-        background: radial-gradient(ellipse at 50% 50%, rgba(255,255,255,0.25) 0%, transparent 70%);
-        border-radius: 50%;
-        animation: liquidWave 1.8s ease-in-out infinite;
+      .sp-vig { inset: 0; background: radial-gradient(ellipse 46% 42% at 50% 42%, rgba(4,4,10,.3) 0%, rgba(4,4,10,.82) 70%, #04040a 100%); }
+      .sp-floor { left: 0; right: 0; bottom: 0; height: 42%; background: linear-gradient(0deg, #04040a 20%, transparent); }
+      .sp-glow { inset: 0; background: radial-gradient(circle at 50% 42%, color-mix(in oklch, var(--acc) 32%, transparent) 0%, transparent 34%); animation: sp-glowPulse 4s ease-in-out infinite; }
+      .sp-scan { left: 0; right: 0; top: 0; height: 140px; background: linear-gradient(180deg, transparent, color-mix(in oklch, var(--acc) 9%, transparent), transparent); animation: sp-scan 3.4s linear infinite; }
+      .sp-giant {
+        left: 0; right: 0; top: 42%; text-align: center; font-size: clamp(220px, 32vw, 560px); font-weight: 800; line-height: 1;
+        color: transparent; -webkit-text-stroke: 1.5px rgba(255,255,255,.08); white-space: nowrap;
+        animation: sp-giantIn 2.2s .15s cubic-bezier(.16, 1, .3, 1) both;
       }
-      
-      .progress-glow {
-        position: absolute;
-        right: 0;
-        top: 0;
-        bottom: 0;
-        width: 60px;
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4));
-        animation: glowMove 2s ease-in-out infinite;
+      .sp-center { left: 50%; top: 42%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; }
+      .sp-logo { position: relative; width: 168px; height: 168px; }
+      .sp-beam { position: absolute; left: 50%; top: 50%; width: 100vw; height: 1px; margin-left: -50vw; background: linear-gradient(90deg, transparent, var(--acc) 30%, #fff 50%, var(--acc) 70%, transparent); box-shadow: 0 0 18px var(--acc); animation: sp-beam 1.2s .1s cubic-bezier(.7, 0, .2, 1) both; }
+      .sp-burst { position: absolute; inset: 0; border-radius: 50%; }
+      .sp-conic {
+        position: absolute; inset: -16px; border-radius: 48px; padding: 1.5px;
+        background: conic-gradient(from var(--sp-ang), transparent 0deg, transparent 220deg, color-mix(in oklch, var(--acc) 80%, transparent) 300deg, #fff 345deg, transparent 360deg);
+        -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+        -webkit-mask-composite: xor; mask-composite: exclude;
+        animation: sp-spinAng 2.4s linear infinite, sp-ringIn .6s .95s cubic-bezier(.16, 1, .3, 1) both;
       }
-      @keyframes glowMove { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.8; } }
-      @keyframes liquidWave {
-        0% { transform: translateX(-5%) scaleY(0.4); }
-        50% { transform: translateX(5%) scaleY(1); }
-        100% { transform: translateX(-5%) scaleY(0.4); }
-      }
-      @keyframes pulseGlow {
-        0% { box-shadow: 0 0 30px rgba(139, 92, 246, 0.6), 0 0 60px rgba(139, 92, 246, 0.3); }
-        50% { box-shadow: 0 0 50px rgba(139, 92, 246, 0.9), 0 0 100px rgba(139, 92, 246, 0.6); }
-        100% { box-shadow: 0 0 30px rgba(139, 92, 246, 0.6), 0 0 60px rgba(139, 92, 246, 0.3); }
-      }
-
-      .status {
-        margin-top: 24px;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        font-size: 14px;
-        color: rgba(167, 139, 250, 0.7);
-      }
-      .status span {
-        display: inline-block;
-        transition: opacity 0.2s ease-out, transform 0.2s ease-out;
-      }
-      
-      .status-dot {
-        width: 8px;
-        height: 8px;
-        background: #8b5cf6;
-        border-radius: 50%;
-        box-shadow: 0 0 15px #8b5cf6;
-        animation: dotPulse 1.5s ease-in-out infinite;
-      }
-      @keyframes dotPulse { 0%, 100% { transform: scale(0.8); opacity: 0.5; } 50% { transform: scale(1.3); opacity: 1; } }
-
-      .fade-in-up {
-        opacity: 0;
-        animation: fadeInUp 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-      }
-      @keyframes fadeInUp {
-        0% { opacity: 0; transform: translateY(16px); }
-        100% { opacity: 1; transform: translateY(0); }
+      .sp-logo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 20px 50px color-mix(in oklch, var(--acc) 70%, transparent)); animation: sp-unfold .9s .5s cubic-bezier(.16, 1, .3, 1) both; }
+      .sp-sheen { position: absolute; inset: 8px; border-radius: 34px; overflow: hidden; }
+      .sp-sheen i { position: absolute; top: 0; bottom: 0; width: 40%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.5), transparent); animation: sp-sheen 1.1s 1.3s cubic-bezier(.6, 0, .2, 1) both; }
+      .sp-title { margin-top: 36px; font-size: 14px; font-weight: 500; letter-spacing: .55em; padding-left: .55em; color: #fff; white-space: pre; animation: sp-fadeIn .3s .45s both; }
+      .sp-br { position: absolute; width: 18px; height: 18px; border: 0 solid rgba(255,255,255,.35); animation: sp-fadeIn .5s .3s both; }
+      .sp-br.tl { top: 22px; left: 22px; border-top-width: 1.5px; border-left-width: 1.5px; }
+      .sp-br.tr { top: 22px; right: 22px; border-top-width: 1.5px; border-right-width: 1.5px; }
+      .sp-br.bl { bottom: 22px; left: 22px; border-bottom-width: 1.5px; border-left-width: 1.5px; }
+      .sp-br.brr { bottom: 22px; right: 22px; border-bottom-width: 1.5px; border-right-width: 1.5px; }
+      .sp-tag { position: absolute; top: 25px; font-size: 10.5px; color: #77768e; animation: sp-fadeIn .5s .4s both; }
+      .sp-foot { position: absolute; left: 52px; right: 52px; bottom: 44px; display: flex; align-items: flex-end; gap: 56px; animation: sp-riseIn .5s .7s cubic-bezier(.16, 1, .3, 1) both; }
+      .sp-pct { flex: none; width: 320px; }
+      .sp-pct-n { font-size: 76px; font-weight: 500; line-height: .85; letter-spacing: -.05em; color: #fff; display: flex; align-items: flex-start; font-variant-numeric: tabular-nums; }
+      .sp-pct-n small { font-size: 20px; color: var(--acc); margin: 6px 0 0 8px; letter-spacing: 0; }
+      .sp-status { font-size: 11.5px; color: #a6a5bb; margin-top: 14px; display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .sp-status i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--acc); box-shadow: 0 0 10px var(--acc); animation: sp-blink 1s steps(1) infinite; }
+      .sp-stages { flex: 1; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; padding-bottom: 3px; }
+      .sp-stage { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+      .sp-stage span { font-size: 10px; letter-spacing: .14em; color: #55546a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color .2s; }
+      .sp-stage.on span { color: #fff; }
+      .sp-stage.done span { color: #c9c8da; }
+      .sp-bar { height: 3px; border-radius: 2px; background: rgba(255,255,255,.08); overflow: hidden; }
+      .sp-bar b { display: block; height: 100%; width: 0; background: var(--acc); box-shadow: 0 0 10px var(--acc); transition: width .1s linear; }
+      .sp-tip { position: absolute; bottom: 16px; left: 0; right: 0; text-align: center; font-size: 10px; letter-spacing: .24em; color: #55546a; animation: sp-fadeIn .8s 1.4s backwards; }
+      .sp-flash { position: absolute; left: 0; right: 0; top: 50%; height: 2px; margin-top: -1px; z-index: 2; background: #fff; box-shadow: 0 0 30px var(--acc), 0 0 90px var(--acc); opacity: 0; }
+      #loadingScreen.closing .sp-flash { animation: sp-flashLine .8s ease both; }
+      @media (max-width: 760px) { .sp-foot { left: 24px; right: 24px; gap: 20px; flex-direction: column; align-items: stretch; } .sp-pct { width: auto; } .sp-stage span { font-size: 8px; } .sp-tag.r { display: none; } }
+      @media (prefers-reduced-motion: reduce) {
+        #loadingScreen *, #loadingScreen { animation-duration: .01ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
       }
 
-      @keyframes textReveal {
-        0% { opacity: 0; transform: translateY(24px) rotateX(-30deg); filter: blur(8px) brightness(2); }
-        60% { opacity: 1; filter: blur(0) brightness(1.4); }
-        100% { opacity: 1; transform: translateY(0) rotateX(0); filter: blur(0) brightness(1); }
-      }
-
-      .stats-row {
-        display: flex;
-        gap: 24px;
-        margin-top: 36px;
-        opacity: 0;
-      }
-      
-      .stat-badge {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 12px 20px;
-        background: rgba(18, 18, 31, 0.8);
-        border: 1px solid rgba(139, 92, 246, 0.3);
-        border-radius: 16px;
-      }
-      
-      .stat-badge svg { width: 18px; height: 18px; }
-      .stat-badge span { color: white; font-size: 14px; font-weight: 700; }
-
-      .version {
-        position: absolute;
-        bottom: 32px;
-        font-size: 12px;
-        color: rgba(167, 139, 250, 0.3);
-        font-weight: 500;
-      }
-
-      .boot-log {
-        margin-top: 16px;
-        height: 16px;
-        font-family: ui-monospace, 'JetBrains Mono', 'Cascadia Code', Menlo, monospace;
-        font-size: 11px;
-        letter-spacing: 0.02em;
-        color: #5f6b7e;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 360px;
-        text-align: center;
-        transition: opacity 0.25s ease;
-      }
-      .boot-log .lg-tag { color: #8b5cf6; font-weight: 700; }
-      .boot-log .lg-ok { color: #22c55e; font-weight: 700; }
-      .boot-tip {
-        margin-top: 18px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        justify-content: center;
-        font-size: 12.5px;
-        color: #94a3b8;
-        max-width: 400px;
-        min-height: 18px;
-      }
-      .boot-tip-icon { filter: drop-shadow(0 0 6px rgba(139, 92, 246, 0.55)); }
-      #bootTipText { transition: opacity 0.4s ease, transform 0.4s ease; }
+      /* Splash keeps a fixed LTR layout in every language (text still shapes/bidi-orders itself); Arabic must not be letter-spaced */
+      #loadingScreen, #spBar { direction: ltr; }
+      html[lang='ar'] #loadingScreen *, html[lang='ar'] #spBar * { letter-spacing: 0 !important; }
 
       #root {
         width: 100%;
@@ -459,267 +169,203 @@
     <script type="module" src="/src/main.tsx"></script>
   </head>
   <body>
-      <div id="loadingScreen">
-      <div class="bg-grid"></div>
-      <div class="bg-noise"></div>
-      
-      <div class="orb orb-1"></div>
-      <div class="orb orb-2"></div>
-      <div class="orb orb-3"></div>
-      <div class="orb orb-4"></div>
-      <div class="orb orb-5"></div>
-      
-      <div class="ring-glow"></div>
-      <div class="ring-glow"></div>
-      <div class="ring-glow"></div>
-      
-      <div class="loader-content">
-        <div class="logo-box">
-          <div class="ring-glow"></div>
-          <div class="logo-outer"></div>
-          <div class="logo-inner">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
-            </svg>
-            <div class="logo-shine"></div>
-          </div>
-          <div class="logo-ring">
-            <div class="ring-dot"></div>
-            <div class="ring-dot"></div>
-            <div class="ring-dot"></div>
-            <div class="ring-dot"></div>
-          </div>
-        </div>
-        
-        <h1 class="title"><span class="title-char">A</span><span class="title-char">H</span><span class="title-char">G</span></h1>
-        <p class="subtitle fade-in-up" style="animation-delay:0.4s">Steam Unlocker</p>
-        
-        <div class="progress-section fade-in-up" style="animation-delay:0.8s">
-          <div class="progress-track">
-            <div class="progress-fill">
-              <div class="progress-glow"></div>
-            </div>
-          </div>
-        </div>
-        
-        <div class="status">
-          <div class="status-dot"></div>
-          <span><span style="color:#8b5cf6">Loading</span> games database</span>
-        </div>
-        
-        <div class="stats-row fade-in-up" style="animation-delay:1.0s">
-          <div class="stat-badge">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#8b5cf6" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
-            </svg>
-            <span id="percentText">0%</span>
-          </div>
-          <div class="stat-badge">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#3b82f6" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-            </svg>
-            <span>176K+</span>
-          </div>
-          <div class="stat-badge">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#10b981" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.75 3.75 0 00-2.455-2.456L14.25 6l1.036-.259a3.75 3.75 0 002.455-2.456L18 2.25l.259 1.035a3.75 3.75 0 002.456 2.456L21.75 6l-1.035.259a3.75 3.75 0 00-2.456 2.456z" />
-            </svg>
-            <span>Ready</span>
-          </div>
-        </div>
+    <div id="spBar">
+      <div class="sp-bar-label"><img src="/assets/ahg-logo.png" alt="" /><span>AHG UNLOCKER</span></div>
+      <div class="sp-bar-ctl">
+        <button data-sp-title="min" title="Minimize" onclick="window.electronAPI&&window.electronAPI.minimizeWindow&&window.electronAPI.minimizeWindow()"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="5.5" width="10" height="1" rx=".5" fill="currentColor"/></svg></button>
+        <button data-sp-title="max" title="Maximize" onclick="window.electronAPI&&window.electronAPI.maximizeWindow&&window.electronAPI.maximizeWindow()"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="10" height="10" rx="1.5" stroke="currentColor" stroke-width="1.2"/></svg></button>
+        <button class="x" data-sp-title="close" title="Close" onclick="window.electronAPI&&window.electronAPI.closeWindow&&window.electronAPI.closeWindow()"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+      </div>
+    </div>
+    <div id="loadingScreen">
+      <div class="sp-wall-wrap"><div class="sp-wall" id="spWall"></div></div>
+      <div class="sp-abs sp-vig"></div>
+      <div class="sp-abs sp-floor"></div>
+      <div class="sp-abs sp-glow"></div>
+      <div class="sp-abs sp-scan"></div>
+      <div class="sp-abs sp-giant">AHG</div>
 
-        <!-- Live boot log stream -->
-        <div class="boot-log fade-in-up" style="animation-delay:1.15s" id="bootLog"></div>
-
-        <!-- Rotating tips -->
-        <div class="boot-tip fade-in-up" style="animation-delay:1.3s">
-          <span class="boot-tip-icon">💡</span>
-          <span id="bootTipText">Tip: Press Ctrl+K to search instantly</span>
+      <div class="sp-abs sp-center">
+        <div class="sp-logo">
+          <div class="sp-beam"></div>
+          <div class="sp-burst" style="border:2px solid var(--acc);animation:sp-burst 1.1s .7s ease-out both"></div>
+          <div class="sp-burst" style="border:1px solid #fff;animation:sp-burst 1.3s .85s ease-out both"></div>
+          <div class="sp-conic"></div>
+          <img src="/assets/ahg-logo.png" alt="" />
+          <div class="sp-sheen"><i></i></div>
         </div>
+        <div class="sp-title mono" id="spTitle">AHG UNLOCKER</div>
       </div>
 
-      <p class="version">v1.0 • Developed by sinfo</p>
+      <span class="sp-br tl"></span><span class="sp-br tr"></span><span class="sp-br bl"></span><span class="sp-br brr"></span>
+      <div class="sp-tag mono" data-sp="boot" style="left:52px;letter-spacing:.2em">AHG // BOOT SEQUENCE</div>
+      <div class="sp-tag mono r" data-sp="dev" data-pre="v1.0 • " style="right:52px;letter-spacing:.12em">v1.0 • Developed by sinfo</div>
+
+      <div class="sp-foot mono">
+        <div class="sp-pct">
+          <div class="sp-pct-n"><span id="percentText">000</span><small>%</small></div>
+          <div class="sp-status"><i></i><span id="spStatus">Initializing core</span></div>
+        </div>
+        <div class="sp-stages" id="spStages"></div>
+      </div>
+      <div class="sp-tip mono" id="bootTipText" data-sp="tip">CLICK ANYWHERE TO SKIP</div>
+      <div class="sp-flash"></div>
     </div>
-    
+
     <script>
-      // Enable fullscreen support immediately
+      // Fullscreen on double-click
       document.addEventListener('DOMContentLoaded', () => {
         document.body.addEventListener('dblclick', () => {
-          if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen?.();
-          } else {
-            document.exitFullscreen?.();
-          }
+          if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+          else document.exitFullscreen?.();
         });
       });
-      
-      // Splash screen uses CSS width/height: 100vw/100vh — no JS resize needed
 
-      // Create enhanced particle system
-      const particleColors = ['#8b5cf6', '#3b82f6', '#10b981', '#ec4899', '#06b6d4', '#a78bfa', '#818cf8', '#22d3ee'];
-      for (let i = 0; i < 65; i++) {
-        const p = document.createElement('div');
-        p.className = 'particle';
-        const size = 2 + Math.floor(Math.random() * 5); // 2-6px
-        const isRound = Math.random() > 0.45;
-        const w = isRound ? size : Math.round(size * 1.6);
-        const h = size;
-        p.style.left = Math.random() * 100 + '%';
-        p.style.top = Math.random() * 100 + '%';
-        p.style.width = w + 'px';
-        p.style.height = h + 'px';
-        p.style.borderRadius = isRound ? '50%' : (size * 0.25) + 'px';
-        const color = particleColors[Math.floor(Math.random() * particleColors.length)];
-        p.style.background = color;
-        p.style.color = color;
-        p.style.opacity = 0.12 + Math.random() * 0.5;
-        p.style.boxShadow = `0 0 ${size * 2.5}px ${color}`;
-        const floatDur = (4 + Math.random() * 6);
-        // Particles MOVE (drift up/down) — no spin-in-place. The rectangular
-        // particles used to visibly rotate on themselves via particleSpin; that
-        // is removed so every particle simply travels and fades.
-        p.style.animation = `particleFloat ${floatDur}s ease-in-out infinite`;
-        p.style.animationDelay = Math.random() * 6 + 's';
-        document.getElementById('loadingScreen').appendChild(p);
-      }
+      // ── Poster wall: gradient tiles (fully offline, no images) ──
+      (function () {
+        const wall = document.getElementById('spWall');
+        let html = '';
+        // 16 posters bundled in /assets/posters (offline-safe); gradient tiles stay underneath while they decode.
+        let k = 0;
+        for (let c = 0; c < 8; c++) {
+          html += '<div class="sp-col" style="animation:' + (c % 2 ? 'sp-colDown' : 'sp-colUp') + ' ' + (22 + c * 3) + 's ease-in-out infinite alternate">';
+          for (let r = 0; r < 6; r++) {
+            const h = (c * 47 + r * 61 + 240) % 360;
+            const grad = 'linear-gradient(160deg,hsl(' + h + ' 55% 34%),hsl(' + ((h + 50) % 360) + ' 60% 14%))';
+            const bg = 'url(./assets/posters/p' + ((c * 5 + r * 3 + k++) % 16) + '.webp) center/cover,' + grad;
+            html += '<div class="sp-tile" style="background:' + bg + ';animation-delay:' + (0.15 + c * 0.07 + r * 0.06).toFixed(2) + 's"></div>';
+          }
+          html += '</div>';
+        }
+        wall.innerHTML = html;
+      })();
 
-      // Smooth progress animation with expo easing
-      const progressFill = document.querySelector('.progress-fill');
+      // ── Splash strings (pre-React): language from localStorage('ahg.lang'), same codes as src/i18n ──
+      const SP = {
+        en: { st: ['CORE', 'DATABASE', 'COVERS', 'MIRRORS', 'STEAM', 'INTERFACE', 'READY'], ms: ['Initializing core', 'Loading games database', 'Warming cover cache', 'Syncing mirrors', 'Detecting Steam library', 'Building interface', 'Ready'], tip: 'CLICK ANYWHERE TO SKIP', boot: 'AHG // BOOT SEQUENCE', dev: 'Developed by sinfo', min: 'Minimize', max: 'Maximize', close: 'Close' },
+        es: { st: ['NÚCLEO', 'BASE DE DATOS', 'PORTADAS', 'MIRRORS', 'STEAM', 'INTERFAZ', 'LISTO'], ms: ['Iniciando el núcleo', 'Cargando la base de datos de juegos', 'Calentando la caché de portadas', 'Sincronizando mirrors', 'Detectando la biblioteca de Steam', 'Construyendo la interfaz', 'Listo'], tip: 'HAZ CLIC EN CUALQUIER LUGAR PARA OMITIR', boot: 'AHG // SECUENCIA DE ARRANQUE', dev: 'Desarrollado por sinfo', min: 'Minimizar', max: 'Maximizar', close: 'Cerrar' },
+        fr: { st: ['NOYAU', 'BASE DE DONNÉES', 'JAQUETTES', 'MIRRORS', 'STEAM', 'INTERFACE', 'PRÊT'], ms: ['Initialisation du noyau', 'Chargement de la base de jeux', 'Préchauffage du cache des jaquettes', 'Synchronisation des miroirs', 'Détection de la bibliothèque Steam', 'Construction de l’interface', 'Prêt'], tip: 'CLIQUEZ N’IMPORTE OÙ POUR PASSER', boot: 'AHG // SÉQUENCE DE DÉMARRAGE', dev: 'Développé par sinfo', min: 'Réduire', max: 'Agrandir', close: 'Fermer' },
+        de: { st: ['KERN', 'DATENBANK', 'COVER', 'MIRRORS', 'STEAM', 'OBERFLÄCHE', 'BEREIT'], ms: ['Kern wird initialisiert', 'Spieledatenbank wird geladen', 'Cover-Cache wird aufgewärmt', 'Mirrors werden synchronisiert', 'Steam-Bibliothek wird erkannt', 'Oberfläche wird aufgebaut', 'Bereit'], tip: 'ZUM ÜBERSPRINGEN IRGENDWO KLICKEN', boot: 'AHG // STARTSEQUENZ', dev: 'Entwickelt von sinfo', min: 'Minimieren', max: 'Maximieren', close: 'Schließen' },
+        pt: { st: ['NÚCLEO', 'BANCO DE DADOS', 'CAPAS', 'MIRRORS', 'STEAM', 'INTERFACE', 'PRONTO'], ms: ['Inicializando o núcleo', 'Carregando o banco de dados de jogos', 'Aquecendo o cache de capas', 'Sincronizando mirrors', 'Detectando a biblioteca do Steam', 'Construindo a interface', 'Pronto'], tip: 'CLIQUE EM QUALQUER LUGAR PARA PULAR', boot: 'AHG // SEQUÊNCIA DE INICIALIZAÇÃO', dev: 'Desenvolvido por sinfo', min: 'Minimizar', max: 'Maximizar', close: 'Fechar' },
+        tr: { st: ['ÇEKİRDEK', 'VERİTABANI', 'KAPAKLAR', 'YANSILAR', 'STEAM', 'ARAYÜZ', 'HAZIR'], ms: ['Çekirdek başlatılıyor', 'Oyun veritabanı yükleniyor', 'Kapak önbelleği ısıtılıyor', 'Yansılar eşitleniyor', 'Steam kütüphanesi algılanıyor', 'Arayüz oluşturuluyor', 'Hazır'], tip: 'ATLAMAK İÇİN HERHANGİ BİR YERE TIKLAYIN', boot: 'AHG // AÇILIŞ DİZİSİ', dev: 'Geliştiren: sinfo', min: 'Küçült', max: 'Büyüt', close: 'Kapat' },
+        zh: { st: ['核心', '数据库', '封面', '镜像', 'STEAM', '界面', '就绪'], ms: ['正在初始化核心', '正在加载游戏数据库', '正在预热封面缓存', '正在同步镜像', '正在检测 Steam 游戏库', '正在构建界面', '就绪'], tip: '点击任意位置跳过', boot: 'AHG // 启动序列', dev: '开发者 sinfo', min: '最小化', max: '最大化', close: '关闭' },
+        ar: { st: ['النواة', 'قاعدة البيانات', 'الأغلفة', 'المرايا', 'STEAM', 'الواجهة', 'جاهز'], ms: ['جارٍ تهيئة النواة', 'جارٍ تحميل قاعدة بيانات الألعاب', 'جارٍ تسخين ذاكرة الأغلفة', 'جارٍ مزامنة المرايا', 'جارٍ اكتشاف مكتبة Steam', 'جارٍ بناء الواجهة', 'جاهز'], tip: 'انقر في أي مكان للتخطي', boot: 'AHG // تسلسل الإقلاع', dev: 'تطوير sinfo', min: 'تصغير', max: 'تكبير', close: 'إغلاق' },
+      };
+      const SPL = SP[document.documentElement.lang] || SP.en;
+      document.querySelectorAll('[data-sp]').forEach((el) => { el.textContent = (el.dataset.pre || '') + SPL[el.dataset.sp]; });
+      document.querySelectorAll('[data-sp-title]').forEach((el) => { el.title = SPL[el.dataset.spTitle]; });
+
+      // ── Stages mapped onto the real progress percentage ──
+      const STAGES = SPL.st.map((n, i) => [n, SPL.ms[i]]);
+      const stagesEl = document.getElementById('spStages');
+      stagesEl.innerHTML = STAGES.map((s) => '<div class="sp-stage"><span>' + s[0] + '</span><div class="sp-bar"><b></b></div></div>').join('');
+      const stageEls = Array.from(stagesEl.children);
+      const stageBars = stageEls.map((el) => el.querySelector('b'));
       const percentText = document.getElementById('percentText');
+      const statusText = document.getElementById('spStatus');
       const loadingScreen = document.getElementById('loadingScreen');
-      const statusText = document.querySelector('.status span');
-      
+      let lastStage = -1;
+
+      // Real progress only sets a TARGET; the displayed counter eases up through every number and can't
+      // finish before MIN_MS, so the splash never flashes by.
+      const MIN_MS = 4500;
+      let lastPct = 0, target = 0, shown = 0, pendingMsg, hiding = false;
+      function setProgress(pct, msg) {
+        target = Math.max(target, Math.max(0, Math.min(100, pct)));
+        if (msg) pendingMsg = msg;
+      }
+      function render(pct, msg) {
+        lastPct = pct;
+        percentText.textContent = String(Math.round(pct)).padStart(3, '0');
+        const per = 100 / STAGES.length;
+        // READY only lights once we hit 100%
+        const cur = pct >= 100 ? STAGES.length - 1 : Math.min(STAGES.length - 2, Math.floor(pct / per));
+        for (let i = 0; i < STAGES.length; i++) {
+          const fill = pct >= 100 ? 100 : Math.max(0, Math.min(100, ((pct - i * per) / per) * 100));
+          stageBars[i].style.width = (i === STAGES.length - 1 ? (pct >= 100 ? 100 : 0) : fill) + '%';
+          stageEls[i].className = 'sp-stage' + (i < cur ? ' done' : i === cur ? ' on' : '');
+        }
+        if (msg) { statusText.textContent = msg; lastStage = -1; }
+        else if (cur !== lastStage) {
+          lastStage = cur;
+          statusText.textContent = STAGES[cur][1];
+        }
+      }
+      render(0);
+      // Virtual clock: a long main-thread stall (catalogue IPC/clone) must not make the counter leap,
+      // so each frame advances by at most 34ms of "splash time" and the number resumes where it froze.
+      let vt = 0, prev = performance.now();
+      (function tick(now) {
+        const dt = Math.min(now - prev, 34); prev = now; vt += dt;
+        const cap = Math.min(100, (vt / MIN_MS) * 100);
+        const goal = Math.min(target, cap);
+        if (goal > shown) shown = Math.min(goal, shown + Math.min(Math.max(0.05, (goal - shown) * 0.04), 0.5 * (dt / 16.7)));
+        const r = Math.floor(shown + 0.001);
+        if (r !== Math.floor(lastPct) || pendingMsg) { render(r >= 100 && shown < 100 ? 99 : r, pendingMsg); pendingMsg = undefined; }
+        if (hiding && shown >= 99.99) { hiding = false; closeSplash(); }
+        requestAnimationFrame(tick);
+      })(prev);
+
+      // ── Title scramble ──
+      (function () {
+        const el = document.getElementById('spTitle');
+        const target = 'AHG UNLOCKER';
+        const pool = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#%&';
+        let n = 0;
+        const t = setInterval(() => {
+          n++;
+          el.textContent = target.split('').map((ch, i) => (ch === ' ' || i < n / 2 ? ch : pool[Math.floor(Math.random() * pool.length)])).join('');
+          if (n / 2 >= target.length) { clearInterval(t); el.textContent = target; }
+        }, 45);
+      })();
+
       function easeOutExpo(t) {
         return t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
       }
-      
+
       // Initial ramp-up animation — brief flash while React mounts
       function animateInitialProgress() {
         const startTime = performance.now();
         const duration = 600;
         const targetPct = 15;
-        
+
         function frame(now) {
-          const elapsed = now - startTime;
-          const t = Math.min(elapsed / duration, 1);
-          const eased = easeOutExpo(t);
-          const percent = Math.round(eased * targetPct);
-          
-          progressFill.style.width = percent + '%';
-          if (percentText) percentText.textContent = percent + '%';
-          
+          const t = Math.min((now - startTime) / duration, 1);
+          setProgress(Math.round(easeOutExpo(t) * targetPct));
+
           if (t < 1) {
             requestAnimationFrame(frame);
           } else {
             // Signal React to start loading games — React sends real progress updates
-            if (statusText) statusText.innerHTML = '<span style="color:#8b5cf6">Loading</span> games database';
             window.dispatchEvent(new CustomEvent('splash-complete'));
             window.__splashCompleted = true;
-            // After initial animation, listen for real progress from React
             window.addEventListener('progress-update', (e) => {
-              const pct = e.detail.percent;
-              progressFill.style.width = pct + '%';
-              if (percentText) percentText.textContent = pct + '%';
-              // Pulse the glow on progress jump
-              progressFill.style.animation = 'none';
-              void progressFill.offsetHeight; // force reflow
-              progressFill.style.animation = 'pulseGlow 0.35s ease-out';
-              // Update phase text with fade transition
-              if (statusText) {
-                let newHtml;
-                if (pct < 30) newHtml = '<span style="color:#8b5cf6">Loading</span> game database';
-                else if (pct < 55) newHtml = '<span style="color:#a78bfa">Parsing</span> game entries';
-                else if (pct < 70) newHtml = '<span style="color:#818cf8">Processing</span> genres & filters';
-                else if (pct < 90) newHtml = '<span style="color:#6366f1">Finalizing</span> game catalog';
-                else newHtml = '<span style="color:#22c55e">Starting</span> app...';
-                if (statusText.innerHTML !== newHtml) {
-                  statusText.style.opacity = '0';
-                  statusText.style.transform = 'translateY(4px)';
-                  setTimeout(() => {
-                    statusText.innerHTML = newHtml;
-                    statusText.style.opacity = '1';
-                    statusText.style.transform = 'translateY(0)';
-                  }, 150);
-                }
-              }
+              setProgress(Math.max(targetPct, e.detail.percent), e.detail.message);
             });
           }
         }
-        
+
         requestAnimationFrame(frame);
       }
-      
-      // React dispatches this event when games are loaded and the main app is ready
-      window.addEventListener('hide-splash', () => {
-        progressFill.style.width = '100%';
-        if (percentText) percentText.textContent = '100%';
-        if (statusText) statusText.innerHTML = '<span style="color:#22c55e">Ready</span>';
-        // Smooth fade-out with subtle scale — no white flash, no 3D (performance)
-        loadingScreen.style.transition = 'opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1), transform 0.35s cubic-bezier(0.4, 0, 0.2, 1)';
-        loadingScreen.style.transform = 'scale(1.04)';
-        loadingScreen.classList.add('hidden');
-      });
-      
-      // ── Rotating tips (keeps the wait interactive) ──
-      const BOOT_TIPS = [
-        'Press Ctrl+K to search 176,000+ games instantly',
-        'Right-click any game for quick actions',
-        'Hover a game card to reveal one-click install',
-        'Batch mode adds several games in one go',
-        'Favourite a game to pin it to your library',
-        'Installed games show an Update badge when a new version drops',
-        'AHG keeps your catalogue fresh automatically',
-        'Library, Recent and Favourites stay in sync',
-        'AHG handles the heavy lifting — you just hit Play',
-        '176,000+ games at your fingertips',
-      ];
-      const tipEl = document.getElementById('bootTipText');
-      let tipIdx = 0;
-      setInterval(() => {
-        if (!tipEl) return;
-        tipEl.style.opacity = '0';
-        tipEl.style.transform = 'translateY(5px)';
-        setTimeout(() => {
-          tipIdx = (tipIdx + 1) % BOOT_TIPS.length;
-          tipEl.textContent = 'Tip: ' + BOOT_TIPS[tipIdx];
-          tipEl.style.opacity = '1';
-          tipEl.style.transform = 'translateY(0)';
-        }, 400);
-      }, 3200);
 
-      // ── Live boot log stream ──
-      const BOOT_LOGS = [
-        ['boot', 'Initializing AHG engine'],
-        ['db', 'Opening games database (54 MB)'],
-        ['db', '176,930 games indexed'],
-        ['sync', 'Syncing the latest releases'],
-        ['fixes', 'Loading community fixes'],
-        ['img', 'Warming cover cache'],
-        ['lib', 'Detecting your library'],
-        ['ok', 'Catalogue ready'],
-      ];
-      const bootLogEl = document.getElementById('bootLog');
-      let logIdx = 0;
-      function pushBootLog() {
-        if (!bootLogEl || logIdx >= BOOT_LOGS.length) return;
-        const entry = BOOT_LOGS[logIdx++];
-        const cls = entry[0] === 'ok' ? 'lg-ok' : 'lg-tag';
-        bootLogEl.style.opacity = '0';
-        setTimeout(() => {
-          bootLogEl.innerHTML = '<span class="' + cls + '">[' + entry[0] + ']</span> ' + entry[1] + (entry[0] === 'ok' ? '' : '…');
-          bootLogEl.style.opacity = '1';
-        }, 180);
+      // React dispatches this event when games are loaded and the main app is ready
+      window.addEventListener('hide-splash', () => { target = 100; hiding = true; });
+      function closeSplash() {
+        render(100);
+        // Collapse to a line (design: clip-path close + flash), then remove from layout
+        loadingScreen.classList.add('closing');
+        setTimeout(() => { loadingScreen.classList.add('hidden'); document.getElementById('spBar').classList.add('hidden'); }, 600);
       }
-      pushBootLog();
-      const bootLogTimer = setInterval(() => {
-        if (logIdx >= BOOT_LOGS.length) { clearInterval(bootLogTimer); return; }
-        pushBootLog();
-      }, 820);
+
+      // Click anywhere to skip the closing animation — only once loading has actually finished (never interrupts the load protocol)
+      loadingScreen.addEventListener('click', () => {
+        if (lastPct >= 100 && !loadingScreen.classList.contains('hidden')) closeSplash();
+      });
 
       // Start immediately
       animateInitialProgress();
     </script>
-    
+
     <div id="root"></div>
   </body>
 </html>

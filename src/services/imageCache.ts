@@ -103,7 +103,7 @@ export function getLqipData(appid: string, preferredImageTypes?: readonly string
 // miss), so a higher ceiling lets many DIFFERENT covers load in parallel rather
 // than starving the pool with one cover's host race. 16 comfortably covers a full
 // viewport of a virtualized grid while staying well under Steam-CDN rate limits.
-const MAX_CONCURRENT_FETCHES = 16
+const MAX_CONCURRENT_FETCHES = 24
 let activeFetches = 0
 const fetchQueue: (() => void)[] = []
 
@@ -345,7 +345,8 @@ const pendingRequests = new Map<string, Promise<string | null>>()
 
 // ── CDN fallback hosts ──────────────────────────────────────────────────
 
-const FALLBACK_HOSTS = ['shared.akamai.steamstatic.com', 'cdn.cloudflare.steamstatic.com', 'cdn.akamai.steamstatic.com']
+// shared.akamai.steamstatic.com now 404s every asset, so it must not be the primary host (a 404 there is treated as a definitive miss).
+const FALLBACK_HOSTS = ['cdn.cloudflare.steamstatic.com', 'cdn.akamai.steamstatic.com', 'shared.akamai.steamstatic.com']
 const FALLBACK_TYPES = ['header.jpg', 'library_600x900.jpg', 'portrait.jpg']
 
 /**
@@ -372,13 +373,16 @@ export const IMAGE_TYPES = {
 } as const
 
 /** Fetch an image URL as a Blob and create an object URL. Returns `null` on any failure. */
-async function fetchAsBlob(url: string, timeoutMs = 8000): Promise<{ blob: Blob; blobUrl: string } | null> {
+// URLs that returned a definitive 404/403: that asset does not exist on ANY mirror host, so the
+// host fan-out is pointless — skip straight to the next file type.
+const definitiveMiss = new Set<string>()
+async function fetchAsBlob(url: string, timeoutMs = 4500): Promise<{ blob: Blob; blobUrl: string } | null> {
   try {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
     try {
       const resp = await withConcurrencyLimit(() => fetch(url, { signal: controller.signal }))
-      if (!resp.ok) return null
+      if (!resp.ok) { if (resp.status === 404 || resp.status === 403) definitiveMiss.add(url); return null }
       const blob = await resp.blob()
       if (blob.size < 500) return null
       return { blob, blobUrl: URL.createObjectURL(blob) }
@@ -392,12 +396,45 @@ function mapToSgdbType(preferredImageTypes?: readonly string[]): SGDBImageType {
   return preferredImageTypes?.some(t => t.includes('hero')) ? 'hero' : 'grid'
 }
 
+const pendingDirect = new Map<string, Promise<string | null>>()
+function loadDirect(appid: string, preferredImageTypes?: readonly string[]): Promise<string | null> {
+  const k = cacheKey(appid, preferredImageTypes)
+  let p = pendingDirect.get(k)
+  if (!p) {
+    p = (async () => {
+      for (const type of directCoverTypes(preferredImageTypes)) {
+        const url = steamCdnUrl(appid, type)
+        const ok = await new Promise<boolean>(resolve => {
+          const img = new Image()
+          const t = setTimeout(() => { img.src = ''; resolve(false) }, 6000)
+          img.onload = () => { clearTimeout(t); resolve(img.naturalWidth > 1) }
+          img.onerror = () => { clearTimeout(t); resolve(false) }
+          img.src = url
+        })
+        if (ok) return url
+      }
+      return null
+    })()
+    pendingDirect.set(k, p)
+    p.finally(() => pendingDirect.delete(k))
+  }
+  return p
+}
+
 export async function loadGameImage(appid: string, localHeaderUrl?: string, _gameName?: string, preferredImageTypes?: readonly string[]): Promise<string | null> {
   const key = cacheKey(appid, preferredImageTypes)
 
   // 1. Check in-memory cache (session-speed)
   const cached = accessMemoryCache(key)
   if (cached) return cached
+
+  // 1b. DIRECT CDN probe: a plain Image() load goes through the browser HTTP cache (7-day, persistent)
+  // and HTTP/2 — no IPC, no fetch semaphore, no blob/WebP conversion. Everything below is the fallback
+  // (disk cache, mirrors, SteamGridDB) for covers the CDN doesn't have.
+  {
+    const direct = await loadDirect(appid, preferredImageTypes)
+    if (direct) { setMemoryCache(key, direct, false); return direct }
+  }
 
     // 2. Check local images (Phase 2 — build-time pre-cached headers)
     const manifest = await loadLocalManifest()
@@ -434,14 +471,14 @@ export async function loadGameImage(appid: string, localHeaderUrl?: string, _gam
       // localHeader, SGDB, and the Promise.any host fan-out) leaked a blob URL that
       // pinned its Blob for the document's lifetime. Record them all, revoke losers.
       const created: RawHit[] = []
-      const trackFetch = async (url: string, timeoutMs = 8000): Promise<RawHit | null> => {
+      const trackFetch = async (url: string, timeoutMs = 4500): Promise<RawHit | null> => {
         const r = await fetchAsBlob(url, timeoutMs)
         if (!r) return null
         const hit = { blob: r.blob, blobUrl: r.blobUrl }
         created.push(hit)
         return hit
       }
-      const fetchRawOrThrow = async (url: string, timeoutMs = 8000): Promise<RawHit> => {
+      const fetchRawOrThrow = async (url: string, timeoutMs = 4500): Promise<RawHit> => {
         const hit = await trackFetch(url, timeoutMs)
         if (!hit) throw new Error('miss')
         return hit
@@ -458,7 +495,8 @@ export async function loadGameImage(appid: string, localHeaderUrl?: string, _gam
       const typesToTry = preferredImageTypes?.length ? preferredImageTypes : FALLBACK_TYPES
 
       let deferredResolve!: (value: RawHit) => void
-      const firstSuccess = new Promise<RawHit>(resolve => { deferredResolve = resolve })
+      let cdnWon = false
+      const firstSuccess = new Promise<RawHit>(resolve => { deferredResolve = (v) => { cdnWon = true; resolve(v) } })
 
       // localHeader source: the games-DB header_image (only when a header is wanted).
       const prefersHeaderFirst = !preferredImageTypes?.length || preferredImageTypes[0]?.includes('header')
@@ -481,6 +519,7 @@ export async function loadGameImage(appid: string, localHeaderUrl?: string, _gam
         for (const fileType of typesToTry) {
           const primaryUrl = `https://${FALLBACK_HOSTS[0]}/steam/apps/${appid}/${fileType}${fmtParam}`
           try { deferredResolve(await fetchRawOrThrow(primaryUrl)); return } catch {}
+          if (definitiveMiss.has(primaryUrl)) continue // asset absent everywhere — next file type NOW
           const rest: string[] = []
           for (const host of FALLBACK_HOSTS) {
             for (const path of ['/steam/apps/', '/store_item_assets/steam/apps/']) {
@@ -488,13 +527,17 @@ export async function loadGameImage(appid: string, localHeaderUrl?: string, _gam
               if (u !== primaryUrl) rest.push(u)
             }
           }
-          try { deferredResolve(await Promise.any(rest.map(u => fetchRawOrThrow(u)))); return } catch { continue }
+          try { deferredResolve(await Promise.any(rest.slice(0, 3).map(u => fetchRawOrThrow(u)))); return } catch { continue }
         }
       })().catch(() => {})
 
       // SGDB source: fires in parallel with CDN
       const sgdbWork = (async () => {
         try {
+          // Fire only if the CDN hasn't won within 900ms — avoids 2 extra requests (+ API call) per
+          // cover that would otherwise steal slots from other covers' primary fetches.
+          await Promise.race([firstSuccess, new Promise(r => setTimeout(r, 900))])
+          if (cdnWon) return
           const sgdbType = mapToSgdbType(preferredImageTypes)
           // Match the cover box orientation. SGDB grids exist in both landscape
           // (460×215) and portrait (600×900); a landscape header box must never get
@@ -856,4 +899,43 @@ export function preloadLibraryImages(games: { appid: string; name?: string; head
     else setTimeout(scheduleNext, PRELOAD_INTERVAL_MS)
   }
   scheduleNext()
+}
+
+/** Deterministic Steam-CDN URL for a cover. Used for DIRECT <img> loading (browser HTTP cache: 7-day, HTTP/2). */
+export function steamCdnUrl(appid: string, fileType: string): string {
+  return `https://${FALLBACK_HOSTS[0]}/steam/apps/${appid}/${fileType}`
+}
+
+/** File types that exist on Steam's CDN (portrait.jpg / hero.jpg 404 there, so they're pipeline-only). */
+export function directCoverTypes(preferredImageTypes?: readonly string[]): string[] {
+  const t = (preferredImageTypes?.length ? preferredImageTypes : ['header.jpg']).filter(x => x !== 'portrait.jpg' && x !== 'hero.jpg')
+  return t.length ? t : ['header.jpg']
+}
+
+/** Remember a successfully loaded direct URL so later mounts paint synchronously (no async work at all). */
+export function rememberCover(appid: string, preferredImageTypes: readonly string[] | undefined, url: string): void {
+  setMemoryCache(cacheKey(appid, preferredImageTypes), url, false)
+}
+
+/**
+ * Warm covers into the browser HTTP cache with plain Image() requests — no fetch/blob/convert/IPC.
+ * Small waves so on-screen requests never queue behind them.
+ */
+const warmRefs = new Set<HTMLImageElement>()
+export function warmCovers(games: { appid: string }[], count = 160): void {
+  const list = games.slice(0, count)
+  let i = 0
+  const wave = () => {
+    for (const g of list.slice(i, i + 8)) {
+      for (const type of ['library_600x900.jpg', 'header.jpg']) {
+        const img = new Image()
+        warmRefs.add(img)
+        img.onload = img.onerror = () => { warmRefs.delete(img) }
+        img.src = steamCdnUrl(g.appid, type)
+      }
+    }
+    i += 8
+    if (i < list.length) setTimeout(wave, 100)
+  }
+  wave()
 }

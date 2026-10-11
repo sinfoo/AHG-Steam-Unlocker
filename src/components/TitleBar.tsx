@@ -1,11 +1,13 @@
 import { memo, useEffect, useState } from 'react'
 import { COLORS } from '../constants/colors'
+import { useT, useLangStore, type TKey } from '../i18n'
 
 interface TitleBarColors {
   bgDeep: string
   bgDark: string
   border: string
   textMuted: string
+  textDim: string
   text: string
   textSecondary: string
   red: string
@@ -19,19 +21,22 @@ interface TitleBarProps {
   currentPage?: string
 }
 
-const PAGE_NAMES: Record<string, string> = {
-  home: 'Home',
-  browse: 'Browse',
-  library: 'Library',
-  favourites: 'Favourites',
-  recent: 'Recent',
-  fixes: 'Fixes',
-  settings: 'Settings',
+const PAGE_NAMES: Record<string, TKey> = {
+  home: 'app.nav.home',
+  browse: 'app.nav.browse',
+  library: 'app.nav.library',
+  favourites: 'app.nav.favourites',
+  recent: 'app.nav.recent',
+  fixes: 'app.nav.fixes',
+  settings: 'app.nav.settings',
 }
 
 const TitleBar = memo(function TitleBar({ colors, currentPage }: TitleBarProps) {
   const [isMaximized, setIsMaximized] = useState(false)
-  const pageName = PAGE_NAMES[currentPage || ''] || ''
+  const t = useT()
+  const lang = useLangStore(s => s.lang)
+  const pageKey = PAGE_NAMES[currentPage || '']
+  const pageName = pageKey ? t(pageKey) : ''
 
   useEffect(() => {
     ;(window as any).electronAPI?.isMaximized?.().then(setIsMaximized)
@@ -43,7 +48,7 @@ const TitleBar = memo(function TitleBar({ colors, currentPage }: TitleBarProps) 
     height: '100%',
     border: 'none',
     background: 'transparent',
-    color: colors.textMuted,
+    color: colors.textDim,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -58,32 +63,28 @@ const TitleBar = memo(function TitleBar({ colors, currentPage }: TitleBarProps) 
       onDoubleClick={() => (window as any).electronAPI?.maximizeWindow?.()}
       style={{
         width: '100%',
-        height: 34,
+        height: 36,
         flexShrink: 0,
         position: 'relative',
         zIndex: 50,
-        background: `linear-gradient(180deg, ${colors.bgDark} 0%, ${colors.bgDeep} 100%)`,
-        borderBottom: `1px solid ${colors.border}`,
+        background: 'var(--s1, #0f0f1b)',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
         display: 'flex',
         alignItems: 'center',
         userSelect: 'none',
+        direction: 'ltr', // keep window controls on the right in RTL
         WebkitAppRegion: 'drag',
       } as React.CSSProperties}
     >
       {/* App icon + label — drag handle */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 12, WebkitAppRegion: 'drag' } as React.CSSProperties}>
-        <svg width="16" height="16" viewBox="0 0 32 32" fill="none">
-          <rect width="32" height="32" rx="6" fill={colors.violet} />
-          <path d="M8 22V10l12 6-12 6z" fill={COLORS.white} opacity="0.95" />
-          <path d="M18 22V10l6 6-6 6z" fill={COLORS.white} opacity="0.6" />
-        </svg>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginLeft: 14, WebkitAppRegion: 'drag' } as React.CSSProperties}>
+        <img src="./assets/ahg-logo.png" alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} />
         <span
           style={{
             fontSize: 10.5,
             fontWeight: 700,
-            letterSpacing: '1.8px',
-            color: colors.textMuted,
-            opacity: 0.5,
+            letterSpacing: '0.18em',
+            color: colors.textDim,
           }}
         >
           AHG UNLOCKER
@@ -91,17 +92,16 @@ const TitleBar = memo(function TitleBar({ colors, currentPage }: TitleBarProps) 
 
         {pageName && (
           <>
-            <span style={{ color: colors.border, fontSize: 14, opacity: 0.4, margin: '0 2px' }}>|</span>
+            <span style={{ width: 1, height: 12, background: 'rgba(255,255,255,0.12)' }} />
             <span
               style={{
                 fontSize: 10.5,
                 fontWeight: 600,
-                letterSpacing: '0.5px',
-                color: colors.violet,
-                opacity: 0.7,
+                letterSpacing: '0.1em',
+                color: 'var(--acc, #a77dff)',
               }}
             >
-              {pageName.toUpperCase()}
+              {pageName.toLocaleUpperCase(lang)}
             </span>
           </>
         )}
@@ -118,7 +118,7 @@ const TitleBar = memo(function TitleBar({ colors, currentPage }: TitleBarProps) 
           onClick={() => (window as any).electronAPI?.minimizeWindow?.()}
           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
           onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-          title="Minimize"
+          title={t('app.title.minimize')}
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
             <rect x="1" y="5.5" width="10" height="1" rx="0.5" fill="currentColor" />
@@ -131,7 +131,7 @@ const TitleBar = memo(function TitleBar({ colors, currentPage }: TitleBarProps) 
           onClick={() => (window as any).electronAPI?.maximizeWindow?.()}
           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
           onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-          title={isMaximized ? 'Restore' : 'Maximize'}
+          title={isMaximized ? t('app.title.restore') : t('app.title.maximize')}
         >
           {isMaximized ? (
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -157,7 +157,7 @@ const TitleBar = memo(function TitleBar({ colors, currentPage }: TitleBarProps) 
             e.currentTarget.style.background = 'transparent'
             e.currentTarget.style.color = colors.textMuted
           }}
-          title="Close"
+          title={t('app.title.close')}
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
             <path d="M2 2L10 10M10 2L2 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />

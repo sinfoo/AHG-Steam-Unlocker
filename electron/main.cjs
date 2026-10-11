@@ -184,13 +184,6 @@ function extractQueryParams(url, base) {
   };
 }
 
-function buildDiscordTokenPayload(data) {
-  return new URLSearchParams({
-    client_id: DISCORD_CLIENT_ID,
-    client_secret: secrets.discordClientSecret,
-    ...data
-  });
-}
 // ──────────────────────────────────────────
 
 let mainWindow = null;
@@ -461,7 +454,7 @@ function createWindow() {
   // ── TLS Certificate Verification ──
   // This previously called callback(0) unconditionally, which accepts EVERY
   // certificate — expired, self-signed, wrong-host, attacker-supplied. That made
-  // every HTTPS call (GitHub license registry, Discord OAuth token exchange, Steam)
+  // every HTTPS call (GitHub license registry, Steam)
   // trivially interceptable by anyone on the network path.
   // All hosts we talk to use publicly-trusted certs, so validate normally.
   session.defaultSession.setCertificateVerifyProc((request, callback) => {
@@ -752,7 +745,7 @@ registerInitDataHandler({ customFixesManager });
 registerPersistenceHandlers();
 // Native image handlers (fast decode + LQIP via C++) — lightweight, no I/O
 registerImageNativeHandlers();
-// Non-critical handlers (config, db, discord, fixes, install, etc.) are
+// Non-critical handlers (config, db, fixes, install, etc.) are
 // loaded deferred after the window is visible — see the setImmediate call below.
 
 // handled by handlers/db.cjs: ipcMain.handle('remote-sync:check', ...)
@@ -1419,22 +1412,7 @@ async function tryRyuuLolPrimary(appid, depotCache, luaPath, sendLog, signal) {
 }
 
 async function tryLuaToolsApis(appid, depotCache, luaPath, sendLog, signal) {
-  // Try Morrenus if API key is configured
-  const DISCORD_DATA_PATH = path.join(app.getPath('userData'), 'discord_auth.json');
-  let morrenusKey = null;
-  try {
-    if (fs.existsSync(DISCORD_DATA_PATH)) {
-      const authData = JSON.parse(fs.readFileSync(DISCORD_DATA_PATH, 'utf-8'));
-      morrenusKey = authData.morrenusApiKey || null;
-    }
-  } catch (e) {}
-
-  // Build API list: Morrenus first if key available, then free APIs
-  const apis = [];
-  if (morrenusKey) {
-    apis.push({ name: 'Morrenus', url: 'https://hubcapmanifest.com/api/v1/manifest/<appid>?api_key=' + morrenusKey });
-  }
-  apis.push(...LUATOOLS_APIS);
+  const apis = [...LUATOOLS_APIS];
 
   if (apis.length === 0) return null;
   if (signal && signal.aborted) { sendLog('Operation aborted'); return null; }
@@ -3109,7 +3087,7 @@ app.whenReady().then(async () => {
     try { await runRemoteSync(); } finally { remoteSyncRunning = false; }
   };
   setTimeout(guardedRemoteSync, 3000); // 3s delay to let the app finish loading
-  setInterval(guardedRemoteSync, 30 * 60 * 1000); // re-check while the app stays open
+  setInterval(guardedRemoteSync, 5 * 60 * 1000); // re-check while the app stays open
 
   // ── Custom Fixes: check GitHub releases after startup ──
   setTimeout(async () => {
@@ -3248,133 +3226,6 @@ app.on('before-quit', () => {
     globalThis._imageDiskCache.close().catch(() => {});
   }
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// DISCORD AUTHENTICATION SYSTEM
-// ─────────────────────────────────────────────────────────────────────────────
-
-const DISCORD_CLIENT_ID = '1491071254206353580';
-// Secrets loaded from config/secrets.json (gitignored) or fallback to template
-// Tries multiple paths to work in both dev (electron .) and packaged modes
-let secrets = {};
-try {
-  // Safely resolve resourcesPath — process.resourcesPath can be undefined
-  // in some environments, and path.join(undefined, 'config', ...) throws
-  // "TypeError: Path must be a string". Use empty string as safe fallback.
-  const rp = (typeof process.resourcesPath !== 'undefined' && process.resourcesPath)
-    ? process.resourcesPath
-    : '';
-
-  // App userData path - best fallback for when the user manually places secrets.json there
-  let userDataSecretsPath = '';
-  try { userDataSecretsPath = path.join(app.getPath('userData'), 'config', 'secrets.json'); } catch(e) {}
-
-  const possiblePaths = [
-    path.join(__dirname, '..', 'config', 'secrets.json'),
-    path.join(__dirname, 'config', 'secrets.json'),
-    path.join(__dirname, '..', '..', 'config', 'secrets.json'),
-    path.join(process.cwd(), 'config', 'secrets.json'),
-    path.join(rp, 'app', 'config', 'secrets.json'),
-    path.join(rp, 'config', 'secrets.json'),
-    userDataSecretsPath,
-  ].filter(Boolean); // filter out empty strings
-  // App userData path for template fallback too
-  let userDataTemplatePath = '';
-  try { userDataTemplatePath = path.join(app.getPath('userData'), 'config', 'secrets.template.json'); } catch(e) {}
-
-  const possibleTemplates = [
-    path.join(__dirname, '..', 'config', 'secrets.template.json'),
-    path.join(__dirname, 'config', 'secrets.template.json'),
-    path.join(__dirname, '..', '..', 'config', 'secrets.template.json'),
-    path.join(process.cwd(), 'config', 'secrets.template.json'),
-    path.join(rp, 'app', 'config', 'secrets.template.json'),
-    path.join(rp, 'config', 'secrets.template.json'),
-    userDataTemplatePath,
-  ].filter(Boolean); // filter out empty strings
-  // Try secrets.json paths with per-path logging
-  let src = null;
-  for (const p of possiblePaths) {
-    const exists = fs.existsSync(p);
-    console.log('[MAIN] Trying secrets path: ' + p + ' — exists: ' + exists);
-    if (exists) { src = p; console.log('[MAIN] Found secrets at:', p); break; }
-  }
-  // Fall back to template if no secrets.json found
-  if (!src) {
-    for (const p of possibleTemplates) {
-      const exists = fs.existsSync(p);
-      console.log('[MAIN] Trying secrets template path: ' + p + ' — exists: ' + exists);
-      if (exists) { src = p; console.log('[MAIN] Found secrets template at:', p); break; }
-    }
-  }
-  if (src) {
-    secrets = JSON.parse(fs.readFileSync(src, 'utf-8'));
-  } else {
-    console.warn('[MAIN] Secrets not found at any of:', JSON.stringify(possiblePaths));
-  }
-} catch (e) {
-  console.warn('[MAIN] Could not load secrets:', e.message);
-}
-// ── Packaged-mode fallback (app.isPackaged + process.resourcesPath) ──
-if (!secrets.discordClientSecret) {
-  try {
-    const isPackaged = app.isPackaged;
-    if (isPackaged) {
-      const rpSafe = (typeof process.resourcesPath !== 'undefined' && process.resourcesPath)
-        ? process.resourcesPath
-        : '';
-      if (rpSafe) {
-        const packagedPath = path.join(rpSafe, 'config', 'secrets.json');
-        console.log('[MAIN] Packaged-mode fallback trying:', packagedPath);
-        if (fs.existsSync(packagedPath)) {
-          secrets = JSON.parse(fs.readFileSync(packagedPath, 'utf-8'));
-          console.log('[MAIN] Loaded secrets from packaged resourcesPath:', packagedPath);
-        }
-      }
-    }
-  } catch (e3) {
-    console.warn('[MAIN] Packaged-mode fallback failed:', e3.message);
-  }
-}
-// ── Dev-mode fallback: directly try project root config/secrets.json ──
-if (!secrets.discordClientSecret) {
-  try {
-    const devPath = path.join(__dirname, '..', 'config', 'secrets.json');
-    console.log('[MAIN] Dev-mode fallback trying:', devPath);
-    if (fs.existsSync(devPath)) {
-      secrets = JSON.parse(fs.readFileSync(devPath, 'utf-8'));
-      console.log('[MAIN] Loaded secrets via dev fallback from:', devPath);
-    }
-  } catch (e2) {
-    console.warn('[MAIN] Dev fallback secrets not available:', e2.message);
-  }
-}
-// ── Last-resort: absolute path from app.getPath('exe') ──
-if (!secrets.discordClientSecret) {
-  try {
-    const exeDir = path.dirname(app.getPath('exe'));
-    const lastResortPath = path.join(exeDir, 'resources', 'config', 'secrets.json');
-    console.log('[MAIN] Last-resort (exe-relative) trying:', lastResortPath);
-    if (fs.existsSync(lastResortPath)) {
-      secrets = JSON.parse(fs.readFileSync(lastResortPath, 'utf-8'));
-      console.log('[MAIN] Loaded secrets via last-resort from:', lastResortPath);
-    }
-  } catch (e4) {
-    console.warn('[MAIN] Last-resort secrets fallback failed:', e4.message);
-  }
-}
-// ── Secrets diagnostics: store what we know for the renderer ──
-const secretsDiag = {
-  loaded: !!secrets.discordClientSecret,
-  hasDiscordClientSecret: !!secrets.discordClientSecret,
-  discordClientSecretLen: secrets.discordClientSecret ? secrets.discordClientSecret.length : 0,
-  keysFound: Object.keys(secrets).join(', ') || 'none',
-  __dirname: __dirname,
-  cwd: process.cwd(),
-  resourcesPath: (typeof process.resourcesPath !== 'undefined' && process.resourcesPath) || 'unset',
-  isPackaged: app.isPackaged,
-  userData: '',
-};
-try { secretsDiag.userData = app.getPath('userData'); } catch(e) { secretsDiag.userData = 'unavailable'; }
 
 // ── v0.8 NEW FEATURES ──
 

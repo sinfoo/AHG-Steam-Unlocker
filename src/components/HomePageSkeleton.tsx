@@ -1,66 +1,30 @@
-import { motion } from 'framer-motion'
-
-const staggerContainer = {
-  animate: {
-    transition: {
-      staggerChildren: 0.03,
-      delayChildren: 0.05,
-    },
-  },
-}
-
-const fadeSlideUp = {
-  initial: { opacity: 0, y: 12 },
-  animate: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.15, ease: [0.4, 0, 0.2, 1] as const },
-  },
-}
+/** v2 home skeleton — hero + side column + two rails, with a sweeping shimmer. */
+const Block = ({ className = '', style }: { className?: string; style?: React.CSSProperties }) => (
+  <div className={`relative overflow-hidden ${className}`} style={{ background: '#10101c', border: '1px solid rgba(255,255,255,.06)', ...style }}>
+    <div className="absolute inset-y-0 w-1/3" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,.05), transparent)', animation: 'v2-hshimmer 1.6s ease-in-out infinite' }} />
+  </div>
+)
 
 export default function HomePageSkeleton() {
   return (
-    <motion.div
-      className="page-enter"
-      variants={staggerContainer}
-      initial="initial"
-      animate="animate"
-    >
-      {/* Hero skeleton */}
-      <motion.div
-        variants={fadeSlideUp}
-        className="relative w-full h-[70vh] min-h-[500px] rounded-2xl overflow-hidden bg-mid animate-pulse mb-8"
-      >
-        <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-transparent" />
-        <div className="absolute bottom-0 left-0 p-8 lg:p-12 space-y-4 w-full">
-          <div className="h-8 w-24 rounded-full bg-card" />
-          <div className="h-12 w-3/4 rounded-lg bg-card" />
-          <div className="h-6 w-1/2 rounded-lg bg-card" />
-          <div className="flex gap-4">
-            <div className="h-14 w-36 rounded-2xl bg-card" />
-            <div className="h-14 w-36 rounded-2xl bg-card" />
-          </div>
+    <div className="flex flex-col gap-[34px] v2-rise" style={{ padding: '24px 24px 56px', width: '100%', maxWidth: 1680, margin: '0 auto' }}>
+      <div className="flex flex-wrap gap-4">
+        <Block style={{ flex: '3 1 560px', height: 'clamp(400px,56vh,560px)', borderRadius: 26 }} />
+        <div className="flex flex-col gap-4" style={{ flex: '1 1 260px' }}>
+          <Block className="flex-1" style={{ minHeight: 200, borderRadius: 22 }} />
+          <Block style={{ height: 150, borderRadius: 22 }} />
         </div>
-      </motion.div>
-
-      {/* Section skeleton (x3) */}
-      {[1, 2, 3].map(i => (
-        <motion.div
-          key={i}
-          variants={fadeSlideUp}
-          className="bg-mid/80 rounded-2xl p-4 mb-6 animate-pulse"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="h-5 w-36 rounded bg-card" />
-            <div className="h-4 w-16 rounded bg-card" />
-          </div>
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
-            {Array.from({ length: 6 }).map((_, j) => (
-              <div key={j} className="aspect-[3/4] rounded-xl bg-card" />
+      </div>
+      {[0, 1].map(r => (
+        <div key={r} className="flex flex-col gap-3.5">
+          <Block style={{ width: 220, height: 28, borderRadius: 10 }} />
+          <div className="flex gap-4 overflow-hidden">
+            {Array.from({ length: 8 }).map((_, j) => (
+              <Block key={j} className="flex-none" style={{ width: 172, aspectRatio: '2/3', borderRadius: 14 }} />
             ))}
           </div>
-        </motion.div>
+        </div>
       ))}
-    </motion.div>
+    </div>
   )
 }

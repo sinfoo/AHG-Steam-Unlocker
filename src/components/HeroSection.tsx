@@ -3,8 +3,8 @@ import { Game } from '../types'
 import { loadGameImage } from '../services/imageCache'
 import { getHeroUrl } from '../services/steamGridDb'
 
-import { AnimatePresence, motion } from 'framer-motion'
-import { Star, Shield, CheckCircle2, Play, LayoutGrid, Sparkles, ChevronLeft, ChevronRight, Gamepad2 } from 'lucide-react'
+import { Plus, Check, Heart, Shuffle, Gamepad2 } from 'lucide-react'
+import { useT, useLangStore } from '../i18n'
 
 interface HeroSectionProps {
   featuredGame: Game | null
@@ -15,29 +15,21 @@ interface HeroSectionProps {
   playSound: (type: 'error' | 'success' | 'click' | 'hover') => void
   games: Game[]
   setFeaturedGame: (game: any) => void
-  quickAccessOffset: number
-  setQuickAccessOffset: (v: number) => void
-  totalAAA: number
-  quickGameImgs: Record<string, string | null>
   isLoaded: boolean
+  isFavorite: (appid: string) => boolean
+  isInstalled: (appid: string) => boolean
+  onToggleFavorite: (appid: string) => void
+  onInstall: (game: Game) => void
+  /** Right column content (new-fix spotlight, stats). */
+  sideExtra?: React.ReactNode
 }
 
 export default function HeroSection({
-  featuredGame, accentColor, COLORS, onGameClick, navigateTo, playSound,
-  games, setFeaturedGame, quickAccessOffset, setQuickAccessOffset,
-  totalAAA, quickGameImgs, isLoaded,
+  featuredGame, COLORS, onGameClick, navigateTo, playSound,
+  games, setFeaturedGame, isLoaded, sideExtra, isFavorite, isInstalled, onToggleFavorite, onInstall,
 }: HeroSectionProps) {
-  // ── Mouse spotlight position ──
-  const [spotlight, setSpotlight] = useState({ x: 50, y: 50 })
-
-  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    setSpotlight({
-      x: ((e.clientX - rect.left) / rect.width) * 100,
-      y: ((e.clientY - rect.top) / rect.height) * 100,
-    })
-  }, [])
-
+  const t = useT()
+  const rtl = useLangStore(s => s.lang) === 'ar'
   // ── Auto-rotation ──
   const [isRotating, setIsRotating] = useState(true)
   const rotateTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -77,26 +69,6 @@ export default function HeroSection({
 
   const pauseRotation = useCallback(() => setIsRotating(false), [])
   const resumeRotation = useCallback(() => setIsRotating(true), [])
-
-  // ── Content crossfade state ──
-  const [prevContentGame, setPrevContentGame] = useState<Game | null>(null)
-  const prevGameRef = useRef<Game | null>(null)
-
-  // When featuredGame changes, stash the OLD game (before ref is updated)
-  useEffect(() => {
-    if (prevGameRef.current && featuredGame &&
-        prevGameRef.current.appid !== featuredGame.appid) {
-      setPrevContentGame(prevGameRef.current)
-    }
-    prevGameRef.current = featuredGame
-  }, [featuredGame])
-
-  // Clear prev content after fade animation completes
-  useEffect(() => {
-    if (!prevContentGame) return
-    const timer = setTimeout(() => setPrevContentGame(null), 350)
-    return () => clearTimeout(timer)
-  }, [prevContentGame])
 
   // ── Image loading (with SGDB hero fallback) ──
   const [featuredImgUrl, setFeaturedImgUrl] = useState<string | null>(null)
@@ -146,7 +118,7 @@ export default function HeroSection({
         const old = featuredImgUrlRef.current
         if (old && old !== url) {
           setPrevBgUrl(old) // the prevBgUrl effect cross-fades it out
-          clearTimer = setTimeout(() => { if (mounted) setPrevBgUrl(null) }, 750)
+          clearTimer = setTimeout(() => { if (mounted) setPrevBgUrl(null) }, 1300)
         }
         setFeaturedImgUrl(url) // new layer fades in via .active
       }
@@ -159,27 +131,11 @@ export default function HeroSection({
     return () => { mounted = false; if (clearTimer) clearTimeout(clearTimer) }
   }, [featuredGame?.appid, featuredGame?.header_image, featuredGame?.name])
 
-  // ── Quick access image error tracking ──
-  const [failedImages, setFailedImages] = useState<Set<string>>(new Set())
-  const markFailed = useCallback((appid: string) => {
-    setFailedImages(prev => new Set(prev).add(appid))
-  }, [])
-
   // ── Skeleton ──
   if (!isLoaded) {
     return (
-      <div className="relative w-full h-[70vh] min-h-[520px] rounded-2xl overflow-hidden bg-mid">
-        <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-transparent" />
+      <div className="relative w-full overflow-hidden" style={{ height: 'clamp(380px,50vh,485px)', borderRadius: 26, background: '#10101c', border: '1px solid rgba(255,255,255,.08)' }}>
         <div className="absolute inset-0 premium-shimmer" />
-        <div className="absolute bottom-0 left-0 p-8 lg:p-12 space-y-4 w-full max-w-xl">
-          <div className="h-7 w-28 rounded-full bg-card shimmer-pulse" />
-          <div className="h-14 w-full rounded-xl bg-card shimmer-pulse" />
-          <div className="h-5 w-3/4 rounded-lg bg-card shimmer-pulse" />
-          <div className="flex gap-4 pt-2">
-            <div className="h-14 w-36 rounded-2xl bg-card shimmer-pulse" />
-            <div className="h-14 w-36 rounded-2xl bg-card shimmer-pulse" />
-          </div>
-        </div>
       </div>
     )
   }
@@ -187,526 +143,130 @@ export default function HeroSection({
   // ── Empty state ──
   if (!featuredGame) {
     return (
-      <div className="relative w-full h-[60vh] min-h-[400px] rounded-2xl overflow-hidden"
-        style={{ background: `linear-gradient(135deg, ${COLORS.bgDeep} 0%, ${COLORS.bgMid} 100%)` }}
-      >
-        {/* Animated gradient orb for depth */}
-        <div
-          className="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full pointer-events-none"
-          style={{
-            background: `radial-gradient(circle, ${COLORS.violet}20 0%, transparent 70%)`,
-            filter: 'blur(80px)',
-            animation: 'premiumOrbFloat1 8s ease-in-out infinite',
-          }}
-        />
-        <div
-          className="absolute -bottom-40 left-[20%] w-[400px] h-[400px] rounded-full pointer-events-none"
-          style={{
-            background: `radial-gradient(circle, ${COLORS.blue}15 0%, transparent 70%)`,
-            filter: 'blur(80px)',
-            animation: 'premiumOrbFloat2 10s ease-in-out infinite',
-          }}
-        />
-        <div className="hero-grid-bg" />
-        <div className="absolute inset-0 flex items-center justify-center z-10">
-          <div className="text-center hero-entrance-container">
-            <div className="flex justify-center mb-6">
-              <div
-                className="w-20 h-20 rounded-2xl flex items-center justify-center"
-                style={{
-                  background: `linear-gradient(135deg, ${COLORS.violet}30 0%, ${COLORS.violet}10 100%)`,
-                  border: `1px solid ${COLORS.violet}25`,
-                }}
-              >
-                <Gamepad2 size={40} style={{ color: COLORS.violet }} />
-              </div>
+      <div className="relative w-full overflow-hidden flex items-center justify-center v2-rise"
+        style={{ height: 'clamp(320px,44vh,440px)', borderRadius: 26, background: `linear-gradient(135deg, ${COLORS.bgDark} 0%, ${COLORS.bgMid} 100%)`, border: '1px solid rgba(255,255,255,.08)' }}>
+        <div className="text-center">
+          <div className="flex justify-center mb-5">
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
+              style={{ background: 'color-mix(in oklch, var(--acc) 16%, transparent)', border: '1px solid color-mix(in oklch, var(--acc) 30%, transparent)' }}>
+              <Gamepad2 size={32} style={{ color: 'var(--acc)' }} />
             </div>
-            <h2 className="text-5xl lg:text-6xl font-bold mb-4 premium-title-gradient">
-              Welcome to AHG
-            </h2>
-            <p className="text-lg max-w-md mx-auto" style={{ color: COLORS.textSecondary }}>
-              Your ultimate Steam game unlocker with 176K+ games at your fingertips
-            </p>
           </div>
+          <h2 className="m-0 mb-3 font-bold" style={{ fontSize: 'clamp(34px,4.4vw,56px)', letterSpacing: '-.035em', color: COLORS.text }}>{t('app.hero.welcome')}</h2>
+          <p className="text-base max-w-md mx-auto m-0" style={{ color: COLORS.textSecondary }}>
+            {t('app.hero.tagline')}
+          </p>
         </div>
       </div>
     )
   }
 
-  // ── Quick access games ──
-  const displayedGames = totalAAA > 0
-    ? [...Array(4)].map((_, i) => {
-        const idx = (quickAccessOffset + i) % totalAAA
-        return { game: games.filter(g => g.header_image)[idx]!, index: idx }
-      }).filter(x => x.game)
-    : []
-
-  const accentVal = COLORS[accentColor as keyof typeof COLORS] || COLORS.violet
   const canRotate = featuredPool.length > 1
+  const fg = featuredGame as Game & { developer?: string; release_date?: string }
+  const genreLine = fg.genres?.slice(0, 2).join(' · ') || ''
+  const metaLine = [fg.developer, fg.release_date?.match(/\d{4}/)?.[0]].filter(Boolean).join(' · ')
+  const fav = isFavorite(featuredGame.appid)
+  const installed = isInstalled(featuredGame.appid)
+  const pills = featuredPool.slice(0, 8)
 
   return (
-    <div
-      className="premium-hero-wrapper relative w-full h-[56vh] min-h-[420px] rounded-2xl overflow-hidden"
-      onMouseMove={handleMouseMove}
-      onMouseEnter={pauseRotation}
-      onMouseLeave={() => {
-        setSpotlight({ x: 50, y: 50 })
-        resumeRotation()
-      }}
-    >
-      {/* ── Animated gradient border glow ── */}
-      <div className="premium-border-glow" />
-
-      {/* ── CSS-only crossfading background (two-layer: prev fades out, current fades in) ── */}
-      <div className="hero-bg-wrapper">
-        {/* Previous background — rendered at opacity 1, then fades out */}
+    <div className="flex flex-wrap gap-4">
+      {/* ═══════ Hero ═══════ */}
+      <section
+        className="relative overflow-hidden v2-rise"
+        style={{
+          flex: '3 1 560px', minWidth: 0, height: 'clamp(380px,50vh,485px)', borderRadius: 26,
+          border: '1px solid rgba(255,255,255,.08)', boxShadow: '0 50px 90px -50px rgba(0,0,0,1)', background: '#10101c',
+        }}
+        onMouseEnter={pauseRotation}
+        onMouseLeave={resumeRotation}
+      >
+        {/* Previous art fades out, current art fades in (1.2s) — both Ken Burns */}
         {prevBgUrl && (
-          <div
-            className={`hero-bg-image ${prevBgFading ? 'exit' : 'active'}`}
-            style={{ backgroundImage: `url(${prevBgUrl})`, backgroundSize: 'cover', backgroundPosition: 'center 30%' }}
-          >
-            <div className="absolute inset-0 premium-hero-overlay" />
-            <div className="absolute inset-0 premium-hero-vignette" />
+          <div className="absolute inset-0" style={{ opacity: prevBgFading ? 0 : 1, transition: 'opacity 1.2s ease' }}>
+            <img src={prevBgUrl} alt="" className="w-full h-full object-cover v2-ken" />
           </div>
         )}
-        {/* Current background — fading in */}
-        <div
-          className={`hero-bg-image ${featuredImgUrl ? 'active' : ''}`}
-          style={
-            featuredImgUrl
-              ? { backgroundImage: `url(${featuredImgUrl})`, backgroundSize: 'cover', backgroundPosition: 'center 30%' }
-              : { background: `linear-gradient(135deg, ${accentVal}40 0%, ${COLORS.bgDeep} 100%)` }
-          }
-        >
-          {featuredImgUrl && (
-            <>
-              <div className="absolute inset-0 premium-hero-overlay" />
-              <div className="absolute inset-0 premium-hero-vignette" />
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* ── Floating gradient orbs ── */}
-      <div
-        className="premium-orb premium-orb-1"
-        style={{ background: `radial-gradient(circle, ${accentVal}28 0%, transparent 70%)` }}
-      />
-      <div
-        className="premium-orb premium-orb-2"
-        style={{ background: `radial-gradient(circle, ${COLORS.blue}20 0%, transparent 70%)` }}
-      />
-
-      {/* ── Grid overlay ── */}
-      <div className="hero-grid-bg" />
-
-      {/* ── Floating particle dots ── */}
-      <div className="hero-dots-grid" />
-
-      {/* ── Primary mouse-tracked spotlight (accent) ── */}
-      <div
-        className="absolute inset-0 transition-[background] duration-80 pointer-events-none z-10"
-        style={{
-          background: `radial-gradient(700px circle at ${spotlight.x}% ${spotlight.y}%, ${accentVal}12 0%, transparent 70%)`,
-        }}
-      />
-
-      {/* ── Secondary spotlight layer (blue tone, for depth) ── */}
-      <div
-        className="absolute inset-0 transition-[background] duration-80 pointer-events-none z-10"
-        style={{
-          background: `radial-gradient(500px circle at ${100 - spotlight.x}% ${100 - spotlight.y}%, ${COLORS.blue}06 0%, transparent 60%)`,
-        }}
-      />
-
-      {/* ── Content backdrop panel - seamless gradient integration ── */}
-      <div className="absolute left-0 top-0 bottom-0 w-[68%] max-w-3xl z-20">
-        {/* Primary gradient: deep→transparent with slightly angled feel */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background: `
-              linear-gradient(100deg,
-                ${COLORS.bgDeep}B3 0%,
-                ${COLORS.bgDeep}A0 15%,
-                ${COLORS.bgDeep}80 30%,
-                ${COLORS.bgDeep}50 45%,
-                ${COLORS.bgDeep}30 55%,
-                transparent 72%
-              ),
-              radial-gradient(ellipse 120% 80% at 0% 50%, ${accentVal}0A 0%, transparent 60%),
-              radial-gradient(ellipse 100% 60% at 20% 80%, ${COLORS.violet}08 0%, transparent 50%)
-            `,
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            maskImage: 'linear-gradient(to right, black 60%, transparent 80%)',
-            WebkitMaskImage: 'linear-gradient(to right, black 60%, transparent 80%)',
-          }}
-        />
-        {/* Gradient edge line - subtle accent glow */}
-        <div className="absolute right-0 top-0 bottom-0 w-[2px]" style={{
-          background: `linear-gradient(180deg, transparent 0%, ${accentVal}30 20%, ${accentVal}50 50%, ${accentVal}30 80%, transparent 100%)`,
-          opacity: 0.6,
-        }} />
-      </div>
-
-      {/* ── Content ── */}
-      <div className="relative z-30 h-full flex">
-        {/* ─── Left: Featured Game Info (crossfade) ─── */}
-        <div className="flex-1 flex flex-col justify-end p-8 lg:p-12 relative">
-          {/* Previous content — fades out */}
-          {prevContentGame && prevContentGame.appid !== featuredGame.appid && (
-            <motion.div
-              key={prevContentGame.appid + '-prev'}
-              className="absolute inset-0 p-8 lg:p-12 flex flex-col justify-end"
-              initial={{ opacity: 1 }}
-              animate={{ opacity: 0 }}
-              transition={{ duration: 0.25 }}
-            >
-              {/* Badge row */}
-              <div className="flex items-center gap-3 mb-4">
-                <span
-                  className="premium-featured-badge px-4 py-1.5 rounded-full text-sm font-bold flex items-center gap-2"
-                  style={{
-                    background: `linear-gradient(135deg, ${accentVal} 0%, ${accentVal}cc 100%)`,
-                    color: COLORS.text,
-                    boxShadow: `0 4px 24px ${accentVal}50`,
-                  }}
-                >
-                  <Star size={14} className="fill-white" />
-                  Featured
-                </span>
-                {prevContentGame.drm && (
-                  <span className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5"
-                    style={{ background: `${COLORS.amber}25`, color: COLORS.amber, border: `1px solid ${COLORS.amber}30` }}
-                  >
-                    <Shield size={12} />
-                    DRM
-                  </span>
-                )}
-                <span className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5"
-                  style={{ background: `${COLORS.green}20`, color: COLORS.green, border: `1px solid ${COLORS.green}25` }}
-                >
-                  <CheckCircle2 size={12} />
-                  Free
-                </span>
-                {prevContentGame.genres && prevContentGame.genres[0] && (
-                  <span className="px-3 py-1.5 rounded-full text-xs font-medium hidden sm:inline-flex items-center gap-1.5"
-                    style={{ background: `${COLORS.violet}15`, color: COLORS.textMuted, border: `1px solid ${COLORS.violet}20` }}
-                  >
-                    {prevContentGame.genres[0]}
-                  </span>
-                )}
-              </div>
-              <h2 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold mb-3 max-w-3xl leading-tight premium-title-gradient line-clamp-2 break-words">
-                {prevContentGame.name}
-              </h2>
-              <p className="text-base max-w-xl mb-5 line-clamp-2 leading-relaxed premium-hero-description"
-                style={{ color: COLORS.textSecondary }}>
-                {prevContentGame.short_description || 'Your ultimate Steam game unlocker with 170,000+ games.'}
-              </p>
-              {prevContentGame.genres && prevContentGame.genres.length > 0 && (
-                <div className="flex items-center gap-2 mb-6 flex-wrap">
-                  {prevContentGame.genres.slice(0, 3).map((genre: string) => (
-                    <span key={genre}
-                      className="px-3 py-1 rounded-full text-xs font-medium transition-all duration-80"
-                      style={{
-                        background: `${accentVal}15`, color: COLORS.textMuted,
-                        border: `1px solid ${accentVal}20`,
-                      }}>
-                      {genre}
-                    </span>
-                  ))}
-                  {prevContentGame.tags && prevContentGame.tags.length > 0 && (
-                    <span className="text-xs" style={{ color: COLORS.textDim }}>
-                      +{prevContentGame.tags.length} tags
-                    </span>
-                  )}
-                </div>
-              )}
-            </motion.div>
-          )}
-
-          {/* Current content — fades in */}
-          <motion.div
-            key={featuredGame.appid + '-content'}
-            className="flex flex-col justify-end"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.25 }}
-          >
-          {/* Badge row */}
-          <div className="flex items-center gap-3 mb-4">
-            <span
-              className="premium-featured-badge px-4 py-1.5 rounded-full text-sm font-bold flex items-center gap-2"
-              style={{
-                background: `linear-gradient(135deg, ${accentVal} 0%, ${accentVal}cc 100%)`,
-                color: COLORS.text,
-                boxShadow: `0 4px 24px ${accentVal}50`,
-              }}
-            >
-              <Star size={14} className="fill-white" />
-              Featured
-            </span>
-            {featuredGame.drm && (
-              <span className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5"
-                style={{ background: `${COLORS.amber}25`, color: COLORS.amber, border: `1px solid ${COLORS.amber}30` }}
-              >
-                <Shield size={12} />
-                DRM
-              </span>
-            )}
-            <span className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5"
-              style={{ background: `${COLORS.green}20`, color: COLORS.green, border: `1px solid ${COLORS.green}25` }}
-            >
-              <CheckCircle2 size={12} />
-              Free
-            </span>
-            {featuredGame.genres && featuredGame.genres[0] && (
-              <span className="px-3 py-1.5 rounded-full text-xs font-medium hidden sm:inline-flex items-center gap-1.5"
-                style={{ background: `${COLORS.violet}15`, color: COLORS.textMuted, border: `1px solid ${COLORS.violet}20` }}
-              >
-                {featuredGame.genres[0]}
-              </span>
-            )}
+        {featuredImgUrl ? (
+          <div key={featuredImgUrl} className="absolute inset-0" style={{ animation: 'v2-fadeIn 1.2s ease both' }}>
+            <img src={featuredImgUrl} alt="" className="w-full h-full object-cover v2-ken" />
           </div>
+        ) : (
+          <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, color-mix(in oklch, var(--acc) 25%, transparent) 0%, #0a0a14 100%)' }} />
+        )}
+        <div className="absolute inset-0 pointer-events-none rtl-flip" style={{ background: 'linear-gradient(90deg, rgba(7,7,14,.82) 0%, rgba(7,7,14,.4) 34%, rgba(7,7,14,0) 62%), linear-gradient(0deg, rgba(7,7,14,.72) 0%, rgba(7,7,14,0) 38%)' }} />
 
-          {/* Title — gradient text */}
-          <h2
-            className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold mb-3 max-w-3xl leading-tight premium-title-gradient line-clamp-2 break-words"
-          >
+        {/* Info (re-keyed per game so the stagger replays) */}
+        <div key={featuredGame.appid + '-content'} className="absolute flex flex-col gap-4"
+          style={{ insetInlineStart: 'clamp(24px,4vw,52px)', bottom: 'clamp(24px,4vw,48px)', maxWidth: 'min(580px,60%)' }}>
+          <div className="flex items-center gap-2.5" style={{ animation: 'v2-riseIn .35s .02s var(--ease-out) both' }}>
+            <span className="mono text-[11px] font-semibold" style={{ letterSpacing: '.14em', color: 'var(--acc)' }}>{t('app.hero.featured')}</span>
+            <span className="w-5 h-px" style={{ background: 'rgba(255,255,255,.3)' }} />
+            {genreLine && <span className="text-[12.5px] truncate" style={{ color: COLORS.textSecondary }}>{genreLine}</span>}
+          </div>
+          <h1 className="m-0 font-bold line-clamp-2 break-words" style={{ fontSize: 'clamp(34px,4.4vw,60px)', letterSpacing: '-.035em', lineHeight: .98, textWrap: 'balance', color: COLORS.text, animation: 'v2-riseIn .4s .05s var(--ease-out) both' }}>
             {featuredGame.name}
-          </h2>
-
-          {/* Description — premium paragraph */}
-          <p
-            className="text-base max-w-xl mb-5 line-clamp-2 leading-relaxed premium-hero-description"
-            style={{ color: COLORS.textSecondary }}
-          >
-            {featuredGame.short_description || 'Your ultimate Steam game unlocker with 170,000+ games.'}
-          </p>
-
-          {/* Metadata chips */}
-          {featuredGame.genres && featuredGame.genres.length > 0 && (
-            <div className="flex items-center gap-2 mb-6 flex-wrap">
-              {featuredGame.genres.slice(0, 3).map((genre: string) => (
-                <span
-                  key={genre}
-                  className="px-3 py-1 rounded-full text-xs font-medium transition-all duration-80"
-                  style={{
-                    background: `${accentVal}15`,
-                    color: COLORS.textMuted,
-                    border: `1px solid ${accentVal}20`,
-                    transition: 'background 0.08s cubic-bezier(0.4,0,0.2,1), border-color 0.08s cubic-bezier(0.4,0,0.2,1)',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = `${accentVal}25`
-                    e.currentTarget.style.borderColor = `${accentVal}40`
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = `${accentVal}15`
-                    e.currentTarget.style.borderColor = `${accentVal}20`
-                  }}
-                >
-                  {genre}
-                </span>
-              ))}
-              {featuredGame.tags && featuredGame.tags.length > 0 && (
-                <span className="text-xs" style={{ color: COLORS.textDim }}>
-                  +{featuredGame.tags.length} tags
-                </span>
-              )}
-            </div>
+          </h1>
+          {metaLine && <div className="mono text-[12px]" style={{ color: COLORS.textSecondary, animation: 'v2-riseIn .4s .08s var(--ease-out) both' }}>{metaLine}</div>}
+          {featuredGame.short_description && (
+            <p className="m-0 text-sm line-clamp-2 leading-relaxed max-w-xl" style={{ color: COLORS.textSecondary, animation: 'v2-riseIn .4s .08s var(--ease-out) both' }}>
+              {featuredGame.short_description}
+            </p>
           )}
-
-          {/* Actions */}
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => onGameClick(featuredGame)}
-              className="premium-cta-primary px-10 py-4 rounded-2xl font-bold flex items-center gap-3 text-lg relative overflow-hidden hv-tap"
-              style={{
-                background: `linear-gradient(135deg, ${accentVal} 0%, ${accentVal}cc 100%)`,
-                color: COLORS.text,
-                boxShadow: `0 4px 32px ${accentVal}50`,
-              }}
-            >
-              <div className="premium-cta-glow" style={{ background: accentVal }} />
-              <Play size={20} className="relative z-10" />
-              <span className="relative z-10">Play Now</span>
+          <div className="flex gap-2.5 mt-1.5" style={{ animation: 'v2-riseIn .4s .11s var(--ease-out) both' }}>
+            <button onClick={() => (installed ? onGameClick(featuredGame) : onInstall(featuredGame))}
+              className="v2-btn-acc h-12 px-6 rounded-[14px] text-[14.5px] font-semibold flex items-center gap-[9px]"
+              style={{ boxShadow: '0 16px 40px -14px var(--acc)' }}>
+              {installed ? <Check size={17} /> : <Plus size={17} />}{installed ? t('app.hero.inLibrary') : t('app.hero.addToSteam')}
             </button>
-
-            <button
-              onClick={() => navigateTo('browse')}
-              className="premium-cta-secondary px-8 py-4 rounded-2xl font-bold flex items-center gap-2.5 text-lg relative overflow-hidden hv-tap"
-              style={{
-                background: `${COLORS.bgCard}cc`,
-                backdropFilter: 'blur(12px)',
-                border: `1px solid ${COLORS.violet}30`,
-                color: COLORS.text,
-              }}
-            >
-              <LayoutGrid size={20} className="relative z-10" />
-              <span className="relative z-10">Browse All</span>
+            <button onClick={() => onGameClick(featuredGame)}
+              className="v2-btn-glass h-12 px-5 rounded-[14px] text-[14.5px] font-semibold flex items-center gap-2">
+              {t('app.hero.details')}
             </button>
-
-            <div className="w-14 h-14 shrink-0">
-              <button
-                onClick={() => {
-                  const r = games[Math.floor(Math.random() * games.length)]
-                  setFeaturedGame(r as any)
-                  playSound('success')
-                }}
-                className="premium-cta-shuffle w-14 h-14 rounded-2xl flex items-center justify-center"
-                style={{
-                  background: `linear-gradient(135deg, #fbbf24 0%, ${COLORS.amber} 100%)`,
-                  boxShadow: '0 4px 20px rgba(251, 191, 36, 0.4)',
-                }}
-              >
-                <Sparkles size={20} className="text-white" />
-              </button>
-            </div>
+            <button
+              title={t('app.hero.favourite')} aria-label={t('app.hero.toggleFav')} aria-pressed={fav}
+              onClick={() => onToggleFavorite(featuredGame.appid)}
+              className="v2-btn-glass w-12 h-12 rounded-[14px] flex items-center justify-center"
+              style={fav ? { background: 'rgba(239,68,68,.32)', borderColor: 'rgba(239,68,68,.5)' } : undefined}>
+              <Heart size={18} className={fav ? 'fill-current' : ''} style={{ color: fav ? '#ef4444' : undefined }} />
+            </button>
+            <button
+              title={t('app.hero.surprise')}
+              aria-label={t('app.hero.randomFeatured')}
+              onClick={() => {
+                const r = games[Math.floor(Math.random() * games.length)]
+                setFeaturedGame(r as any)
+                playSound('success')
+              }}
+              className="v2-btn-glass w-12 h-12 rounded-[14px] flex items-center justify-center">
+              <Shuffle size={18} />
+            </button>
           </div>
-
-          {/* ── Rotation dots ── */}
-          {canRotate && (
-            <div className="flex items-center gap-2 mt-6">
-              {featuredPool.slice(0, 8).map((g, i) => (
-                <button
-                  key={g.appid}
-                  onClick={() => goToIndex(i)}
-                  className="premium-dot group relative"
-                  aria-label={`Show ${g.name}`}
-                >
-                  <div
-                    className={`rounded-full transition-all duration-300 ${
-                      i === currentRotateIndex
-                        ? 'w-6 h-2'
-                        : 'w-2 h-2 hover:w-3 hover:h-2'
-                    }`}
-                    style={{
-                      background: i === currentRotateIndex
-                        ? accentVal
-                        : `${COLORS.textMuted}40`,
-                    }}
-                  />
-                </button>
-              ))}
-            </div>
-          )}
-        </motion.div>
         </div>
 
-        {/* ─── Right: Quick Access (CSS-only staggered entrance) ─── */}
-        <div
-          className="hidden lg:flex flex-col justify-center pr-8 w-[340px] z-30 hero-qa-entrance"
-        >
-          <div className="premium-qa-glass rounded-2xl p-4"
-            style={{
-              background: `${COLORS.bgDeep}80`,
-              backdropFilter: 'blur(16px)',
-              border: `1px solid ${COLORS.border}`,
-            }}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-semibold flex items-center gap-2" style={{ color: COLORS.text }}>
-                <Sparkles size={14} style={{ color: accentVal }} />
-                Quick Access
-              </span>
-              <div className="flex gap-1">
-                <button
-                  onClick={() => {
-                    setQuickAccessOffset((quickAccessOffset - 1 + totalAAA) % Math.max(totalAAA, 1))
-                  }}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center hv-tap"
-                  style={{
-                    background: COLORS.bgHover,
-                    color: COLORS.textMuted,
-                    transition: 'color 0.08s cubic-bezier(0.4,0,0.2,1), background 0.08s cubic-bezier(0.4,0,0.2,1)',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = `${accentVal}25`
-                    e.currentTarget.style.color = accentVal!
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = COLORS.bgHover!
-                    e.currentTarget.style.color = COLORS.textMuted!
-                  }}
-                >
-                  <ChevronLeft size={14} />
-                </button>
-                <button
-                  onClick={() => {
-                    setQuickAccessOffset((quickAccessOffset + 1) % Math.max(totalAAA, 1))
-                  }}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center hv-tap"
-                  style={{
-                    background: COLORS.bgHover,
-                    color: COLORS.textMuted,
-                    transition: 'color 0.08s cubic-bezier(0.4,0,0.2,1), background 0.08s cubic-bezier(0.4,0,0.2,1)',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = `${accentVal}25`
-                    e.currentTarget.style.color = accentVal!
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = COLORS.bgHover!
-                    e.currentTarget.style.color = COLORS.textMuted!
-                  }}
-                >
-                  <ChevronRight size={14} />
-                </button>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2.5 hero-qa-grid">
-              {displayedGames.map(({ game }, i) => (
-                <button
-                  key={game.appid + '-' + i}
-                  onClick={() => onGameClick(game)}
-                  className="group relative aspect-[16/9] rounded-xl overflow-hidden hv-tap"
-                  style={{
-                    border: `1px solid ${COLORS.border}`,
-                    transition: 'border-color 0.08s cubic-bezier(0.4,0,0.2,1), box-shadow 0.08s cubic-bezier(0.4,0,0.2,1), transform 0.08s cubic-bezier(0.4,0,0.2,1)',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = accentVal!
-                    e.currentTarget.style.boxShadow = `0 0 24px ${accentVal}35, 0 4px 12px rgba(0,0,0,0.3)`
-                    e.currentTarget.style.transform = 'translateY(-2px)'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = COLORS.border!
-                    e.currentTarget.style.boxShadow = 'none'
-                    e.currentTarget.style.transform = 'translateY(0)'
-                  }}
-                >
-                  {(!failedImages.has(game.appid) && (quickGameImgs[game.appid] || game.header_image)) ? (
-                    <>
-                      <img
-                        src={quickGameImgs[game.appid] || game.header_image}
-                        alt={game.name}
-                        className="w-full h-full object-cover transition-transform duration-150 group-hover:scale-110"
-                        loading="lazy"
-                        decoding="async"
-                        fetchPriority="high"
-                        onError={() => markFailed(game.appid)}
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex items-end p-2">
-                        <span className="text-[10px] font-semibold text-white leading-tight line-clamp-2 text-left">
-                          {game.name}
-                        </span>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center" style={{ background: COLORS.bgCard }}>
-                      <span className="text-[10px] text-center px-1 line-clamp-2" style={{ color: COLORS.textMuted }}>
-                        {game.name}
-                      </span>
-                    </div>
+        {/* Progress pills */}
+        {canRotate && (
+          <div className="absolute flex items-center gap-1.5 px-2.5 py-2"
+            style={{ insetInlineEnd: 'clamp(18px,2.5vw,28px)', top: 'clamp(18px,2.5vw,26px)', animation: 'v2-riseIn .45s .2s var(--ease-out) both' }}>
+            {pills.map((g, i) => {
+              const active = i === currentRotateIndex
+              return (
+                <button key={g.appid} onClick={() => goToIndex(i)} title={g.name} aria-label={t('app.hero.show', { name: g.name ?? '' })}
+                  className="relative p-0 border-0 overflow-hidden cursor-pointer"
+                  style={{ width: active ? 40 : 12, height: 3, borderRadius: 2, background: 'rgba(255,255,255,.28)', transition: 'width .4s var(--ease-out), background .2s' }}>
+                  {active && (
+                    <span className="absolute inset-0" style={{ background: 'var(--acc)', transformOrigin: rtl ? 'right' : 'left', animation: 'v2-barFill 6.5s linear both', animationPlayState: isRotating ? 'running' : 'paused' }} />
                   )}
                 </button>
-              ))}
-            </div>
+              )
+            })}
           </div>
-        </div>
+        )}
+      </section>
+
+      {/* ═══════ Right column: new-fix spotlight + stats ═══════ */}
+      <div className="flex flex-col gap-4 min-h-0 max-w-full" style={{ flex: '1 1 260px' }}>
+        {sideExtra}
       </div>
     </div>
   )

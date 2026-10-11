@@ -1,45 +1,37 @@
 import { memo } from 'react'
 import { LayoutGrid, FolderHeart, Heart, Settings } from 'lucide-react'
+import { SectionHeader } from './SectionHeader'
 import type { ColorScheme } from '../../types/colors'
+import { useT } from '../../i18n'
 
 export const BottomActionsCard = memo(function BottomActionsCard({ onBrowse, onLibrary, onFavorites, onSettings, colors }: {
   onBrowse: () => void; onLibrary: () => void; onFavorites: () => void; onSettings: () => void; colors: ColorScheme
 }) {
+  const t = useT()
   const actions = [
-    { icon: LayoutGrid, label: 'Browse All', desc: '170,000+ games', color: colors.violet, action: onBrowse },
-    { icon: FolderHeart, label: 'My Library', desc: 'Installed games', color: colors.green, action: onLibrary },
-    { icon: Heart, label: 'Favorites', desc: 'Your picks', color: colors.pink, action: onFavorites },
-    { icon: Settings, label: 'Settings', desc: 'Customize', color: colors.amber, action: onSettings },
+    { icon: LayoutGrid, label: t('app.home.browseAll'), desc: t('app.home.browseAllDesc'), color: colors.violet, action: onBrowse },
+    { icon: FolderHeart, label: t('app.home.myLibrary'), desc: t('app.home.installedGames'), color: colors.green, action: onLibrary },
+    { icon: Heart, label: t('app.nav.favourites'), desc: t('app.home.yourPicks'), color: colors.pink, action: onFavorites },
+    { icon: Settings, label: t('app.nav.settings'), desc: t('app.home.customize'), color: colors.amber, action: onSettings },
   ]
-  
+
   return (
-    <div 
-      className="rounded-3xl p-6 entrance-fade-up"
-      style={{ background: colors.bgCard, border: `1px solid ${colors.border}` }}
-    >
-      <div className="flex items-center justify-between mb-5">
-        <h3 className="text-xl font-bold" style={{ color: colors.text }}>Explore</h3>
-        <p className="text-sm" style={{ color: colors.textMuted }}>Navigate the app</p>
-      </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <section className="v2-panel p-5 flex flex-col gap-4 v2-rise">
+      <SectionHeader icon={LayoutGrid} color="var(--acc)" title={t('app.home.explore')} sub={t('app.home.exploreSub')} />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {actions.map((action, i) => (
           <button
             key={action.label}
             onClick={action.action}
-            className="p-5 rounded-2xl text-left hover-lift entrance-fade-up"
-            style={{ 
-              animationDelay: `${i * 0.1}s`,
-              background: `${action.color}15`,
-              border: `1px solid ${action.color}30`,
-              boxShadow: `0 4px 20px ${action.color}10`
-            }}
+            className="v2-lift text-start cursor-pointer border-0 text-white p-4 rounded-2xl flex flex-col gap-1.5"
+            style={{ background: `linear-gradient(135deg, color-mix(in oklch, ${action.color} 16%, #0d0d18) 0%, #0d0d18 80%)`, border: `1px solid color-mix(in oklch, ${action.color} 28%, transparent)`, animation: `v2-riseIn .4s ${i * 0.06}s both` }}
           >
-            <action.icon size={32} style={{ color: action.color }} className="mb-3" />
-            <p className="text-lg font-bold" style={{ color: colors.text }}>{action.label}</p>
-            <p className="text-sm" style={{ color: colors.textMuted }}>{action.desc}</p>
+            <action.icon size={20} style={{ color: action.color }} />
+            <span className="text-[15px] font-semibold" style={{ color: colors.text }}>{action.label}</span>
+            <span className="mono text-[11px]" style={{ color: colors.textDim }}>{action.desc}</span>
           </button>
         ))}
       </div>
-    </div>
+    </section>
   )
 })

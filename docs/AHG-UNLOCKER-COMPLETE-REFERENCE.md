@@ -136,7 +136,7 @@ AHG Unlocker is a **professional Steam game browser and library manager** for Wi
 - Runs in Node.js — has full file system, network, and OS access
 - Creates BrowserWindow (the UI window)
 - Handles ALL IPC (Inter-Process Communication) from the renderer
-- Manages: Steam library scanning, manifest injection, game installation, image caching, Discord OAuth, license validation, SQLite database, update checks, system tray
+- Manages: Steam library scanning, manifest injection, game installation, image caching, license validation, SQLite database, update checks, system tray
 - Registers custom protocol `image-cache://` for serving cached images
 
 **Renderer Process** (`src/`):
@@ -293,8 +293,6 @@ All pages are **lazy-loaded** via `React.lazy()` in App.tsx — each is a separa
 | **`ExportModal.tsx`** | — | **Game list export.** Export game library data. |
 | **`ChangelogModal.tsx`** | — | **Version changelog display.** Shows update history. |
 | **`UpdateModal.tsx`** | — | **App update notification.** Shows available update with download/install controls. |
-| **`DiscordLoginModal.tsx`** | — | **Discord auth login.** OAuth flow for Discord integration. |
-| **`DiscordSuccessModal.tsx`** | — | **Discord auth success confirmation.** |
 | **`ThankYouModal.tsx`** | — | **Donation/support thank-you.** |
 | **`NoInternetModal.tsx`** | — | **Offline notification.** Shown when network unavailable. |
 | **`NewFixesModal.tsx`** | — | **New fixes notification.** Lists newly available fixes since last check. |
@@ -364,7 +362,7 @@ All pages are **lazy-loaded** via `React.lazy()` in App.tsx — each is a separa
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| **`Sidebar.tsx`** | — | **Navigation sidebar.** App logo, nav items (pages), quick tools section, bottom actions (settings, Discord), collapsible state. |
+| **`Sidebar.tsx`** | — | **Navigation sidebar.** App logo, nav items (pages), quick tools section, bottom profile card (licence status, updates, settings), collapsible state. |
 | **`AppHeader.tsx`** | — | **Top header bar.** Hamburger menu, search bar with glow effects, batch controls, fullscreen toggle, achievements button. |
 | **`SearchBar/SearchBar.tsx`** | — | **Search input with dropdown.** Debounced search (300ms), results dropdown with game cards, keyboard navigation (arrow keys), Ctrl+F shortcut. |
 | **`GameGrid.tsx`** | — | **Generic game grid.** Reusable grid layout with popularity ranking system. |
@@ -403,7 +401,6 @@ All pages are **lazy-loaded** via `React.lazy()` in App.tsx — each is a separa
 | **`installQueueStore.ts`** | `useInstallQueueStore`, `useInstallQueue`, `useShowInstallQueue`, `useRecentlyAddedGames` | **Install queue.** Queue of pending installations, recently added to queue. |
 | **`downloadStore.ts`** | `useDownloadStore`, `useDownloadQueue` | **Download management.** Active download queue and progress tracking. |
 | **`scanStore.ts`** | `useScanStore` | **Scan state.** Library scanning progress and results. |
-| **`discordStore.ts`** | `useDiscordStore`, `useDiscordModalOpen`, `useDiscordConnected`, `useDiscordUser` | **Discord integration.** Connection status, user info, modal state. |
 | **`fixGamesStore.ts`** | `useFixGamesStore` | **Fixes browsing state.** Fix search/filter state, selected fix. |
 
 #### Hooks (`src/hooks/`)
@@ -421,7 +418,6 @@ All pages are **lazy-loaded** via `React.lazy()` in App.tsx — each is a separa
 | **`useLazyImage.ts`** | — | **Lazy image loading.** Intersection Observer-based lazy loading for game covers. |
 | **`useImagePrefetch.ts`** | — | **Image prefetching.** Preloads images in viewport direction (directional prefetch). |
 | **`useDirectionalCoverPrefetch.ts`** | — | **Directional cover prefetch.** Predicts scroll direction and preloads corresponding images. |
-| **`useDiscordAuth.ts`** | — | **Discord OAuth flow.** Handles Discord login, token management, user info fetch. |
 | **`useLicense.ts`** | — | **License validation.** Checks/validates license keys via IPC. |
 | **`useNetworkStatus.ts`** | — | **Network status monitoring.** Online/offline detection, connectivity checks. |
 | **`useNotifications.ts`** | — | **Notification management.** Toast notification state. |
@@ -518,7 +514,6 @@ Each handler module is registered in `main.cjs` via its exported registration fu
 | **`handlers/steam.cjs`** | — | **Steam client interaction.** Launch Steam, open Steam store/library pages. |
 | **`handlers/scan.cjs`** | — | **Library scanning.** Scan Steam library folders for installed games, detect new games. |
 | **`handlers/license.cjs`** | — | **License validation.** Verify license keys, check activation status. |
-| **`handlers/discord.cjs`** | — | **Discord integration.** OAuth login, user info fetch, rich presence. |
 | **`handlers/imageNative.cjs`** | — | **Native image processing IPC.** Bridge to the C++ addon for decode/encode/LQIP. |
 | **`handlers/misc.cjs`** | — | **Miscellaneous handlers.** Various utility IPC calls. |
 | **`handlers/system.cjs`** | — | **System operations.** File dialogs, shell commands, environment info. |
@@ -569,9 +564,6 @@ Each handler module is registered in `main.cjs` via its exported registration fu
 | **`electron/db.cjs`** | SQLite database connection and query interface |
 | **`electron/remote-sync-manager.cjs`** | Syncs fix/game data from remote manifest repositories |
 | **`electron/ryuuDownloader.cjs`** | Downloader interface for Ryuu game sources |
-| **`electron/pages/oauth-connecting.html`** | Discord OAuth connecting page (standalone HTML) |
-| **`electron/pages/oauth-success.html`** | Discord OAuth success page |
-| **`electron/pages/oauth-error.html`** | Discord OAuth error page |
 
 ---
 

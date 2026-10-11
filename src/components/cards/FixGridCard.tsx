@@ -5,6 +5,8 @@ import type { Fix } from '../../types'
 import type { ColorScheme } from '../../types/colors'
 import GameCover from '../GameCover'
 import { CardShell } from './CardShell'
+import { useT } from '../../i18n'
+import { useFixTagLabel } from '../../utils/genreLabel'
 
 // ── Badge → colour key map ──
 const BADGE_COLORS: Record<string, string> = {
@@ -39,6 +41,8 @@ const COVER_STYLE_HOVERED = { transform: 'scale(1.08)', transition: `transform $
 
 // ── FixGridCard ── (mirrors Browse GameCard grid mode) ──
 export const FixGridCard = memo(function FixGridCard({ fix, index, onApply, colors, onContextMenu }: { fix: Fix; index: number; onApply: (url?: string) => void; colors: ColorScheme; onContextMenu?: (e: React.MouseEvent, fix: Fix) => void }) {
+  const t = useT()
+  const ft = useFixTagLabel()
   const [selectedVer, setSelectedVer] = useState(0)
   const [isApplying, setIsApplying] = useState(false)
 
@@ -70,13 +74,7 @@ export const FixGridCard = memo(function FixGridCard({ fix, index, onApply, colo
       {(isHovered) => (
         <>
           {/* ── Cover Section (16:9) ── */}
-          <div className="relative overflow-hidden card-sheen" style={{ aspectRatio: '16/9' }}>
-            {/* Genre-tinted placeholder */}
-            <div
-              className="absolute inset-0 pointer-events-none"
-              style={{ background: `linear-gradient(135deg, hsla(${genreHue}, 60%, 15%, 0.50), ${COLORS.bgDeep})` }}
-            />
-
+          <div className="relative overflow-hidden" style={{ aspectRatio: '16/9', background: 'var(--s2, #151524)' }}>
             {/* Image with IndexedDB caching via GameCover */}
             <GameCover
               appid={fix.appid}
@@ -91,22 +89,17 @@ export const FixGridCard = memo(function FixGridCard({ fix, index, onApply, colo
             {/* Cinematic gradient overlay */}
             <div
               className="absolute inset-0 pointer-events-none z-[2]"
-              style={{ background: 'linear-gradient(to top, rgba(10,10,15,0.95) 10%, rgba(10,10,15,0.30) 40%, transparent 60%)' }}
+              style={{ background: 'linear-gradient(180deg,rgba(0,0,0,.35) 0%,transparent 28%,transparent 62%,rgba(6,6,12,.55) 100%)' }}
             />
-
-            {/* Genre vignette on hover */}
-            <div className={`card-genre-vignette ${isHovered ? 'active' : ''}`} style={{ zIndex: 2 }} />
 
             {/* ── AppID badge (top-left, hover-revealed) ── */}
             <div
-              className="absolute top-2.5 left-2.5 z-20 px-1.5 py-0.5 rounded-md text-[9px] font-mono font-semibold opacity-0 group-hover:opacity-100"
+              className="absolute bottom-2 end-2 z-20 mono px-1.5 py-0.5 rounded-md text-[10px] font-semibold opacity-0 group-hover:opacity-100"
               style={{
-                background: 'rgba(0,0,0,0.6)',
+                background: 'rgba(8,8,16,.72)',
                 color: COLORS.textMuted,
-                border: '1px solid rgba(255,255,255,0.08)',
-                backdropFilter: 'blur(4px)',
-                WebkitBackdropFilter: 'blur(4px)',
-                transition: `opacity ${T}`,
+                border: '1px solid rgba(255,255,255,0.12)',
+                transition: 'opacity .3s ease',
               }}
             >
               #{fix.appid}
@@ -115,13 +108,12 @@ export const FixGridCard = memo(function FixGridCard({ fix, index, onApply, colo
             {/* ── Source badge (top-right) ── */}
             {sourceLabel && (
               <div
-                className="absolute top-2.5 right-2.5 z-20 px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider"
+                className="absolute top-2 start-2 z-20 mono px-[7px] py-[3px] rounded-[7px] text-[10.5px] font-semibold uppercase"
                 style={{
-                  background: sourceLabel.toLowerCase() === 'sinfo' ? 'rgba(239,68,68,0.20)' : 'rgba(0,0,0,0.55)',
-                  color: sourceLabel.toLowerCase() === 'sinfo' ? COLORS.red : COLORS.textMuted,
+                  letterSpacing: '.1em',
+                  background: sourceLabel.toLowerCase() === 'sinfo' ? 'rgba(245,158,11,.92)' : 'rgba(8,8,16,.75)',
+                  color: sourceLabel.toLowerCase() === 'sinfo' ? '#1f1300' : COLORS.textSecondary,
                   border: '1px solid rgba(255,255,255,0.10)',
-                  backdropFilter: 'blur(6px)',
-                  WebkitBackdropFilter: 'blur(6px)',
                 }}
               >
                 {sourceLabel}
@@ -133,15 +125,8 @@ export const FixGridCard = memo(function FixGridCard({ fix, index, onApply, colo
           <div className="p-3.5 space-y-2.5">
             {/* Title — reserve 2 lines so every card is the same height */}
             <h3
-              className="font-bold text-sm leading-tight line-clamp-2"
-              style={{
-                minHeight: '2.5em',
-                color: isHovered ? `hsl(${genreHue}, 60%, 78%)` : COLORS.white,
-                textShadow: isHovered
-                  ? `0 0 30px hsla(${genreHue}, 60%, 50%, 0.30)`
-                  : '0 1px 2px rgba(0,0,0,0.5)',
-                transition: `color ${T}, text-shadow ${T}`,
-              }}
+              className="text-[13.5px] font-semibold leading-tight line-clamp-2"
+              style={{ minHeight: '2.5em', color: COLORS.text }}
             >
               {fix.name}
             </h3>
@@ -153,16 +138,16 @@ export const FixGridCard = memo(function FixGridCard({ fix, index, onApply, colo
                   const badgeColor = (colors as any)[BADGE_COLORS[badge]!] ?? colors.pink
                   return (
                     <span key={bi} className="fixcard-badge" style={{ background: badgeColor + '1f', color: badgeColor, border: `1px solid ${badgeColor}33` }}>
-                      {badge}
+                      {ft(badge)}
                     </span>
                   )
                 })
               ) : (
-                <span className="text-[11px]" style={{ color: colors.textDim }}>No labels</span>
+                <span className="text-[11px]" style={{ color: colors.textDim }}>{t('app.fix.noLabels')}</span>
               )}
               {fix.fix_count > 0 && (
-                <span className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-md" style={{ background: `${colors.green}15`, color: colors.green }}>
-                  {fix.fix_count} fix{fix.fix_count !== 1 ? 'es' : ''}
+                <span className="ms-auto text-[10px] font-semibold px-2 py-0.5 rounded-md" style={{ background: `${colors.green}15`, color: colors.green }}>
+                  {t(fix.fix_count === 1 ? 'app.fix.count.one' : 'app.fix.count.other', { n: fix.fix_count })}
                 </span>
               )}
             </div>
@@ -189,10 +174,11 @@ export const FixGridCard = memo(function FixGridCard({ fix, index, onApply, colo
               <button
                 onClick={handleApply}
                 disabled={isApplying}
-                className="gamecard-btn-steam flex-1 text-[12px] font-bold py-2.5 px-3.5 rounded-xl flex items-center justify-center gap-2 leading-none cursor-pointer pointer-events-auto disabled:opacity-60 disabled:cursor-not-allowed"
+                className="gamecard-btn-steam flex-1 text-[12.5px] py-2 px-3 flex items-center justify-center gap-2 leading-none cursor-pointer pointer-events-auto disabled:opacity-60 disabled:cursor-not-allowed"
+                style={{ background: COLORS.amber, color: '#1f1300' }}
               >
                 {isApplying ? <Loader2 size={13} className="animate-spin" /> : <Zap size={13} />}
-                <span>{isApplying ? 'Applying...' : 'Apply Fix'}</span>
+                <span>{isApplying ? t('app.fix.applyingDots') : t('app.fix.applyFix')}</span>
               </button>
             </div>
           </div>
@@ -209,6 +195,8 @@ export const FixGridCard = memo(function FixGridCard({ fix, index, onApply, colo
 
 // ── FixListCard ── (mirrors Browse GameCard list mode) ──
 export const FixListCard = memo(function FixListCard({ fix, index, onApply, colors, onContextMenu }: { fix: Fix; index: number; onApply: (url?: string) => void; colors: ColorScheme; onContextMenu?: (e: React.MouseEvent, fix: Fix) => void }) {
+  const t = useT()
+  const ft = useFixTagLabel()
   const [selectedVer, setSelectedVer] = useState(0)
   const [isApplying, setIsApplying] = useState(false)
   const hasVersions = fix.versions && fix.versions.length > 1
@@ -239,11 +227,11 @@ export const FixListCard = memo(function FixListCard({ fix, index, onApply, colo
         <div className="flex items-center w-full gap-4 p-4">
           {/* ── Left accent glow bar ── */}
           <div
-            className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full pointer-events-none"
+            className="absolute start-0 top-2 bottom-2 w-[3px] rounded-full pointer-events-none"
             style={{
               opacity: isHovered ? 1 : 0,
-              background: `linear-gradient(180deg, hsla(${genreHue}, 65%, 55%, 0.80), hsla(${genreHue}, 60%, 40%, 0.20))`,
-              boxShadow: isHovered ? `0 0 10px hsla(${genreHue}, 60%, 50%, 0.50)` : 'none',
+              background: 'linear-gradient(180deg, var(--acc), transparent)',
+              boxShadow: isHovered ? '0 0 10px color-mix(in oklch, var(--acc) 50%, transparent)' : 'none',
               transition: `opacity ${T}`,
             }}
           />
@@ -268,7 +256,7 @@ export const FixListCard = memo(function FixListCard({ fix, index, onApply, colo
             <div className="flex-1 min-w-0">
               <h3
                 className="font-bold truncate"
-                style={{ color: isHovered ? `hsl(${genreHue}, 60%, 72%)` : COLORS.white, transition: `color ${T}` }}
+                style={{ color: COLORS.text }}
               >
                 {fix.name}
               </h3>
@@ -278,12 +266,12 @@ export const FixListCard = memo(function FixListCard({ fix, index, onApply, colo
                     const badgeColor = (colors as any)[BADGE_COLORS[badge]!] ?? colors.pink
                     return (
                       <span key={bi} className="fixcard-badge" style={{ background: badgeColor + '1f', color: badgeColor, border: `1px solid ${badgeColor}33` }}>
-                        {badge}
+                        {ft(badge)}
                       </span>
                     )
                   })
                 ) : (
-                  <span className="text-xs" style={{ color: colors.textDim }}>No labels</span>
+                  <span className="text-xs" style={{ color: colors.textDim }}>{t('app.fix.noLabels')}</span>
                 )}
               </div>
             </div>
@@ -308,10 +296,11 @@ export const FixListCard = memo(function FixListCard({ fix, index, onApply, colo
               <button
                 onClick={handleApplyList}
                 disabled={isApplying}
-                className="gamecard-btn-steam text-[12px] font-bold py-2.5 px-6 rounded-xl flex items-center gap-2 leading-none cursor-pointer pointer-events-auto disabled:opacity-60 disabled:cursor-not-allowed"
+                className="gamecard-btn-steam text-[12.5px] py-2 px-5 flex items-center gap-2 leading-none cursor-pointer pointer-events-auto disabled:opacity-60 disabled:cursor-not-allowed"
+                style={{ background: COLORS.amber, color: '#1f1300' }}
               >
                 {isApplying ? <Loader2 size={13} className="animate-spin" /> : <Zap size={13} />}
-                <span>{isApplying ? 'Applying...' : 'Apply Fix'}</span>
+                <span>{isApplying ? t('app.fix.applyingDots') : t('app.fix.applyFix')}</span>
               </button>
             </div>
           </div>

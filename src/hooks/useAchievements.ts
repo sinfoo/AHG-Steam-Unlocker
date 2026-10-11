@@ -1,12 +1,19 @@
+import { t as tNow, type TKey } from '../i18n'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useUserStore } from '../store/userStore'
 import { useGameStore } from '../store/gameStore'
 import type { Achievement } from '../types'
 
+const trk = (k: string, fb: string) => { const r = tNow(k as TKey); return r === k ? fb : r }
+/** Display strings only; ids stay English. */
+export const achName = (a: { id: string; name: string }) => trk(`ui.ach.${a.id}.n`, a.name)
+export const achDesc = (a: { id: string; desc: string }) => trk(`ui.ach.${a.id}.d`, a.desc)
+export const achCategory = (c: string) => trk('ui.ach.cat.' + c.toLowerCase().replace(/\s+/g, ''), c)
+
 /**
  * AHG Unlocker achievement system.
- * 30 core-aligned achievements tracked via:
+ * 29 core-aligned achievements tracked via:
  *   - Passive effects (time, navigation, search, session)
  *   - Active tracker callbacks (from App.tsx action hooks)
  *   - Automatic unlock detection => XP + toast + IPC persist
@@ -18,7 +25,7 @@ export function useAchievements(
   searchQuery: string,
   loading: boolean
 ) {
-  // -- 30 Unlocker-themed achievement definitions --
+  // -- 29 Unlocker-themed achievement definitions --
   const [achievements, setAchievements] = useState<Achievement[]>([
     // -- The Awakening (Getting Started) --
     { id: 'first_install', name: 'First Injection', desc: 'Unlock your first game via manifest injection', icon: '🎯', unlocked: false, progress: 0, maxProgress: 1, category: 'The Awakening', xp: 10 },
@@ -60,9 +67,6 @@ export function useAchievements(
     { id: 'batch_install', name: 'Batch Commander', desc: 'Complete a batch install', icon: '📋', unlocked: false, progress: 0, maxProgress: 1, category: 'Power User', xp: 25 },
     { id: 'quick_tool', name: 'Quick Thinker', desc: 'Use Quick Tools', icon: '⚡', unlocked: false, progress: 0, maxProgress: 1, category: 'Power User', xp: 15 },
     { id: 'fix_games_script', name: 'Troubleshooter', desc: 'Run the Fix Games script', icon: '🩺', unlocked: false, progress: 0, maxProgress: 1, category: 'Power User', xp: 20 },
-
-    // -- Social --
-    { id: 'discord_connect', name: 'Connected', desc: 'Connect your Discord account', icon: '🔗', unlocked: false, progress: 0, maxProgress: 1, category: 'Social', xp: 15 },
 
     // -- Special --
     { id: 'night_owl', name: 'Night Owl', desc: 'Use the app after midnight', icon: '🌙', unlocked: false, progress: 0, maxProgress: 1, category: 'Special', xp: 15 },
@@ -122,13 +126,13 @@ export function useAchievements(
       achievementToastQueueRef.current = []
       if (queue.length === 1) {
         const ach = queue[0]!
-        showToast(`ACHIEVEMENT UNLOCKED: ${ach.name} (+${ach.xp || 0} XP)`, 'achievement')
+        showToast(tNow('ui.ach.toast.one', { name: achName(ach), xp: ach.xp || 0 }), 'achievement')
       } else if (queue.length <= 3) {
         const total = queue.reduce((sum, ach) => sum + (ach.xp || 0), 0)
-        showToast(`${queue.length} achievements (+${total} XP): ${queue.map(a => a.name).join(', ')}`, 'achievement')
+        showToast(tNow('ui.ach.toast.few', { n: queue.length, xp: total, names: queue.map(a => achName(a)).join(', ') }), 'achievement')
       } else {
         const total = queue.reduce((sum, ach) => sum + (ach.xp || 0), 0)
-        showToast(`${queue.length} achievements unlocked! (+${total} XP)`, 'achievement')
+        showToast(tNow('ui.ach.toast.many', { n: queue.length, xp: total }), 'achievement')
       }
     }, 500)
 
@@ -351,15 +355,6 @@ export function useAchievements(
     }))
   }, [])
 
-  const trackDiscordConnected = useCallback(() => {
-    setAchievements(prev => prev.map(a => {
-      if (a.id === 'discord_connect' && !a.unlocked) {
-        return { ...a, progress: 1, unlocked: true, unlockedAt: Date.now() }
-      }
-      return a
-    }))
-  }, [])
-
   // -- New trackers for Power User category --
 
   const trackBatchInstall = useCallback(() => {
@@ -406,7 +401,6 @@ export function useAchievements(
     trackFavoriteAdded,
     trackScanCompleted,
     trackCollectionCreated,
-    trackDiscordConnected,
     trackBatchInstall,
     trackQuickToolUsed,
     trackFixGamesScript,

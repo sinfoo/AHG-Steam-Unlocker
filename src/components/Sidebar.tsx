@@ -1,9 +1,13 @@
-import { memo } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Gamepad2, Zap, ChevronDown, LayoutGrid, Download, X } from 'lucide-react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { BadgeCheck, ChevronDown, ChevronsUpDown, Download, PanelLeftClose, PanelLeftOpen, Settings as SettingsIcon, X, Zap } from 'lucide-react'
+import { useShallow } from 'zustand/react/shallow'
 import { DARK_COLORS } from '../constants/colors'
 import { useUIStore } from '../store/uiStore'
+import { useGameStore, useUserStore } from '../store'
+import { steamPortrait, coverFallback } from '../utils/gameHelpers'
+import type { Game } from '../types'
 import { OfflineIndicator } from './OfflineIndicator'
+import { useT } from '../i18n'
 
 interface NavItem {
   id: string
@@ -26,358 +30,263 @@ interface SidebarProps {
   quickTools: QuickTool[]
   colors: typeof DARK_COLORS
   navigateTo: (page: string) => void
+  onOpenGame: (game: Game) => void
   sidebarCollapsed: boolean
   isOverlay?: boolean
   onCloseOverlay?: () => void
-  discordConnected: boolean
   quickToolsOpen: boolean
   setQuickToolsOpen: (value: boolean | ((prev: boolean) => boolean)) => void
-  setDiscordModalOpen: (value: boolean | ((prev: boolean) => boolean)) => void
-  setDiscordSuccessOpen: (value: boolean | ((prev: boolean) => boolean)) => void
   setUpdateModalOpen: (value: boolean | ((prev: boolean) => boolean)) => void
 }
 
-/* ── Sub-component to isolate currentPage subscription ── */
-function NavItemList({
-  navItems,
-  navigateTo,
-  sidebarCollapsed,
-  colors: COLORS,
-}: {
-  navItems: NavItem[]
-  navigateTo: (page: string) => void
-  sidebarCollapsed: boolean
-  colors: typeof DARK_COLORS
-}) {
-  const currentPage = useUIStore(s => s.currentPage)
+const ACC = 'var(--acc, #a77dff)'
+const MONO = "'Geist Mono Variable','Geist Mono',monospace"
 
-  return navItems.map((item) => (
-    <button
-      key={item.id}
-      onClick={() => navigateTo(item.id)}
-      title={sidebarCollapsed ? item.label : undefined}
-      className={`w-full rounded-2xl flex items-center cursor-pointer relative group sidebar-nav-btn tap-dim ${currentPage === item.id ? 'sidebar-nav-btn-active' : ''} ${sidebarCollapsed ? 'py-3 justify-center' : 'py-3.5 px-3 gap-3'}`}
-      style={{
-        background: currentPage === item.id
-          ? `radial-gradient(ellipse at 30% 50%, ${item.color}30 0%, ${item.color}12 60%, ${item.color}08 100%)`
-          : `linear-gradient(135deg, ${COLORS.bgCard} 0%, ${COLORS.bgDeep} 100%)`,
-        border: `1px solid ${currentPage === item.id ? item.color + '60' : 'transparent'}`,
-        boxShadow: currentPage === item.id ? `0 4px 24px ${item.color}35, inset 0 1px 0 ${item.color}20` : undefined,
-        '--sidebar-nav-hover-shadow': `0 4px 20px ${item.color}40, 0 0 40px ${item.color}15`,
-        ...(currentPage !== item.id ? { '--sidebar-nav-hover-text-color': item.color } : {}),
-      } as React.CSSProperties}
-    >
-      {currentPage === item.id && (
-        <div
-          className="absolute inset-0 rounded-2xl pointer-events-none"
-          style={{ background: `linear-gradient(90deg, ${item.color}15 0%, transparent 100%)` }}
-        />
-      )}
-      <div className="relative sidebar-icon-wrap">
-        <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center relative overflow-hidden sidebar-nav-icon"
-          style={{
-            background: `linear-gradient(135deg, ${item.color}25 0%, ${item.color}10 100%)`,
-            boxShadow: item.id === 'settings' ? `0 0 20px ${item.color}40` : `0 2px 12px ${item.color}30`,
-          }}
-        >
-          <item.icon size={18} style={{ color: item.color, position: 'relative', zIndex: 1 }} />
-        </div>
-        {/* CSS tooltip for collapsed mode */}
-        {sidebarCollapsed && (
-          <span className="sidebar-tooltip">{item.label}</span>
-        )}
-      </div>
-      <span
-        style={{
-          color: currentPage === item.id ? COLORS.text : COLORS.textSecondary,
-          fontWeight: currentPage === item.id ? 600 : 500,
-          transition: 'color 80ms cubic-bezier(0.4, 0, 0.2, 1)',
-        }}
-        className={`flex-1 font-medium text-sm relative z-10 sidebar-nav-label sidebar-nav-text ${sidebarCollapsed ? 'hidden' : ''}`}
-      >
-        {item.label}
-      </span>
-      {item.count > 0 && !sidebarCollapsed && (
-        <motion.span
-          className="px-3 py-1 rounded-lg text-xs font-bold sidebar-badge-expanded sidebar-badge-btn relative"
-          style={{
-            background: item.color,
-            color: 'white',
-            boxShadow: `0 2px 8px ${item.color}50`,
-          }}
-          animate={{
-            boxShadow: [
-              `0 2px 8px ${item.color}50`,
-              `0 2px 16px ${item.color}80`,
-              `0 2px 8px ${item.color}50`,
-            ],
-          }}
-          transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-        >
-          {item.count > 999 ? `${(item.count / 1000).toFixed(1)}k` : item.count}
-        </motion.span>
-      )}
-    </button>
-  ))
+const sectionLabel = (open: boolean, text: string) =>
+  open ? (
+    <div style={{ fontFamily: MONO, fontSize: 10, fontWeight: 600, letterSpacing: '.16em', color: '#6f6e86', padding: '14px 10px 6px', flex: 'none' }}>{text}</div>
+  ) : (
+    <div style={{ height: 1, background: 'rgba(255,255,255,.07)', margin: '10px 8px', flex: 'none' }} />
+  )
+
+/* Sub-component isolates the currentPage subscription */
+function NavList({ items, navigateTo, open }: { items: NavItem[]; navigateTo: (p: string) => void; open: boolean }) {
+  const currentPage = useUIStore(s => s.currentPage)
+  return (
+    <>
+      {items.map(n => {
+        const active = currentPage === n.id
+        return (
+          <button
+            key={n.id}
+            onClick={() => navigateTo(n.id)}
+            title={n.label}
+            className="v2-nav"
+            style={{
+              position: 'relative', height: 42, width: '100%', flex: 'none', border: 'none', borderRadius: 12,
+              background: active ? `color-mix(in oklch, ${ACC} 14%, transparent)` : 'transparent',
+              color: active ? '#fff' : '#a6a5bb', display: 'flex', alignItems: 'center', gap: 12,
+              padding: open ? '0 12px' : 0, justifyContent: open ? 'flex-start' : 'center', cursor: 'pointer',
+            }}
+          >
+            {active && <span style={{ position: 'absolute', insetInlineStart: -12, top: 10, bottom: 10, width: 3, borderStartEndRadius: 3, borderEndEndRadius: 3, background: ACC, boxShadow: `0 0 12px ${ACC}`, animation: 'v2-barIn .3s cubic-bezier(.34,1.56,.64,1) both' }} />}
+            <n.icon size={18} style={{ color: active ? ACC : '#8b8aa3', flex: 'none' }} />
+            {open && (
+              <>
+                <span style={{ flex: 1, textAlign: 'start', fontSize: 13.5, fontWeight: active ? 650 : 500, whiteSpace: 'nowrap' }}>{n.label}</span>
+                {n.count > 0 && (
+                  <span style={{ fontFamily: MONO, fontSize: 11, padding: '2px 7px', borderRadius: 6, background: active ? `color-mix(in oklch, ${ACC} 24%, transparent)` : 'rgba(255,255,255,.06)', color: active ? '#fff' : '#a6a5bb' }}>
+                    {n.count > 999 ? `${(n.count / 1000).toFixed(1)}k` : n.count}
+                  </span>
+                )}
+              </>
+            )}
+          </button>
+        )
+      })}
+    </>
+  )
 }
 
+/** Up to 5 favourited games (design: PINNED). Own subscriptions so favourite toggles don't re-render the whole sidebar. */
+function PinnedList({ open, onOpenGame }: { open: boolean; onOpenGame: (g: Game) => void }) {
+  const favorites = useUserStore(s => s.favorites)
+  const { games, installedGames } = useGameStore(useShallow(s => ({ games: s.games, installedGames: s.installedGames })))
+  const pinned = useMemo(() => {
+    if (!favorites.size) return []
+    const out: Game[] = []
+    // ponytail: linear scan with early exit at 5 hits; memoized on favourites/games identity
+    for (const g of games as Game[]) { if (favorites.has(g.appid)) { out.push(g); if (out.length === 5) break } }
+    return out
+  }, [favorites, games])
+  const installedIds = useMemo(() => new Set(installedGames.map((g: any) => g.appid)), [installedGames])
+  return (
+    <>
+      {pinned.map((g, i) => (
+        <button
+          key={g.appid} onClick={() => onOpenGame(g)} title={g.name} className="v2-nav"
+          style={{ height: 46, width: '100%', flex: 'none', border: 'none', borderRadius: 12, background: 'transparent', color: '#c9c8da', display: 'flex', alignItems: 'center', gap: 11, padding: open ? '0 12px' : 0, justifyContent: open ? 'flex-start' : 'center', cursor: 'pointer', animation: 'v2-riseIn .3s both', animationDelay: `${i * 40}ms` }}
+        >
+          <img src={steamPortrait(g.appid)} onError={e => coverFallback(e, g.appid)} alt="" loading="lazy" decoding="async" style={{ width: 26, height: 36, borderRadius: 6, objectFit: 'cover', flex: 'none', boxShadow: '0 4px 10px rgba(0,0,0,.5)', background: '#151524' }} />
+          {open && (
+            <>
+              <span style={{ flex: 1, minWidth: 0, textAlign: 'start', fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.name}</span>
+              {installedIds.has(g.appid) && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', flex: 'none' }} />}
+            </>
+          )}
+        </button>
+      ))}
+    </>
+  )
+}
+
+function ProfileCard({ open, onUpdates, onSettings }: { open: boolean; onUpdates: () => void; onSettings: () => void }) {
+  const t = useT()
+  const [menu, setMenu] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!menu) return
+    const off = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setMenu(false) }
+    document.addEventListener('mousedown', off)
+    return () => document.removeEventListener('mousedown', off)
+  }, [menu])
+  const activated = useUIStore(s => s.isActivated)
+  const name = 'AHG Unlocker'
+  const status = activated ? t('app.side.licenseActive') : t('app.side.notActivated')
+  const items = [
+    { label: t('app.side.checkUpdates'), icon: <Download size={16} />, run: onUpdates },
+    { label: t('app.nav.settings'), icon: <SettingsIcon size={16} />, run: onSettings },
+  ]
+  return (
+    <div ref={ref} style={{ position: 'relative', marginTop: 6 }}>
+      <button
+        onClick={() => setMenu(v => !v)} title={name} aria-haspopup="menu" aria-expanded={menu} className="v2-nav"
+        style={{ height: 54, width: '100%', borderRadius: 14, border: `1px solid ${menu ? `color-mix(in oklch, ${ACC} 40%, transparent)` : 'rgba(255,255,255,.07)'}`, background: menu ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.03)', display: 'flex', alignItems: 'center', gap: 10, padding: open ? '0 10px' : 0, justifyContent: open ? 'flex-start' : 'center', cursor: 'pointer', color: '#fff' }}
+      >
+        <span style={{ position: 'relative', width: 34, height: 34, flex: 'none', borderRadius: 11, background: `linear-gradient(135deg, ${ACC}, #3b82f6)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, color: '#0b0614' }}>
+          A
+          {activated && <span style={{ position: 'absolute', insetInlineEnd: -2, bottom: -2, width: 10, height: 10, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 0 2px var(--s1,#0f0f1b)' }} />}
+        </span>
+        {open && (
+          <>
+            <div style={{ flex: 1, minWidth: 0, textAlign: 'start' }}>
+              <div style={{ fontSize: 13, fontWeight: 650, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
+              <div style={{ fontFamily: MONO, fontSize: 10.5, color: activated ? '#4ade80' : '#8b8aa3', marginTop: 2 }}>{status}</div>
+            </div>
+            <ChevronsUpDown size={14} style={{ color: '#8b8aa3', flex: 'none' }} />
+          </>
+        )}
+      </button>
+      {menu && (
+        <div role="menu" className="v2-glass" style={{ position: 'absolute', bottom: 62, insetInlineStart: 0, width: 272, borderRadius: 18, transformOrigin: 'bottom left', animation: 'v2-scaleIn .22s var(--ease-out) both', padding: 8, zIndex: 50 }}>
+          <div style={{ margin: '4px 4px 8px', padding: '10px 12px', borderRadius: 12, background: `color-mix(in oklch, ${ACC} 12%, transparent)`, border: `1px solid color-mix(in oklch, ${ACC} 28%, transparent)`, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <BadgeCheck size={17} style={{ color: ACC }} />
+            <div style={{ flex: 1, fontSize: 12.5 }}>
+              <div style={{ fontWeight: 600 }}>{status}</div>
+              <div style={{ color: '#a6a5bb', fontFamily: MONO, fontSize: 11, marginTop: 1 }}>{name}</div>
+            </div>
+          </div>
+          {items.map((it, i) => (
+            <div key={it.label}>
+              {i === 1 && <div style={{ height: 1, background: 'rgba(255,255,255,.07)', margin: '6px 8px' }} />}
+              <button role="menuitem" onClick={() => { setMenu(false); it.run() }} className="v2-nav" style={{ width: '100%', height: 40, border: 'none', background: 'transparent', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 12, padding: '0 10px', color: '#c9c8da', fontSize: 13.5, cursor: 'pointer' }}>
+                <span style={{ opacity: .85, display: 'flex' }}>{it.icon}</span><span style={{ flex: 1, textAlign: 'start' }}>{it.label}</span>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const footBtn = (open: boolean): React.CSSProperties => ({
+  height: 40, width: '100%', border: 'none', borderRadius: 12, background: 'transparent', color: '#8b8aa3',
+  display: 'flex', alignItems: 'center', gap: 12, padding: open ? '0 12px' : 0,
+  justifyContent: open ? 'flex-start' : 'center', cursor: 'pointer',
+})
+
 const Sidebar = memo(function Sidebar({
-  navItems,
-  quickTools,
-  colors: COLORS,
-  navigateTo,
-  sidebarCollapsed,
-  isOverlay,
-  onCloseOverlay,
-  discordConnected,
-  quickToolsOpen,
-  setQuickToolsOpen,
-  setDiscordModalOpen,
-  setDiscordSuccessOpen,
-  setUpdateModalOpen,
+  navItems, quickTools, navigateTo, onOpenGame, sidebarCollapsed, isOverlay, onCloseOverlay,
+  quickToolsOpen, setQuickToolsOpen, setUpdateModalOpen,
 }: SidebarProps) {
+  const t = useT()
+  const [manual, setManual] = useState(() => {
+    try { return localStorage.getItem('ahg.sideCollapsed') === '1' } catch { return false }
+  })
+  const open = !(sidebarCollapsed || manual)
+  const toggle = () => setManual(v => {
+    try { localStorage.setItem('ahg.sideCollapsed', v ? '0' : '1') } catch { /* ignore */ }
+    return !v
+  })
+  const byId = (ids: string[]) => ids.map(id => navItems.find(n => n.id === id)).filter((n): n is NavItem => !!n)
+  const discover = byId(['home', 'browse', 'fixes'])
+  const mine = byId(['library', 'favourites', 'recent'])
+  const settings = navItems.find(n => n.id === 'settings')
 
   return (
-    <motion.aside
-      initial={{ x: isOverlay ? -288 : -20, opacity: 0 }}
-      animate={{ x: 0, opacity: 1 }}
-      transition={{ duration: 0.25, ease: 'easeOut' }}
-      className={`sidebar-container h-full flex flex-col ${isOverlay ? 'fixed left-0 top-0 z-50 h-screen' : 'relative z-20'} ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}
-      style={{ 
-        width: sidebarCollapsed ? 'var(--sidebar-collapsed-width)' : 'var(--sidebar-width)',
-        background: `linear-gradient(180deg, ${COLORS.bgDark} 0%, ${COLORS.bgDeep} 100%)`, 
-        borderRight: `1px solid ${COLORS.border}`,
-        boxShadow: isOverlay ? '8px 0 60px rgba(0,0,0,0.6)' : '8px 0 40px rgba(0,0,0,0.4)',
-        transition: 'width 150ms cubic-bezier(0.16, 1, 0.3, 1)',
+    <nav
+      className={isOverlay ? 'fixed top-0 z-50 h-screen' : 'relative z-40'}
+      style={{
+        width: open ? 264 : 72, flex: 'none', display: 'flex', flexDirection: 'column', padding: '14px 12px 12px',
+        background: 'linear-gradient(180deg, var(--s1,#0f0f1b), color-mix(in oklch, var(--s1,#0f0f1b) 80%, #000))',
+        borderInlineEnd: '1px solid rgba(255,255,255,.06)', insetInlineStart: isOverlay ? 0 : undefined, transition: 'width .32s var(--ease-out)',
+        animation: 'v2-shellRail .4s var(--ease-out) both', boxShadow: isOverlay ? '8px 0 60px rgba(0,0,0,.6)' : undefined,
       }}
     >
-      {/* Logo Area */}
-        <div className={`sidebar-logo relative ${sidebarCollapsed ? '' : 'p-4 pb-2'}`} style={{ borderBottom: `1px solid ${COLORS.border}50` }}>
-        <div
-          className={`flex items-center cursor-pointer group relative hv-scale-03 tap-scale-97 tap-dim ${sidebarCollapsed ? 'justify-center gap-0' : 'gap-3.5'}`}
-          onClick={() => navigateTo('home')}
-        >
-          <div 
-            className="w-10 h-10 rounded-xl flex items-center justify-center relative overflow-hidden shrink-0 hv-scale-08 transition-transform duration-75" 
-            style={{ 
-              background: `linear-gradient(135deg, ${COLORS.violet} 0%, ${COLORS.blue} 100%)`, 
-              boxShadow: `0 8px 32px ${COLORS.violet}50`
-            }}
-          >
-            <div
-              className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-[600ms] ease-in-out"
-              style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.3) 0%, transparent 60%)' }}
-            />
-            <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent" />
-            <Gamepad2 className="text-white" size={22} strokeWidth={1.5} />
+      {/* Brand */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 11, height: 44, padding: '0 4px', flex: 'none', justifyContent: open ? 'flex-start' : 'center' }}>
+        <button onClick={() => navigateTo('home')} title={t('app.nav.home')} className="hv-scale-08" style={{ flex: 'none', width: 38, height: 38, border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}>
+          <img src="./assets/ahg-logo.png" alt="AHG" style={{ width: 38, height: 38, objectFit: 'contain', display: 'block' }} />
+        </button>
+        {open && (
+          <div style={{ flex: 1, minWidth: 0, animation: 'v2-fadeIn .25s both' }}>
+            <div style={{ fontSize: 17, fontWeight: 750, letterSpacing: '-.02em', lineHeight: 1 }}>AHG</div>
+            <div style={{ fontFamily: MONO, fontSize: 9.5, letterSpacing: '.26em', color: ACC, marginTop: 4 }}>UNLOCKER</div>
           </div>
-          <div className={`sidebar-logo-text space-y-0.5 ${sidebarCollapsed ? 'hidden' : ''}`}>
-            <h1 
-              className="text-white font-bold text-xl tracking-tight group-hover:text-violet-400 transition-colors duration-75"
-            >
-              AHG
-            </h1>
-            <p className="text-violet-400 text-sm font-medium">Steam Unlocker</p>
-          </div>
-        </div>
+        )}
         {isOverlay && onCloseOverlay && (
-          <button
-            onClick={onCloseOverlay}
-            className="absolute right-2 top-2 w-7 h-7 rounded-lg flex items-center justify-center cursor-pointer hover:brightness-125 tap-scale"
-            style={{
-              background: COLORS.bgCard,
-              border: `1px solid ${COLORS.border}`,
-              color: COLORS.textSecondary,
-              transition: 'all 80ms cubic-bezier(0.4, 0, 0.2, 1)',
-            }}
-          >
-            <X size={13} />
+          <button onClick={onCloseOverlay} aria-label={t('app.side.closeMenu')} style={{ border: 'none', background: 'transparent', color: '#8b8aa3', cursor: 'pointer' }}><X size={16} /></button>
+        )}
+      </div>
+
+      {/* Nav */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', scrollbarWidth: 'none', display: 'flex', flexDirection: 'column', gap: 2, margin: '8px -12px 0', padding: '0 12px' }}>
+        {sectionLabel(open, t('app.side.discover'))}
+        <NavList items={discover} navigateTo={navigateTo} open={open} />
+        {sectionLabel(open, t('app.side.yourGames'))}
+        <NavList items={mine} navigateTo={navigateTo} open={open} />
+
+        {open ? (
+          <div style={{ display: 'flex', alignItems: 'center', padding: '16px 10px 6px', flex: 'none' }}>
+            <span style={{ flex: 1, fontFamily: MONO, fontSize: 10, fontWeight: 600, letterSpacing: '.16em', color: '#6f6e86' }}>{t('app.side.pinned')}</span>
+            <button onClick={() => navigateTo('favourites')} className="v2-nav" style={{ border: 'none', background: 'transparent', color: '#77768e', fontSize: 11, cursor: 'pointer', padding: '0 4px', borderRadius: 6 }}>{t('app.side.seeAll')}</button>
+          </div>
+        ) : (
+          <div style={{ height: 1, background: 'rgba(255,255,255,.07)', margin: '10px 8px', flex: 'none' }} />
+        )}
+        <PinnedList open={open} onOpenGame={onOpenGame} />
+
+        {sectionLabel(open, t('app.side.tools'))}
+        <button
+          onClick={() => { if (!open) toggle(); setQuickToolsOpen(o => !o) }}
+          title={t('app.side.ahgTools')} className="v2-nav"
+          style={{ ...footBtn(open), height: 42, color: '#a6a5bb', flex: 'none', background: quickToolsOpen && open ? 'rgba(255,255,255,.04)' : 'transparent' }}
+        >
+          <Zap size={18} style={{ color: '#8b8aa3', flex: 'none' }} />
+          {open && (<><span style={{ flex: 1, textAlign: 'start', fontSize: 13.5, fontWeight: 500 }}>{t('app.side.ahgTools')}</span><ChevronDown size={14} style={{ transition: 'transform .2s', transform: quickToolsOpen ? 'rotate(180deg)' : 'none' }} /></>)}
+        </button>
+        {open && quickToolsOpen && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1, paddingInlineStart: 12, borderInlineStart: '1px solid rgba(255,255,255,.07)', marginInlineStart: 20, animation: 'v2-fadeIn .2s both' }}>
+            {quickTools.slice(0, 8).map((q, i) => (
+              <button key={q.name} title={q.desc} onClick={() => { q.action(); setQuickToolsOpen(false) }} className="v2-nav"
+                style={{ height: 36, border: 'none', borderRadius: 9, background: 'transparent', color: '#a6a5bb', display: 'flex', alignItems: 'center', gap: 10, padding: '0 10px', cursor: 'pointer', fontSize: 13, animation: 'v2-riseIn .3s both', animationDelay: `${i * 30}ms` }}>
+                <q.icon size={15} style={{ color: q.color, flex: 'none' }} />
+                <span style={{ flex: 1, textAlign: 'start', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{q.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 10, marginTop: 6, borderTop: '1px solid rgba(255,255,255,.06)' }}>
+        <OfflineIndicator collapsed={!open} />
+        {settings && <NavList items={[settings]} navigateTo={navigateTo} open={open} />}
+        {!isOverlay && (
+          <button onClick={toggle} title={open ? t('app.side.collapse') : t('app.side.expand')} className="v2-nav" style={footBtn(open)}>
+            {open ? <PanelLeftClose size={17} className="rtl-flip" /> : <PanelLeftOpen size={17} className="rtl-flip" />}{open && <span style={{ flex: 1, textAlign: 'start', fontSize: 13 }}>{t('app.side.collapse')}</span>}
           </button>
         )}
-      </div>
-      
-      {/* Quick Tools - Premium matching nav buttons */}
-      {!sidebarCollapsed && (
-      <div className="px-3 pt-3 pb-1">
-        <button
-          onClick={() => setQuickToolsOpen(o => !o)}
-          className="w-full py-3 px-3.5 rounded-2xl flex items-center gap-3 cursor-pointer relative overflow-hidden group sidebar-nav-btn"
-          style={{ 
-            background: quickToolsOpen 
-              ? `linear-gradient(135deg, ${COLORS.violet}25 0%, ${COLORS.violet}10 100%)` 
-              : `linear-gradient(135deg, ${COLORS.bgCard} 0%, ${COLORS.bgDeep} 100%)`,
-            border: `1px solid ${quickToolsOpen ? COLORS.violet + '50' : 'transparent'}`,
-            boxShadow: quickToolsOpen ? `0 4px 20px ${COLORS.violet}25` : 'none',
-          }}
-        >
-          {quickToolsOpen && (
-            <div
-              className="absolute inset-0 rounded-2xl pointer-events-none"
-              style={{ background: `linear-gradient(90deg, ${COLORS.violet}15 0%, transparent 100%)` }}
-            />
-          )}
-          {/* Icon */}
-          <div 
-            className="w-10 h-10 rounded-xl flex items-center justify-center relative overflow-hidden shrink-0 sidebar-nav-icon" 
-            style={{ 
-              background: `linear-gradient(135deg, ${COLORS.violet}25 0%, ${COLORS.violet}10 100%)`,
-              boxShadow: `0 2px 12px ${COLORS.violet}30`
-            }}
-          >
-            <motion.div
-              className="absolute inset-0"
-              style={{ background: `radial-gradient(circle, ${COLORS.violet}40 0%, transparent 70%)` }}
-              initial={{ opacity: 0, scale: 0.5 }}
-              animate={quickToolsOpen ? { opacity: 1, scale: 1.2 } : { opacity: 0, scale: 0.5 }}
-              transition={{ duration: 0.08, ease: [0.4, 0, 0.2, 1] }}
-            />
-            <Zap size={18} style={{ color: COLORS.violet, position: 'relative', zIndex: 1 }} />
-          </div>
-          {/* Label */}
-          <span 
-            style={{ color: quickToolsOpen ? COLORS.text : COLORS.textSecondary }}
-            className="flex-1 font-semibold text-sm relative z-10"
-          >
-            AHG Tools
-          </span>
-          {/* Chevron */}
-          <div className="relative z-10">
-            <ChevronDown size={15} style={{ color: quickToolsOpen ? COLORS.violet : COLORS.textMuted }} />
-          </div>
-        </button>
-        <AnimatePresence initial={false}>
-          {quickToolsOpen && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="overflow-hidden"
-            >
-              <div className="grid grid-cols-2 gap-2 pt-3 pb-1.5 px-0.5">
-                {quickTools.slice(0, 8).map((tool, i) => (
-                  <motion.button
-                    key={tool.name}
-                    initial={{ opacity: 0, y: 10, scale: 0.9 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    transition={{ delay: i * 0.04, type: 'spring', stiffness: 350, damping: 22 }}
-                    onClick={() => { tool.action(); setQuickToolsOpen(false) }}
-                    className="flex flex-col items-center gap-2 py-3 px-2 rounded-xl text-center relative overflow-hidden group hv-scale-05-lift tap-scale-92 tap-dim"
-                    style={{ 
-                      background: `linear-gradient(145deg, ${tool.color}14 0%, ${tool.color}06 100%)`, 
-                      border: `1px solid ${tool.color}25`,
-                      boxShadow: `0 2px 8px ${tool.color}15`,
-                    }}
-                    title={tool.desc}
-                  >
-                    <div
-                      className="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-75"
-                      style={{ 
-                        background: `radial-gradient(120% 100% at 50% 0%, ${tool.color}30 0%, transparent 70%)`,
-                      }}
-                    />
-                    <div
-                      className="w-9 h-9 rounded-lg flex items-center justify-center relative transition-transform duration-75 group-hover:scale-110 group-hover:rotate-6"
-                      style={{ 
-                        background: `linear-gradient(135deg, ${tool.color}35 0%, ${tool.color}12 100%)`,
-                        boxShadow: `0 2px 10px ${tool.color}25`,
-                      }}
-                    >
-                      <tool.icon size={14} style={{ color: tool.color, position: 'relative', zIndex: 1 }} />
-                    </div>
-                    <span className="text-xs font-semibold leading-tight relative z-10" style={{ color: COLORS.textSecondary }}>{tool.name}</span>
-                    <div
-                      className="absolute bottom-0 left-3 right-3 h-[2px] rounded-full scale-x-0 group-hover:scale-x-100 opacity-0 group-hover:opacity-100 transition-all duration-75"
-                      style={{ background: `linear-gradient(90deg, transparent, ${tool.color}70, transparent)` }}
-                    />
-                  </motion.button>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-      )}
-      <div className="px-3 pt-2" style={{ borderTop: `1px solid ${COLORS.border}` }} />
-      {/* Navigation */}
-      <nav className={`flex-1 overflow-y-auto ${sidebarCollapsed ? 'px-1 py-2 space-y-1' : 'px-3 py-2 space-y-1'}`}>
-        {!sidebarCollapsed && (
-        <div className="flex items-center gap-2 mb-2 mt-1 px-2">
-          <LayoutGrid size={12} style={{ color: COLORS.blue }} />
-          <span style={{ color: COLORS.textMuted }} className="text-[10px] font-bold uppercase tracking-[0.12em] sidebar-section-label">Navigation</span>
-        </div>
-        )}
-        
-          <NavItemList
-          navItems={navItems}
-          navigateTo={navigateTo}
-          sidebarCollapsed={sidebarCollapsed}
-          colors={COLORS}
-        />
-      </nav>
-      
-      {/* Gradient separator above footer */}
-      <div className="relative">
-        <div
-          className="absolute top-0 left-3 right-3 h-[1px]"
-          style={{
-            background: `linear-gradient(90deg, transparent, ${COLORS.violet}40, ${COLORS.blue}30, ${COLORS.violet}40, transparent)`,
-          }}
+        <ProfileCard
+          open={open}
+          onUpdates={() => setUpdateModalOpen(true)}
+          onSettings={() => navigateTo('settings')}
         />
       </div>
-      {/* Offline indicator */}
-      <OfflineIndicator collapsed={sidebarCollapsed} />
-      {/* Bottom Actions */}
-      <div className={`sidebar-footer ${sidebarCollapsed ? 'p-2 space-y-1.5' : 'p-3 space-y-1.5'}`}>
-        {/* Discord Login Button */}
-        <button 
-          onClick={() => discordConnected ? setDiscordSuccessOpen(true) : setDiscordModalOpen(true)}
-          title={sidebarCollapsed ? (discordConnected ? 'Discord Connected' : 'Discord Log In') : undefined}
-          className={`w-full rounded-2xl flex items-center cursor-pointer group sidebar-footer-btn ${sidebarCollapsed ? 'py-3 justify-center' : 'py-3 px-3.5 gap-2.5 justify-center'}`}
-          style={{ 
-            background: discordConnected 
-              ? `linear-gradient(135deg, rgba(139,92,246,0.15) 0%, rgba(99,102,241,0.05) 100%)`
-              : `linear-gradient(135deg, ${COLORS.violet}22 0%, ${COLORS.bgCard} 100%)`,
-            border: discordConnected 
-              ? '1px solid rgba(139,92,246,0.4)' 
-              : `1px solid ${COLORS.violet}40`,
-            boxShadow: discordConnected 
-              ? 'none'
-              : `0 2px 12px ${COLORS.violet}10`,
-          }}
-        >
-          <svg width="16" height="16" viewBox="0 0 127.14 96.36" fill={discordConnected ? COLORS.violet : COLORS.textMuted}>
-            <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z"/>
-          </svg>
-          {!sidebarCollapsed && (
-          <span style={{ color: discordConnected ? COLORS.violetLight : COLORS.text, fontWeight: 600 }} className="text-sm sidebar-footer-text">
-            {discordConnected ? 'Discord Connected' : 'Discord Log In'}
-          </span>
-          )}
-          {discordConnected && <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />}
-        </button>
-        <button 
-          onClick={() => setUpdateModalOpen(true)}
-          title={sidebarCollapsed ? 'Check for Updates' : undefined}
-          className={`w-full rounded-2xl flex items-center cursor-pointer group sidebar-footer-btn ${sidebarCollapsed ? 'py-3 justify-center' : 'py-3 px-3.5 gap-2.5 justify-center'}`}
-          style={{ 
-            background: `linear-gradient(135deg, ${COLORS.violet}22 0%, ${COLORS.bgCard} 100%)`,
-            border: `1px solid ${COLORS.violet}40`,
-            boxShadow: `0 2px 12px ${COLORS.violet}10`,
-          }}
-        >
-          <Download size={16} style={{ color: COLORS.violet }} />
-          {!sidebarCollapsed && (
-          <span style={{ color: COLORS.text, fontWeight: 600 }} className="text-sm sidebar-footer-text">Check for Updates</span>
-          )}
-        </button>
-
-      </div>
-    </motion.aside>
+    </nav>
   )
 })
 
 Sidebar.displayName = 'Sidebar'
-
 export { Sidebar }

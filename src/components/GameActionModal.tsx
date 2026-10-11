@@ -1,10 +1,11 @@
+import { useT } from '../i18n'
 import { memo, useState, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Zap, FolderOpen, Shield, Calendar, Tag, Layers, Gamepad2 } from 'lucide-react'
+import { X, Zap, FolderOpen, Shield, Layers } from 'lucide-react'
 import type { Game } from '../types'
 import type { ColorScheme } from './shared'
 import { loadGameImage } from '../services/imageCache'
-import { COLORS } from '../constants/colors'
+import { useReducedMotion } from '../store'
 
 interface GameActionModalProps {
   game: Game | null
@@ -16,7 +17,13 @@ interface GameActionModalProps {
   colors: ColorScheme
 }
 
-export const GameActionModal = memo(function GameActionModal({ game, isOpen, onClose, onInstallGame, onInstallFromZip, onOpenDLCManager, colors }: GameActionModalProps) {
+const E = 'cubic-bezier(.16,1,.3,1)'
+const MONO = "'Geist Mono Variable','Geist Mono',monospace"
+const ghostStyle: React.CSSProperties = { height: 44, borderRadius: 13, border: '1px solid rgba(255,255,255,.14)', background: 'rgba(255,255,255,.06)', color: '#fff', fontSize: 13.5, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontFamily: 'inherit' }
+
+export const GameActionModal = memo(function GameActionModal({ game, isOpen, onClose, onInstallGame, onInstallFromZip, onOpenDLCManager }: GameActionModalProps) {
+  const rm = useReducedMotion()
+  const t = useT()
   const [imageLoaded, setImageLoaded] = useState(false)
   const [imageError, setImageError] = useState(false)
   const [cachedUrl, setCachedUrl] = useState<string | null>(null)
@@ -58,6 +65,16 @@ export const GameActionModal = memo(function GameActionModal({ game, isOpen, onC
     onInstallFromZip(game)
   }
 
+  const rise = (d: number) => (rm ? undefined : `v2-riseIn .35s ${d}ms ${E} both`)
+  const info: [string, string, boolean][] = game ? [
+    [t('ui.gam.type'), (game.type || '').toLowerCase() === 'dlc' ? 'DLC' : t('ui.common.game'), false],
+    [t('ui.gam.appId'), game.appid, true],
+    [t('ui.gam.released'), year || '—', true],
+    [t('ui.gam.added'), game.added_date ? new Date(game.added_date).toLocaleDateString() : '—', true],
+    ['DLC', hasDLC ? String(dlcCount) : '—', true],
+    [t('ui.gam.genre'), genreTag || '—', false],
+  ] : []
+
   return (
     <AnimatePresence>
       {isOpen && game && (
@@ -65,208 +82,101 @@ export const GameActionModal = memo(function GameActionModal({ game, isOpen, onC
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.2, ease: 'easeOut' }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
+          transition={{ duration: rm ? 0 : 0.25, ease: 'easeOut' }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-6"
+          style={{ background: 'rgba(4,4,10,0.6)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}
           onClick={onClose}
         >
           <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            initial={rm ? false : { opacity: 0, scale: 0.96, y: 12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            transition={{ type: 'spring', duration: 0.4, bounce: 0 }}
-            className="w-full overflow-hidden"
+            exit={rm ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 12 }}
+            transition={{ duration: rm ? 0 : 0.3, ease: [0.16, 1, 0.3, 1] }}
+            role="dialog" aria-modal="true" aria-label={game.name}
             style={{
-              maxWidth: 480,
-              background: colors.bgCard,
-              border: '1px solid rgba(255,255,255,0.06)',
-              borderRadius: '1rem',
-              boxShadow: '0 24px 80px rgba(0,0,0,0.5)',
+              position: 'relative', width: 'min(900px,100%)', maxHeight: '100%', overflow: 'auto',
+              background: '#0f0f1b', border: '1px solid rgba(255,255,255,.09)', borderRadius: 26,
+              boxShadow: '0 60px 120px -30px rgba(0,0,0,1)', fontFamily: 'Geist, sans-serif', color: '#f3f2fa',
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* ── Cover Section ── */}
-            <div className="relative overflow-hidden" style={{ height: 190, background: COLORS.bgDark }}>
-              {/* Image */}
+            {/* ── Hero ── */}
+            <div style={{ position: 'relative', height: 280, overflow: 'hidden', background: '#0a0a14' }}>
               {!imageError && game.header_image ? (
-                <motion.img
+                <img
                   src={cachedUrl || game.header_image}
                   alt={game.name}
-                  initial={{ scale: 1.02 }}
-                  animate={{ scale: 1 }}
-                  transition={{ duration: 0.6, ease: 'easeOut' }}
                   onLoad={() => setImageLoaded(true)}
                   onError={() => setImageError(true)}
-                  className="w-full h-full object-cover"
-                  style={{
-                    opacity: imageLoaded ? 1 : 0,
-                    transition: 'opacity 0.3s ease',
-                  }}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: imageLoaded ? 1 : 0, transition: 'opacity .3s ease', animation: rm ? undefined : 'v2-hkenBurns 20s ease-in-out infinite alternate' }}
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center" style={{
-                  background: `linear-gradient(135deg, hsl(${genreHue}, 50%, 12%) 0%, hsl(${(genreHue + 40) % 360}, 40%, 18%) 50%, hsl(${genreHue}, 30%, 8%) 100%)`
-                }}>
-                  <span style={{
-                    color: `hsl(${genreHue}, 70%, 70%)`,
-                    fontSize: 48,
-                    fontWeight: 'bold',
-                    textShadow: `0 2px 12px hsla(${genreHue}, 70%, 50%, 0.5)`,
-                  }}>
-                    {initial}
-                  </span>
+                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: `linear-gradient(135deg, hsl(${genreHue}, 50%, 12%) 0%, hsl(${(genreHue + 40) % 360}, 40%, 18%) 50%, hsl(${genreHue}, 30%, 8%) 100%)` }}>
+                  <span style={{ color: `hsl(${genreHue}, 70%, 70%)`, fontSize: 64, fontWeight: 700 }}>{initial}</span>
                 </div>
               )}
-
-              {/* Cinematic gradient overlay */}
-              <div className="absolute inset-0 pointer-events-none" style={{
-                background: 'linear-gradient(to top, rgba(10,10,15,0.95) 10%, rgba(10,10,15,0.3) 40%, transparent 60%)',
-              }} />
-
-              {/* Ambient genre glow at bottom */}
-              <div className="absolute inset-0 pointer-events-none" style={{
-                background: `radial-gradient(ellipse at 50% 100%, hsla(${genreHue}, 60%, 50%, 0.15) 0%, transparent 60%)`,
-              }} />
-
-              {/* Close button (top-right) */}
-              <motion.button
+              <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'linear-gradient(0deg, #0f0f1b 0%, rgba(15,15,27,.3) 55%, rgba(15,15,27,.1) 100%)' }} />
+              <button
                 onClick={onClose}
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center cursor-pointer z-10"
-                style={{ background: 'rgba(0,0,0,0.5)' }}
+                aria-label={t('ui.common.close')}
+                style={{ position: 'absolute', top: 16, insetInlineEnd: 16, width: 38, height: 38, borderRadius: 12, border: '1px solid rgba(255,255,255,.18)', background: 'rgba(10,10,20,.5)', backdropFilter: 'blur(10px)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform .3s cubic-bezier(.34,1.56,.64,1)' }}
+                onMouseEnter={(e) => { if (!rm) e.currentTarget.style.transform = 'rotate(90deg)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = 'none' }}
               >
-                <X size={16} style={{ color: colors.white }} />
-              </motion.button>
-
-              {/* App ID badge (top-left) */}
-              <div className="absolute top-3 left-3 z-10">
-                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{
-                  background: `${colors.violet}30`,
-                  color: colors.violetLight || colors.violetLight,
-                  border: `1px solid ${colors.violet}50`,
-                  backdropFilter: 'blur(6px)',
-                  WebkitBackdropFilter: 'blur(6px)',
-                }}>
-                  #{game.appid}
-                </span>
-              </div>
-
-              {/* DRM badge */}
-              {game.drm && (
-                <div className="absolute top-3 left-16 z-10">
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1" style={{
-                    background: 'rgba(239, 68, 68, 0.12)',
-                    color: '#fca5a5', // intentional dynamic color
-                    border: '1px solid rgba(239, 68, 68, 0.25)',
-                    backdropFilter: 'blur(6px)',
-                    WebkitBackdropFilter: 'blur(6px)',
-                  }}>
-                    <Shield size={10} /> DRM
-                  </span>
+                <X size={17} />
+              </button>
+              <div style={{ position: 'absolute', left: 30, right: 30, bottom: 22, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', animation: rise(60) }}>
+                  {genreTag && <span style={{ fontSize: 11.5, fontWeight: 600, padding: '4px 10px', borderRadius: 8, background: 'rgba(255,255,255,.1)', backdropFilter: 'blur(8px)', color: '#e4e3f0' }}>{genreTag}</span>}
+                  {game.drm && <span style={{ fontSize: 11.5, fontWeight: 600, padding: '4px 10px', borderRadius: 8, background: 'rgba(239,68,68,.14)', border: '1px solid rgba(239,68,68,.3)', color: '#fca5a5', display: 'inline-flex', alignItems: 'center', gap: 5 }}><Shield size={11} />DRM</span>}
                 </div>
-              )}
+                <h2 style={{ margin: 0, fontSize: 40, fontWeight: 700, letterSpacing: '-.035em', lineHeight: 1, animation: rise(80) }}>{game.name}</h2>
+              </div>
             </div>
 
-            {/* ── Content Section ── */}
-            <div className="p-5 space-y-4">
-              {/* Game name */}
-              <h2 className="text-xl font-bold leading-tight" style={{ color: colors.text }}>
-                {game.name}
-              </h2>
-
-              {/* Genre pill + metadata row */}
-              <div className="flex items-center gap-3 flex-wrap">
-                {genreTag && (
-                  <span className="text-[11px] font-bold px-2.5 py-1 rounded-full" style={{
-                    background: `hsla(${genreHue}, 60%, 40%, 0.2)`,
-                    color: `hsl(${genreHue}, 65%, 70%)`,
-                    border: `1px solid hsla(${genreHue}, 60%, 50%, 0.3)`,
-                    boxShadow: `0 0 12px hsla(${genreHue}, 60%, 40%, 0.15)`,
-                  }}>
-                    {genreTag}
-                  </span>
-                )}
-
-                <span className="flex items-center gap-1.5 text-xs" style={{ color: colors.textMuted }}>
-                  <Gamepad2 size={12} />
-                  {(game.type || '').toLowerCase() === 'dlc' ? 'DLC' : 'Game'}
-                </span>
-
-                {year && (
-                  <span className="flex items-center gap-1.5 text-xs" style={{ color: colors.textMuted }}>
-                    <Calendar size={12} />
-                    {year}
-                  </span>
-                )}
-
-                {game.added_date && (
-                  <span className="flex items-center gap-1.5 text-xs" style={{ color: colors.textMuted }}>
-                    <Tag size={12} />
-                    {new Date(game.added_date).toLocaleDateString()}
-                  </span>
-                )}
-
-                {hasDLC && (
-                  <span className="flex items-center gap-1.5 text-xs" style={{ color: colors.cyan }}>
-                    <Layers size={12} />
-                    {dlcCount} DLC
-                  </span>
-                )}
+            {/* ── Body ── */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,1fr)', gap: 24, padding: '10px 30px 30px' }}>
+              <div style={{ animation: rise(110) }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, borderRadius: 16, overflow: 'hidden', background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.06)' }}>
+                  {info.map(([k, v, mono]) => (
+                    <div key={k} style={{ padding: '14px 16px', background: '#0f0f1b', minWidth: 0 }}>
+                      <div style={{ fontSize: 11.5, color: '#8b8aa3' }}>{k}</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4, fontFamily: mono ? MONO : undefined, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              {/* ── Action Buttons ── */}
-              <div className="space-y-2.5 pt-1">
+              <div style={{ padding: 18, borderRadius: 20, background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.07)', display: 'flex', flexDirection: 'column', gap: 12, animation: rise(140) }}>
                 {/* Add to Steam */}
-                <motion.button
+                <button
                   onClick={handleInstall}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.97 }}
-                  className="w-full py-3 rounded-xl flex items-center justify-center gap-2 font-bold text-sm cursor-pointer"
-                  style={{
-                    background: `linear-gradient(135deg, ${colors.green}, ${colors.green}cc)`,
-                    color: colors.white,
-                    boxShadow: `0 4px 16px rgba(34,197,94,0.35), inset 0 1px 0 ${colors.whiteGlass}`,
-                  }}
+                  className="v2-btn-acc"
+                  style={{ height: 50, borderRadius: 14, fontSize: 15, fontWeight: 650, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, position: 'relative', overflow: 'hidden', boxShadow: '0 16px 40px -14px var(--acc,#a77dff)', fontFamily: 'inherit' }}
                 >
-                  <Zap size={16} />
-                  Add to Steam
-                </motion.button>
+                  <Zap size={17} />
+                  {t('ui.gam.addToSteam')}
+                  {!rm && <span style={{ position: 'absolute', top: 0, bottom: 0, width: '30%', background: 'linear-gradient(90deg,transparent,rgba(255,255,255,.35),transparent)', animation: 'v2-sheen 3s 1s ease-in-out infinite' }} />}
+                </button>
 
                 {/* Install Zip */}
-                <motion.button
-                  onClick={handleInstallZip}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.97 }}
-                  className="w-full py-3 rounded-xl flex items-center justify-center gap-2 font-bold text-sm cursor-pointer"
-                  style={{
-                    background: `linear-gradient(135deg, ${COLORS.violet}, ${COLORS.violet}cc)`,
-                    color: colors.white,
-                    boxShadow: `0 4px 16px rgba(99,102,241,0.35), inset 0 1px 0 ${colors.whiteGlass}`,
-                  }}
-                >
+                <button onClick={handleInstallZip} className="v2-ctl" style={ghostStyle}>
                   <FolderOpen size={16} />
-                  Install Zip
-                </motion.button>
+                  {t('ui.gam.installZip')}
+                </button>
 
                 {/* Manage DLCs — the manager fetches DLCs itself (Steam API + catalogue),
                     so offer it for any game rather than only when the catalog row already
                     has a dlc map (which is empty for many games that do have DLC). */}
                 {onOpenDLCManager && (
-                  <motion.button
+                  <button
                     onClick={() => onOpenDLCManager(game)}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.97 }}
-                    className="w-full py-2.5 rounded-xl flex items-center justify-center gap-2 font-bold text-sm cursor-pointer"
-                    style={{
-                      background: `${colors.violet}15`,
-                      color: colors.violetLight || colors.violet,
-                      border: `1px solid ${colors.violet}30`,
-                    }}
+                    className="v2-ctl"
+                    style={{ ...ghostStyle, height: 40, borderRadius: 12, fontSize: 13, background: 'transparent', color: 'var(--acc,#a77dff)', border: '1px solid color-mix(in oklch, var(--acc,#a77dff) 32%, transparent)' }}
                   >
                     <Layers size={15} />
-                    Manage DLCs ({dlcCount})
-                  </motion.button>
+                    {t('ui.gam.manageDlcs', { n: dlcCount })}
+                  </button>
                 )}
               </div>
             </div>

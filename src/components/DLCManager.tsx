@@ -1,3 +1,4 @@
+import { useT, t as tNow } from '../i18n'
 import { memo, useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Download, CheckCircle2, Loader2, AlertTriangle, Layers, Package } from 'lucide-react'
@@ -31,6 +32,7 @@ export const DLCManager = memo(function DLCManager({
   bridge,
   showToast,
 }: DLCManagerProps) {
+  const t = useT()
   const [dlcs, setDlcs] = useState<DLCItem[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -88,10 +90,10 @@ export const DLCManager = memo(function DLCManager({
           }
           setDlcStates(initialStates)
         } else {
-          setError('No DLCs found for this game')
+          setError(tNow('ui.dlc.none'))
         }
       } catch (e: any) {
-        if (!cancelled) setError(e?.message || 'Failed to fetch DLCs')
+        if (!cancelled) setError(e?.message || tNow('ui.dlc.fetchFail'))
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -110,14 +112,14 @@ export const DLCManager = memo(function DLCManager({
       const result = await bridge.installGame(dlcAppid)
       if (result?.success) {
         setDlcStates(prev => ({ ...prev, [dlcAppid]: 'installed' }))
-        showToast(`DLC installed: ${dlcs.find(d => d.appid === dlcAppid)?.name || dlcAppid}`, 'success')
+        showToast(tNow('ui.dlc.toast.installed', { name: dlcs.find(d => d.appid === dlcAppid)?.name || dlcAppid }), 'success')
       } else {
         setDlcStates(prev => ({ ...prev, [dlcAppid]: 'error' }))
-        showToast(result?.message || `Failed to install DLC ${dlcAppid}`, 'error')
+        showToast(result?.message || tNow('ui.dlc.toast.failed', { id: dlcAppid }), 'error')
       }
     } catch (e: any) {
       setDlcStates(prev => ({ ...prev, [dlcAppid]: 'error' }))
-      showToast(`Error installing DLC: ${e?.message}`, 'error')
+      showToast(tNow('ui.dlc.toast.error', { err: e?.message }), 'error')
     } finally {
       setInstallingIds(prev => {
         const next = new Set(prev)
@@ -147,7 +149,7 @@ export const DLCManager = memo(function DLCManager({
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2, ease: 'easeOut' }}
           className="fixed inset-0 z-[160] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
+          style={{ background: 'rgba(4,4,10,0.6)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}
           onClick={onClose}
         >
           <motion.div
@@ -159,10 +161,10 @@ export const DLCManager = memo(function DLCManager({
             style={{
               maxWidth: 520,
               maxHeight: '80vh',
-              background: colors.bgCard,
-              border: '1px solid rgba(255,255,255,0.06)',
-              borderRadius: '1rem',
-              boxShadow: '0 24px 80px rgba(0,0,0,0.5)',
+              background: '#0f0f1b',
+              border: '1px solid rgba(255,255,255,0.09)',
+              borderRadius: 24,
+              boxShadow: '0 60px 120px -30px rgba(0,0,0,1)',
               display: 'flex',
               flexDirection: 'column',
             }}
@@ -175,7 +177,7 @@ export const DLCManager = memo(function DLCManager({
               <div className="flex items-center gap-2.5">
                 <Layers size={18} style={{ color: colors.violet }} />
                 <h2 className="text-lg font-bold" style={{ color: colors.text }}>
-                  Manage DLCs
+                  {t('ui.dlc.title')}
                 </h2>
                 {!loading && dlcs.length > 0 && (
                   <span className="text-xs px-2 py-0.5 rounded-full" style={{
@@ -183,12 +185,13 @@ export const DLCManager = memo(function DLCManager({
                     color: colors.violetLight || colors.violet,
                     border: `1px solid ${colors.violet}30`,
                   }}>
-                    {dlcs.length} available
+                    {t('ui.dlc.available', { n: dlcs.length })}
                   </span>
                 )}
               </div>
               <motion.button
                 onClick={onClose}
+                aria-label={t('ui.common.close')}
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
                 className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer shrink-0"
@@ -237,7 +240,7 @@ export const DLCManager = memo(function DLCManager({
               {!loading && dlcs.length === 0 && !error && (
                 <div className="flex flex-col items-center justify-center py-10 gap-3">
                   <Loader2 size={28} style={{ color: colors.textMuted }} />
-                  <p className="text-sm" style={{ color: colors.textMuted }}>No DLC data available</p>
+                  <p className="text-sm" style={{ color: colors.textMuted }}>{t('ui.dlc.noData')}</p>
                 </div>
               )}
 
@@ -288,7 +291,7 @@ export const DLCManager = memo(function DLCManager({
                             style={{ color: colors.green }}
                           >
                             <CheckCircle2 size={14} />
-                            Installed
+                            {t('ui.common.installed')}
                           </div>
                         ) : (
                           <motion.button
@@ -300,8 +303,8 @@ export const DLCManager = memo(function DLCManager({
                             style={{
                               background: state === 'error'
                                 ? 'rgba(239,68,68,0.15)'
-                                : `linear-gradient(135deg, ${colors.violet}, ${colors.violet}cc)`,
-                              color: state === 'error' ? '#fca5a5' : colors.white,
+                                : 'var(--acc,#a77dff)',
+                              color: state === 'error' ? '#fca5a5' : '#0b0614',
                             }}
                           >
                             {isInstalling ? (
@@ -311,7 +314,7 @@ export const DLCManager = memo(function DLCManager({
                             ) : (
                               <Download size={12} />
                             )}
-                            {isInstalling ? 'Installing...' : state === 'error' ? 'Retry' : 'Install'}
+                            {isInstalling ? t('ui.common.installing') : state === 'error' ? t('ui.common.retry') : t('ui.common.install')}
                           </motion.button>
                         )}
                       </div>
@@ -328,8 +331,8 @@ export const DLCManager = memo(function DLCManager({
               >
                 <span className="text-xs" style={{ color: colors.textMuted }}>
                   {allInstalled
-                    ? 'All DLCs installed'
-                    : `${dlcs.filter(d => dlcStates[d.appid] === 'installed').length} / ${dlcs.length} installed`
+                    ? t('ui.dlc.allInstalled')
+                    : t('ui.dlc.progress', { done: dlcs.filter(d => dlcStates[d.appid] === 'installed').length, total: dlcs.length })
                   }
                 </span>
                 {!allInstalled && (
@@ -340,9 +343,9 @@ export const DLCManager = memo(function DLCManager({
                     whileTap={{ scale: 0.97 }}
                     className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold cursor-pointer disabled:opacity-50"
                     style={{
-                      background: `linear-gradient(135deg, ${colors.green}, ${colors.green}cc)`,
-                      color: colors.white,
-                      boxShadow: `0 2px 12px rgba(34,197,94,0.3), inset 0 1px 0 ${colors.whiteGlass}`,
+                      background: 'var(--acc,#a77dff)',
+                      color: '#0b0614',
+                      boxShadow: '0 16px 40px -14px var(--acc,#a77dff)',
                     }}
                   >
                     {installingIds.size > 0 ? (
@@ -350,7 +353,7 @@ export const DLCManager = memo(function DLCManager({
                     ) : (
                       <Download size={14} />
                     )}
-                    Install All ({dlcs.length - dlcs.filter(d => dlcStates[d.appid] === 'installed').length})
+                    {t('ui.dlc.installAll', { n: dlcs.length - dlcs.filter(d => dlcStates[d.appid] === 'installed').length })}
                   </motion.button>
                 )}
               </div>

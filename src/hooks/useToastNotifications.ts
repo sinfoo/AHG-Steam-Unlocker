@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { useUIStore, useUserStore } from '../store'
+import { useUIStore, useUserStore, useSettingsStore } from '../store'
 import type { LogEntry } from '../types'
 
 // Monotonic counter for toast ids — guarantees uniqueness even when two toasts
@@ -13,7 +13,8 @@ export function useToastNotifications() {
 
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'favorites' | 'info' = 'info') => {
     const id = ++toastIdCounter
-    setToasts(prev => [...prev, { id, message, type }])
+    if (type === 'error' || useSettingsStore.getState().notifications) setToasts(prev => [...prev, { id, message, type }])
+    useUIStore.getState().pushNotif({ id, message, type })
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id))
     }, 4000)

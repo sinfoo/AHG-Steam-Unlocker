@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import { useEffect } from 'react'
 import { useUIStore } from '../store'
 import { useToastNotifications } from './useToastNotifications'
@@ -16,13 +17,13 @@ export function useLicense() {
       checkLicense().then((result: { activated: boolean; machineId?: string; integrityFailed?: boolean; machineMismatch?: boolean }) => {
         console.log('[APP-TRACE] checkLicense result:', JSON.stringify(result))
         if (result.integrityFailed) {
-          showToast('Code modified - Re-activation required', 'error')
+          showToast(t('ui.toast.lic1'), 'error')
           useUIStore.getState().setActivationOpen(true)
         } else if (result.machineMismatch) {
-          showToast('License invalid on this device - Re-activate', 'error')
+          showToast(t('ui.toast.lic2'), 'error')
           useUIStore.getState().setActivationOpen(true)
         } else if (!result.activated) {
-          showToast('Activation required', 'info')
+          showToast(t('ui.toast.lic3'), 'info')
           useUIStore.getState().setActivationOpen(true)
         }
         useUIStore.getState().setIsActivated(result.activated)

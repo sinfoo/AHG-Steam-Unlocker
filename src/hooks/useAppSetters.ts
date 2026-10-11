@@ -10,7 +10,6 @@ import {
   useFixGamesStore,
   useScanStore,
   useUserStore,
-  useDiscordStore,
 } from '../store'
 
 export function useAppSetters() {
@@ -54,7 +53,6 @@ export function useAppSetters() {
   const setImportResult = useCallback((...args: any[]) => useUIStore.getState().setImportResult(args[0]), [])
   const setBatchSelectMode = useCallback((...args: any[]) => useUIStore.getState().setBatchSelectMode(args[0]), [])
   const setBatchSelected = useCallback((...args: any[]) => useUIStore.getState().setBatchSelected(args[0]), [])
-  const setStartupDiscordModal = useCallback((...args: any[]) => useUIStore.getState().setStartupDiscordModal(args[0]), [])
 
   // ── Settings Store Setters ──
   const setCompactMode = useCallback((...args: any[]) => useSettingsStore.getState().setCompactMode(args[0]), [])
@@ -65,7 +63,6 @@ export function useAppSetters() {
   const setBatchMode = useCallback((...args: any[]) => useSettingsStore.getState().setBatchMode(args[0]), [])
   const setQuickToolsOpen = useCallback((...args: any[]) => useSettingsStore.getState().setQuickToolsOpen(args[0]), [])
   const setPureBlack = useCallback((...args: any[]) => useSettingsStore.getState().setPureBlack(args[0]), [])
-  const setGameSharingEnabled = useCallback((...args: any[]) => useSettingsStore.getState().setGameSharingEnabled(args[0]), [])
   const setReducedMotion = useCallback((...args: any[]) => useSettingsStore.getState().setReducedMotion(args[0]), [])
 
   // ── Install Store Setters (core install) ──
@@ -141,11 +138,6 @@ export function useAppSetters() {
   const setSearchHistory = useCallback((...args: any[]) => useUserStore.getState().setSearchHistory(args[0]), [])
   const setShowSearchSuggestions = useCallback((...args: any[]) => useUserStore.getState().setShowSearchSuggestions(args[0]), [])
 
-  // ── Discord Store Setters ──
-  const setDiscordModalOpen = useCallback((...args: any[]) => useDiscordStore.getState().setDiscordModalOpen(args[0]), [])
-  const setDiscordConnected = useCallback((...args: any[]) => useDiscordStore.getState().setDiscordConnected(args[0]), [])
-  const setDiscordUser = useCallback((...args: any[]) => useDiscordStore.getState().setDiscordUser(args[0]), [])
-
   // ── Refs (migrated from App.tsx lines 1111-1115) ──
   const dlcCountRef = useRef(0)
 
@@ -199,7 +191,6 @@ export function useAppSetters() {
     setImportResult,
     setBatchSelectMode,
     setBatchSelected,
-    setStartupDiscordModal,
 
     // ── Settings Store ──
     setCompactMode,
@@ -210,7 +201,6 @@ export function useAppSetters() {
     setBatchMode,
     setQuickToolsOpen,
     setPureBlack,
-    setGameSharingEnabled,
     setReducedMotion,
 
     // ── Install Store (core) ──
@@ -283,11 +273,6 @@ export function useAppSetters() {
     setFixHealth,
     setSearchHistory,
     setShowSearchSuggestions,
-
-    // ── Discord Store ──
-    setDiscordModalOpen,
-    setDiscordConnected,
-    setDiscordUser,
 
     // ── Refs ──
     dlcCountRef,

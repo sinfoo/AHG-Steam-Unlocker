@@ -2,7 +2,7 @@ import { useEffect, useState, memo, useCallback, useMemo } from 'react'
 
 import '../styles/home-animations.css'
 import { PageProps } from '../types/pages'
-import { Game } from '../types'
+import { Game, Fix } from '../types'
 
 // Zustand stores
 import { useGameStore, useSettingsStore, useUserStore, useModalStore } from '../store'
@@ -24,7 +24,11 @@ import {
 } from '../components/shared'
 import { SearchBar } from '../components/SearchBar'
 import { LazySection } from '../components/LazySection'
-import { loadGameImage } from '../services/imageCache'
+import { getSteamImage } from '../utils/gameHelpers'
+import { SectionHeader } from '../components/home/SectionHeader'
+import { NewFixCard } from '../components/home/NewFixCard'
+import { useT, type TKey } from '../i18n'
+import { useGenreLabel } from '../utils/genreLabel'
 
 // New hero + skeleton components
 import HeroSection from '../components/HeroSection'
@@ -32,9 +36,9 @@ import HomePageSkeleton from '../components/HomePageSkeleton'
 
 // Lucide icons used directly in this component
 import {
-  Crown, Trophy, Calendar, Flame, Award, Users, Star, Clock,
-  Sword, Shield, FolderHeart, Gem, Target, Heart, Sparkles,
-  History, Gamepad2, Settings, Wrench,
+  Crown, Trophy, Calendar, Flame, Award, Users, Star, ArrowRight, Play, SlidersHorizontal,
+  Sword, Shield, Library, Gem, Target, Heart, Sparkles,
+  Compass, Wrench,
 } from 'lucide-react'
 
 // ── Seeded randomization helpers (stable per session/mount) ──────────────
@@ -67,7 +71,9 @@ const HomePage = memo(function HomePage({ handlers, colors, homeSections, recent
   recentGamesList: Game[]
   aiRecommendations: Game[]
 }) {
-  const { navigateTo, handleGameClick, playSound } = handlers
+  const t = useT()
+  const gl = useGenreLabel()
+  const { navigateTo, handleGameClick, playSound, toggleFavorite, handleApplyFix, handleInstallGame } = handlers
 
   // ── Skeleton visible for at least 200ms to prevent flash ──
   const [showSkeleton, setShowSkeleton] = useState(true)
@@ -77,31 +83,28 @@ const HomePage = memo(function HomePage({ handlers, colors, homeSections, recent
   }, [])
 
   // Store selectors
-  const { games, installedGames } = useGameStore(
-    useShallow(s => ({ games: s.games, installedGames: s.installedGames }))
+  const { games, installedGames, fixes } = useGameStore(
+    useShallow(s => ({ games: s.games, installedGames: s.installedGames, fixes: s.fixes }))
   )
   const setFixGamesModalOpen = useModalStore(s => s.setFixGamesModalOpen)
   const accentColor = useSettingsStore(s => s.accentColor)
 
   // Derived data
-  const { featuredGame, quickAccessOffset, favorites, recentGames, userStats, setFeaturedGame, setQuickAccessOffset } = useUserStore(
+  const { featuredGame, favorites, userStats, setFeaturedGame } = useUserStore(
     useShallow(s => ({
       featuredGame: s.featuredGame,
-      quickAccessOffset: s.quickAccessOffset,
       favorites: s.favorites,
-      recentGames: s.recentGames,
       userStats: s.userStats,
       setFeaturedGame: s.setFeaturedGame,
-      setQuickAccessOffset: s.setQuickAccessOffset,
     }))
   )
-  const trendingGames = homeSections.popularGames!.slice(0, 10)
+  const trendingGames = useMemo(() => homeSections.popularGames!.slice(0, 10), [homeSections.popularGames])
 
   // Alias colors to COLORS so the extracted JSX works as-is
   const COLORS = colors
 
   // Shared components use a different Game type; cast at the boundary
-  const onGameClick = (game: any) => handleGameClick(game as any)
+  const onGameClick = useCallback((game: any) => handleGameClick(game as any), [handleGameClick])
 
   // ── Filter & Search State ──
   const [activeFilter, setActiveFilter] = useState<string>('All')
@@ -119,9 +122,9 @@ const HomePage = memo(function HomePage({ handlers, colors, homeSections, recent
       dedupe(seededShuffle([...(genre || []).slice(0, 14), ...pop.slice(0, 14)], rng)).slice(0, 18)
 
     const railDefs = [
-      { id: 'rpg', section: 'RPG', title: 'RPG & Adventure', icon: Shield, color: COLORS.blue, games: railMix(homeSections.rpgGames || []) },
-      { id: 'indie', section: 'Indie', title: 'Indie Gems', icon: Gem, color: COLORS.violet, games: railMix(homeSections.indieGames || []) },
-      { id: 'mp', section: 'Multiplayer', title: 'Multiplayer Arena', icon: Users, color: COLORS.green, games: railMix(homeSections.multiplayerGames || []) },
+      { id: 'rpg', section: 'RPG', title: 'app.rail.rpg' as TKey, icon: Shield, color: COLORS.blue, games: railMix(homeSections.rpgGames || []) },
+      { id: 'indie', section: 'Indie', title: 'app.rail.indie' as TKey, icon: Gem, color: COLORS.violet, games: railMix(homeSections.indieGames || []) },
+      { id: 'mp', section: 'Multiplayer', title: 'app.rail.multiplayer' as TKey, icon: Users, color: COLORS.green, games: railMix(homeSections.multiplayerGames || []) },
     ]
 
     return {
@@ -158,245 +161,264 @@ const HomePage = memo(function HomePage({ handlers, colors, homeSections, recent
     return () => window.removeEventListener('keydown', handleKey)
   }, [games, featuredGame, setFeaturedGame, playSound])
 
-  const [quickGameImgs, setQuickGameImgs] = useState<Record<string, string | null>>({})
-  useEffect(() => {
-    const totalAAA = homeSections.aaaGames!.length
-    const offset = quickAccessOffset % Math.max(totalAAA, 1)
-    const games = totalAAA > 0
-      ? [...homeSections.aaaGames!.slice(offset, offset + 4), ...homeSections.aaaGames!.slice(0, Math.max(0, offset + 4 - totalAAA))].slice(0, 4)
-      : []
-    const results: Record<string, string | null> = {}
-    Promise.allSettled(
-      games.map(g => loadGameImage(g.appid, g.header_image || undefined, g.name || undefined, ['header.jpg']).then(url => { results[g.appid] = url }))
-    ).then(() => setQuickGameImgs(results))
-  }, [homeSections.aaaGames, quickAccessOffset])
+  // First fix whose game is in the loaded catalogue (fixes ~500, games 65k+: one Map + one pass, memoized)
+  const newFix = useMemo(() => {
+    if (!fixes.length || !games.length) return null
+    const byId = new Map<string, number>()
+    fixes.forEach((f, i) => { if (!byId.has(f.appid) && (f.download_url || f.download_urls?.length)) byId.set(f.appid, i) })
+    let best: { i: number; game: Game } | null = null
+    for (const g of games as Game[]) {
+      const i = byId.get(g.appid)
+      if (i !== undefined && (!best || i < best.i)) { best = { i, game: g }; if (i === 0) break }
+    }
+    return best ? { fix: fixes[best.i] as unknown as Fix, game: best.game } : null
+  }, [fixes, games])
 
-  // ── Section divider element ──
-  const Divider = () => (
-    <div className="col-span-12 py-1">
-      <div className="w-full h-px" style={{ background: `linear-gradient(90deg, transparent, ${COLORS.border}40, ${COLORS.violet}30, ${COLORS.border}40, transparent)` }} />
-    </div>
-  )
+  const installedIds = useMemo(() => new Set(installedGames.map(g => g.appid)), [installedGames])
+  const isFavorite = useCallback((id: string) => favorites.has(id), [favorites])
+  const isInstalled = useCallback((id: string) => installedIds.has(id), [installedIds])
+  const onInstall = useCallback((g: Game) => { useGameStore.getState().setSelectedGame(g as any); void (handleInstallGame as (g?: Game) => Promise<void>)(g) }, [handleInstallGame])
+  const catalogue = games.length >= 1000 ? `${Math.floor(games.length / 1000)}K+` : String(games.length)
+
+  // Remember a few covers for the next boot's splash wall (read in index.html)
+  useEffect(() => {
+    const ids = homeSections.aaaGames?.slice(0, 12).map(g => g.appid)
+    if (ids?.length) { try { localStorage.setItem('ahg.splashCovers', JSON.stringify(ids)) } catch { /* ignore */ } }
+  }, [homeSections.aaaGames])
+
+  const section = 'flex flex-col'
+  const filters = ['All', 'AAA', 'Action', 'RPG', 'Strategy', 'Multiplayer', 'Indie', 'Casual']
 
   return (
-      <div className="relative pb-16 px-0">
-        {/* Content with opacity transition — always mounted, skeleton overlays */}
-        <div
-          className={`transition-opacity duration-200 ${showSkeleton ? 'opacity-0' : 'opacity-100'}`}
-          style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
-        >
-        {/* Hero Section */}
-        <HeroSection
-          featuredGame={featuredGame}
-          accentColor={accentColor}
-          COLORS={COLORS}
-          onGameClick={onGameClick}
-          navigateTo={navigateTo}
-          playSound={playSound}
-          games={homeSections.aaaGames!}
-          setFeaturedGame={setFeaturedGame}
-          quickAccessOffset={quickAccessOffset}
-          setQuickAccessOffset={setQuickAccessOffset}
-          totalAAA={homeSections.aaaGames!.length}
-          quickGameImgs={quickGameImgs}
-          isLoaded={true}
-        />
+    <div className="relative" style={{ padding: '24px 24px 56px', width: '100%', maxWidth: 1680, margin: '0 auto' }}>
+      {/* Content with opacity transition — always mounted, skeleton overlays */}
+      <div
+        className={`transition-opacity duration-200 ${showSkeleton ? 'opacity-0' : 'opacity-100'}`}
+        style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
+      >
+        {/* Section filter style — hides sections that don't match active filter */}
+        {activeFilter !== 'All' && (
+          <style>{`
+            [data-section]:not([data-section="${activeFilter}"]):not([data-section="All"]) {
+              display: none !important;
+            }
+          `}</style>
+        )}
 
-        {/* Main Content */}
-        <div className="relative px-4 lg:px-8 py-8">
-          <div>
-            {/* Section filter style — hides sections that don't match active filter */}
-            {activeFilter !== 'All' && (
-              <style>{`
-                [data-section]:not([data-section="${activeFilter}"]):not([data-section="All"]) {
-                  display: none !important;
-                }
-              `}</style>
-            )}
+        <div className={`${section} gap-[34px]`}>
+          {/* ── Hero + side column (quick access, stats) ── */}
+          <HeroSection
+            featuredGame={featuredGame}
+            accentColor={accentColor}
+            COLORS={COLORS}
+            onGameClick={onGameClick}
+            navigateTo={navigateTo}
+            playSound={playSound}
+            games={homeSections.aaaGames!}
+            setFeaturedGame={setFeaturedGame}
+            isLoaded={true}
+            isFavorite={isFavorite}
+            isInstalled={isInstalled}
+            onToggleFavorite={toggleFavorite}
+            onInstall={onInstall}
+            sideExtra={
+              <>
+                {newFix && (
+                  <NewFixCard fix={newFix.fix} game={newFix.game} onApply={handleApplyFix} onAllFixes={() => navigateTo('fixes')} onOpen={onGameClick} />
+                )}
+                <div className="v2-panel p-2.5 grid grid-cols-2 gap-2" style={{ animation: 'v2-riseIn .45s .12s both' }}>
+                  <StatCard icon={Library} value={installedGames.length} label={t('app.home.inLibrary')} color={COLORS.violet} onClick={() => navigateTo('library')} />
+                  <StatCard icon={Heart} value={favorites.size} label={t('app.nav.favourites')} color={COLORS.pink} onClick={() => navigateTo('favourites')} />
+                  <StatCard icon={Wrench} value={userStats.fixesApplied} label={t('app.home.fixesApplied')} color={COLORS.amber} onClick={() => navigateTo('fixes')} />
+                  <StatCard icon={Compass} value={catalogue} label={t('app.home.catalogue')} color={COLORS.green} onClick={() => navigateTo('browse')} />
+                </div>
+              </>
+            }
+          />
 
-            {/* Search Bar */}
-            <div className="flex justify-center mb-4">
+          {/* ── Explore by genre ── */}
+          <div data-section="All">
+            <CategoriesShowcase onCategoryClick={() => navigateTo('browse')} colors={COLORS} games={games} />
+          </div>
+
+          {/* ── Jump back in (recent) ── */}
+          {recentGamesList.length > 0 && (
+            <section className="flex flex-col gap-4 v2-rise" data-section="All">
+              <div className="flex items-baseline gap-3">
+                <h2 className="m-0 text-[20px] font-semibold" style={{ letterSpacing: '-.02em', color: COLORS.text }}>{t('app.home.jumpBack')}</h2>
+                <span className="text-[13px]" style={{ color: COLORS.textDim }}>{t('app.home.yourHistory')}</span>
+                <span className="flex-1" />
+                <button onClick={() => navigateTo('recent')} className="border-0 bg-transparent cursor-pointer flex items-center gap-1 text-[13px] hover:text-white" style={{ color: COLORS.textMuted, transition: 'color .15s' }}>
+                  {t('app.home.viewHistory')} <ArrowRight size={14} className="rtl-flip" />
+                </button>
+              </div>
+              <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))' }}>
+                {recentGamesList.slice(0, 4).map((g, i) => (
+                  <div key={g.appid} onClick={() => onGameClick(g)}
+                    className="v2-lift relative overflow-hidden cursor-pointer rounded-[18px]"
+                    style={{ aspectRatio: '460/215', background: '#10101c', border: '1px solid rgba(255,255,255,.07)', animation: `v2-riseIn .4s ${i * 0.06}s var(--ease-out) both` }}>
+                    <img src={g.header_image || getSteamImage(g.appid)} alt="" loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" onError={e => { e.currentTarget.style.visibility = 'hidden' }} />
+                    <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(0deg, rgba(6,6,12,.92) 0%, rgba(6,6,12,.2) 60%)' }} />
+                    <div className="absolute start-4 end-4 bottom-3.5 flex items-end gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[15px] font-semibold truncate" style={{ color: COLORS.text }}>{g.name}</div>
+                        <div className="mono text-[11px] mt-[3px]" style={{ color: COLORS.textMuted }}>{t('app.home.recentlyViewed')}</div>
+                      </div>
+                      <button aria-label={t('app.home.openNamed', { name: g.name ?? '' })} onClick={e => { e.stopPropagation(); onGameClick(g) }}
+                        className="w-[42px] h-[42px] flex-none rounded-full border-0 cursor-pointer flex items-center justify-center hover:scale-110"
+                        style={{ background: 'var(--acc)', color: '#0b0614', boxShadow: '0 8px 24px -6px var(--acc)', transition: 'transform .2s cubic-bezier(.34,1.56,.64,1)' }}>
+                        <Play size={17} className="fill-current ms-0.5 rtl-flip" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* ── Trending Now — ranked poster rail (Top 10 look) ── */}
+          <div data-section="All">
+            <PosterRail title={t('app.home.trending')} subtitle={t('app.home.trendingSub')} icon={Flame} color="#f97316" games={trendingGames} ranked onGameClick={onGameClick} onSeeAll={() => navigateTo('browse')} colors={COLORS} />
+          </div>
+
+          {/* ── Discover — search + genre filter chips ── */}
+          <section className="v2-panel p-5 flex flex-col gap-4 v2-rise" data-section="All">
+            <SectionHeader icon={SlidersHorizontal} color="var(--acc)" title={t('app.home.discover')} sub={activeFilter === 'All' ? t('app.home.everything') : gl(activeFilter)} />
+            <div className="flex">
               <SearchBar onSearch={handleSearch} accentColor={accentColor} colors={COLORS} />
             </div>
-
-            {/* Filter Chips */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none" style={{ WebkitOverflowScrolling: 'touch' } as any}>
-              {['All', 'AAA', 'Action', 'RPG', 'Strategy', 'Multiplayer', 'Indie', 'Casual'].map(filter => (
-                <button
-                  key={filter}
-                  onClick={() => setActiveFilter(filter)}
-                  className="filter-chip px-4 py-1.5 rounded-full text-sm font-semibold whitespace-nowrap shrink-0 transition-all duration-150 hover:brightness-125 active:scale-95"
-                  style={{
-                    background: activeFilter === filter ? accentColor + '20' : 'rgba(255,255,255,0.04)',
-                    color: activeFilter === filter ? accentColor : COLORS.textMuted,
-                    border: `1px solid ${activeFilter === filter ? accentColor + '40' : 'rgba(255,255,255,0.06)'}`,
-                  }}
-                >
-                  {filter}
-                </button>
-              ))}
-            </div>
-
-            {/* Stats Bar */}
-            <div className="flex items-center gap-6 mb-8 overflow-x-auto pb-2">
-              <StatCard icon={FolderHeart} value={installedGames.length} label="Installed" color={COLORS.violet} onClick={() => navigateTo('library')} />
-              <StatCard icon={Heart} value={favorites.size} label="Favorites" color={COLORS.pink} onClick={() => navigateTo('favourites')} />
-              <StatCard icon={History} value={recentGames.length} label="Recent" color={COLORS.blue} onClick={() => navigateTo('recent')} />
-              <StatCard icon={Wrench} value={userStats.fixesApplied} label="Fixes Applied" color={COLORS.amber} />
-              <StatCard icon={Gamepad2} value={games.length} label="Total Games" color={COLORS.green} />
-              <div className="h-8 w-px" style={{ background: COLORS.border }} />
-              <button onClick={() => navigateTo('settings')} className="flex items-center gap-2 px-4 py-2 rounded-xl" style={{ background: COLORS.bgCard, border: `1px solid ${COLORS.border}` }}>
-                <Settings size={18} style={{ color: COLORS[accentColor as keyof typeof COLORS] }} />
-                <span className="text-sm font-medium" style={{ color: COLORS.text }}>Settings</span>
-              </button>
-            </div>
-
-            {/* ── Spotlight Feature — wide cinematic opener ── */}
-            <LazySection rootMargin="200px" minHeight={320}>
-              <div className="mb-8" data-section="All">
-                <SpotlightFeature game={picks.spotlight} label="Spotlight" onGameClick={onGameClick} colors={COLORS} />
+            <div className="flex flex-col gap-[7px]">
+              <span className="mono text-[10px]" style={{ letterSpacing: '.14em', color: '#77768e' }}>{t('app.home.genre')}</span>
+              <div className="flex gap-0.5 p-[3px] rounded-[11px] overflow-x-auto scrollbar-none self-start max-w-full" style={{ background: 'rgba(0,0,0,.28)', border: '1px solid rgba(255,255,255,.06)' }}>
+                {filters.map(filter => {
+                  const on = activeFilter === filter
+                  return (
+                    <button
+                      key={filter}
+                      onClick={() => setActiveFilter(filter)}
+                      className="h-7 px-[11px] border-0 rounded-lg text-[12.5px] font-semibold whitespace-nowrap shrink-0 cursor-pointer hover:text-white"
+                      style={{
+                        background: on ? 'var(--acc)' : 'transparent',
+                        color: on ? '#0b0614' : COLORS.textMuted,
+                        boxShadow: on ? '0 4px 14px -4px var(--acc)' : 'none',
+                        transition: 'all .18s',
+                      }}
+                    >
+                      {gl(filter)}
+                    </button>
+                  )
+                })}
               </div>
-            </LazySection>
+            </div>
+          </section>
 
-            {/* ── AAA Showcase ── */}
-            <LazySection rootMargin="200px" minHeight={300}>
-              {homeSections.aaaGames!.length > 0 && (
-                <div className="mb-8" data-section="AAA">
-                  <BentoCard title="AAA Blockbusters" icon={Crown} color={COLORS.amber} games={homeSections.aaaGames!.slice(0, 12)} layout="large" onGameClick={onGameClick} onSeeAll={() => navigateTo('browse')} colors={COLORS} />
+          {/* ── Spotlight Feature — wide cinematic opener ── */}
+          <LazySection rootMargin="200px" minHeight={320}>
+            <div data-section="All">
+              <SpotlightFeature game={picks.spotlight} label={t('app.home.spotlight')} onGameClick={onGameClick} colors={COLORS} />
+            </div>
+          </LazySection>
+
+          {/* ── AAA Showcase ── */}
+          <LazySection rootMargin="200px" minHeight={300}>
+            {homeSections.aaaGames!.length > 0 && (
+              <div data-section="AAA">
+                <BentoCard title={t('app.home.aaa')} icon={Crown} color={COLORS.amber} games={homeSections.aaaGames!.slice(0, 12)} layout="large" onGameClick={onGameClick} onSeeAll={() => navigateTo('browse')} colors={COLORS} />
+              </div>
+            )}
+          </LazySection>
+
+          {/* ── Must Play — poster rail (ranked) ── */}
+          <LazySection rootMargin="150px" minHeight={340}>
+            <div data-section="All">
+              <PosterRail title={t('app.home.mustPlay')} subtitle={t('app.home.mustPlaySub')} icon={Star} color={COLORS.amber} games={picks.mustPlay} ranked onGameClick={onGameClick} onSeeAll={() => navigateTo('browse')} colors={COLORS} />
+            </div>
+          </LazySection>
+
+          {/* ── Asymmetric mosaic ── */}
+          <LazySection rootMargin="150px" minHeight={320}>
+            <div data-section="All">
+              <FeatureMosaic games={picks.mosaic} onGameClick={onGameClick} colors={COLORS} />
+            </div>
+          </LazySection>
+
+          {/* ── Everything below ── */}
+          <LazySection rootMargin="100px" minHeight={420}>
+            <div className={`${section} gap-[34px]`}>
+              {/* Top Sellers (large) + side column */}
+              <div className="grid grid-cols-12 gap-4">
+                <div className="col-span-12 lg:col-span-8" data-section="All">
+                  <BentoCard title={t('app.home.topSellers')} icon={Trophy} color={COLORS.amber} games={homeSections.popularGames!.slice(0, 12)} layout="large" onGameClick={onGameClick} onSeeAll={() => navigateTo('browse')} colors={COLORS} />
                 </div>
-              )}
-            </LazySection>
-
-            {/* ── Must Play — premium PORTRAIT poster rail (ranked) ── */}
-            <LazySection rootMargin="150px" minHeight={340}>
-              <div className="mb-8" data-section="All">
-                <PosterRail title="Must Play" subtitle="Hand-picked essentials" icon={Star} color={COLORS.amber} games={picks.mustPlay} ranked onGameClick={onGameClick} onSeeAll={() => navigateTo('browse')} colors={COLORS} />
-              </div>
-            </LazySection>
-
-            {/* ── Asymmetric mosaic — mixed dimensions ── */}
-            <LazySection rootMargin="150px" minHeight={320}>
-              <div className="mb-8" data-section="All">
-                <FeatureMosaic games={picks.mosaic} onGameClick={onGameClick} colors={COLORS} />
-              </div>
-            </LazySection>
-
-            {/* ── Top Sellers (large) + side column ── */}
-            <LazySection rootMargin="100px" minHeight={420}>
-            <div className="grid grid-cols-12 gap-4">
-              <div className="col-span-12 lg:col-span-8 section-entrance" data-section="All">
-                <BentoCard title="Top Sellers" icon={Trophy} color={COLORS.amber} games={homeSections.popularGames!.slice(0, 12)} layout="large" onGameClick={onGameClick} onSeeAll={() => navigateTo('browse')} colors={COLORS} />
-              </div>
-              <div className="col-span-12 lg:col-span-4 space-y-4 section-entrance" data-section="All">
-                <QuickActionsCard colors={COLORS} installedCount={installedGames.length} favoritesCount={favorites.size} onDownloadFix={() => setFixGamesModalOpen(true)} onRefreshGames={() => {}} onMyLibrary={() => navigateTo('library')} onFavorites={() => navigateTo('favourites')} />
-                <BentoCard title="Coming Soon" icon={Calendar} color={COLORS.cyan} games={homeSections.popularGames!.slice(12, 20)} layout="compact" onGameClick={onGameClick} colors={COLORS} />
+                <div className="col-span-12 lg:col-span-4 flex flex-col gap-4" data-section="All">
+                  <QuickActionsCard colors={COLORS} installedCount={installedGames.length} favoritesCount={favorites.size} onDownloadFix={() => setFixGamesModalOpen(true)} onRefreshGames={() => {}} onMyLibrary={() => navigateTo('library')} onFavorites={() => navigateTo('favourites')} />
+                  <BentoCard title={t('app.home.comingSoon')} icon={Calendar} color={COLORS.cyan} games={homeSections.popularGames!.slice(12, 20)} layout="compact" onGameClick={onGameClick} colors={COLORS} />
+                </div>
               </div>
 
-              {/* Categories */}
-              <div className="col-span-12 section-entrance" data-section="All">
-                <CategoriesShowcase onCategoryClick={() => navigateTo('browse')} colors={COLORS} />
+              {/* Action & Shooter — poster rail (ranked) */}
+              <div data-section="Action">
+                <PosterRail title={t('app.home.actionShooter')} subtitle={t('app.home.actionShooterSub')} icon={Sword} color={COLORS.red} games={picks.action} ranked onGameClick={onGameClick} onSeeAll={() => navigateTo('browse')} colors={COLORS} />
               </div>
 
-              <Divider />
-
-              {/* ── Action & Shooter — premium PORTRAIT poster rail (fixed + ranked) ── */}
-              <div className="col-span-12 section-entrance" data-section="Action">
-                <PosterRail title="Action & Shooter" subtitle="Adrenaline, guns & glory" icon={Sword} color={COLORS.red} games={picks.action} ranked onGameClick={onGameClick} onSeeAll={() => navigateTo('browse')} colors={COLORS} />
-              </div>
-
-              {/* Most Played (landscape section) */}
-              <div className="col-span-12 section-entrance" data-section="All">
-                <GameSection title="Most Played" icon={Flame} color={COLORS.amber} games={homeSections.popularGames!.slice(0, 20)} onGameClick={onGameClick} onSeeAll={() => navigateTo('browse')} colors={COLORS} />
+              {/* Most Played (landscape rail) */}
+              <div data-section="All">
+                <GameSection title={t('app.home.mostPlayed')} icon={Flame} color={COLORS.amber} games={homeSections.popularGames!.slice(0, 20)} onGameClick={onGameClick} onSeeAll={() => navigateTo('browse')} colors={COLORS} />
               </div>
 
               {/* Two-column bentos */}
-              <div className="col-span-12 lg:col-span-6 section-entrance" data-section="All">
-                <BentoCard title="Staff Picks" icon={Award} color={COLORS.violet} games={homeSections.popularGames!.slice(20, 24)} layout="medium" onGameClick={onGameClick} onSeeAll={() => navigateTo('browse')} colors={COLORS} />
-              </div>
-              <div className="col-span-12 lg:col-span-6 section-entrance" data-section="Multiplayer">
-                <BentoCard title="Multiplayer Hits" icon={Users} color={COLORS.green} games={homeSections.multiplayerGames!.slice(0, 6)} layout="medium" onGameClick={onGameClick} onSeeAll={() => navigateTo('browse')} colors={COLORS} />
+              <div className="grid grid-cols-12 gap-4">
+                <div className="col-span-12 lg:col-span-6" data-section="All">
+                  <BentoCard title={t('app.home.staffPicks')} icon={Award} color={COLORS.violet} games={homeSections.popularGames!.slice(20, 24)} layout="medium" onGameClick={onGameClick} onSeeAll={() => navigateTo('browse')} colors={COLORS} />
+                </div>
+                <div className="col-span-12 lg:col-span-6" data-section="Multiplayer">
+                  <BentoCard title={t('app.home.multiplayerHits')} icon={Users} color={COLORS.green} games={homeSections.multiplayerGames!.slice(0, 6)} layout="medium" onGameClick={onGameClick} onSeeAll={() => navigateTo('browse')} colors={COLORS} />
+                </div>
               </div>
 
-              {/* ── Randomized genre rails (order shuffled per session) ── */}
+              {/* Randomized genre rails (order shuffled per session) */}
               {picks.genreRails.map(rail => (
-                <div key={rail.id} className="col-span-12 section-entrance" data-section={rail.section}>
-                  <GenreRow title={rail.title} icon={rail.icon} color={rail.color} games={rail.games} onGameClick={onGameClick} colors={COLORS} />
+                <div key={rail.id} data-section={rail.section}>
+                  <GenreRow title={t(rail.title)} icon={rail.icon} color={rail.color} games={rail.games} onGameClick={onGameClick} colors={COLORS} />
                 </div>
               ))}
 
-              {/* ── Second spotlight — rhythm break ── */}
+              {/* Second spotlight — rhythm break */}
               {picks.spotlight2 && (
-                <div className="col-span-12 section-entrance" data-section="All">
-                  <SpotlightFeature game={picks.spotlight2} label="Editor's Choice" onGameClick={onGameClick} colors={COLORS} />
+                <div data-section="All">
+                  <SpotlightFeature game={picks.spotlight2} label={t('app.home.editorsChoice')} onGameClick={onGameClick} colors={COLORS} />
                 </div>
               )}
-
-              {/* Recently Viewed */}
-              {recentGamesList.length > 0 && (
-                <div className="col-span-12 section-entrance" data-section="All">
-                  <BentoCard title="Your History" icon={Clock} color={COLORS.blue} games={recentGamesList.slice(0, 8)} layout="list" onGameClick={onGameClick} onSeeAll={() => navigateTo('recent')} colors={COLORS} />
-                </div>
-              )}
-
-              {/* Trending Now — compact tiles */}
-              <div className="col-span-12 section-entrance" data-section="All">
-                <div className="bg-mid/80 rounded-2xl border-t border-violet-500/10 p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-text font-semibold flex items-center gap-2">
-                      <Flame size={18} style={{ color: COLORS.red }} /> Trending Now
-                    </h3>
-                    <button onClick={() => navigateTo('browse')} className="text-text-muted text-sm hover:text-text transition-colors duration-80">See All →</button>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-                    {trendingGames.map((game, i) => (
-                      <div key={game.appid} onClick={() => onGameClick(game)} className="trending-card group cursor-pointer relative" style={{ background: COLORS.bgCard, borderRadius: '12px', overflow: 'hidden' }}>
-                        <div className={`rank-badge rank-badge-${i + 1}`}>#{i + 1}</div>
-                        <div className="aspect-[3/2] overflow-hidden">
-                          {game.header_image ? (
-                            <img src={game.header_image} alt={game.name || ''} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-75" loading="lazy" decoding="async" fetchPriority="low" />
-                          ) : (
-                            <div className="w-full h-full" style={{ background: `linear-gradient(135deg, ${COLORS.violet}30, ${COLORS.blue}20)` }} />
-                          )}
-                        </div>
-                        <div className="p-2"><p className="text-xs font-bold truncate" style={{ color: COLORS.text }}>{game.name}</p></div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
 
               {/* AI Recommendations */}
               {aiRecommendations.length > 0 && (
-                <div className="col-span-12 section-entrance" data-section="All">
-                  <div className="bg-mid/80 rounded-2xl border-t border-violet-500/10 p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-text font-semibold flex items-center gap-2"><Sparkles size={18} style={{ color: COLORS.violet }} /> AI Picks</h3>
-                    </div>
-                    <AIRecommendationsCard games={aiRecommendations} onGameClick={onGameClick} colors={COLORS} />
-                  </div>
-                </div>
+                <section className="v2-panel p-5 flex flex-col gap-4 v2-rise" data-section="All">
+                  <SectionHeader icon={Sparkles} color="#f472b6" title={t('app.home.aiPicks')} sub={t('app.home.aiPicksSub')} />
+                  <AIRecommendationsCard games={aiRecommendations} onGameClick={onGameClick} colors={COLORS} />
+                </section>
               )}
 
-              {/* ── Best of the Best — PORTRAIT poster rail (ranked) ── */}
-              <div className="col-span-12 section-entrance" data-section="All">
-                <PosterRail title="Best of the Best" subtitle="Top rated all-time" icon={Trophy} color={COLORS.violet} games={picks.bestOf} ranked onGameClick={onGameClick} onSeeAll={() => navigateTo('browse')} colors={COLORS} />
+              {/* Best of the Best — poster rail (ranked) */}
+              <div data-section="All">
+                <PosterRail title={t('app.home.bestOf')} subtitle={t('app.home.bestOfSub')} icon={Trophy} color={COLORS.violet} games={picks.bestOf} ranked onGameClick={onGameClick} onSeeAll={() => navigateTo('browse')} colors={COLORS} />
               </div>
 
               {/* Two-column bentos 2 */}
-              <div className="col-span-12 lg:col-span-6 section-entrance" data-section="Strategy">
-                <BentoCard title="Strategy Masters" icon={Target} color={COLORS.cyan} games={homeSections.popularGames!.slice(24, 28)} layout="medium" onGameClick={onGameClick} onSeeAll={() => navigateTo('browse')} colors={COLORS} />
-              </div>
-              <div className="col-span-12 lg:col-span-6 section-entrance" data-section="Indie">
-                <BentoCard title="Indie Gems" icon={Gem} color={COLORS.amber} games={homeSections.indieGames!.slice(0, 4).length >= 4 ? homeSections.indieGames!.slice(0, 4) : homeSections.popularGames!.slice(28, 32)} layout="medium" onGameClick={onGameClick} onSeeAll={() => navigateTo('browse')} colors={COLORS} />
+              <div className="grid grid-cols-12 gap-4">
+                <div className="col-span-12 lg:col-span-6" data-section="Strategy">
+                  <BentoCard title={t('app.home.strategyMasters')} icon={Target} color={COLORS.cyan} games={homeSections.popularGames!.slice(24, 28)} layout="medium" onGameClick={onGameClick} onSeeAll={() => navigateTo('browse')} colors={COLORS} />
+                </div>
+                <div className="col-span-12 lg:col-span-6" data-section="Indie">
+                  <BentoCard title={t('app.rail.indie')} icon={Gem} color={COLORS.amber} games={homeSections.indieGames!.slice(0, 4).length >= 4 ? homeSections.indieGames!.slice(0, 4) : homeSections.popularGames!.slice(28, 32)} layout="medium" onGameClick={onGameClick} onSeeAll={() => navigateTo('browse')} colors={COLORS} />
+                </div>
               </div>
 
               {/* Bottom Actions */}
-              <div className="col-span-12 section-entrance" data-section="All">
+              <div data-section="All">
                 <BottomActionsCard onBrowse={() => navigateTo('browse')} onLibrary={() => navigateTo('library')} onFavorites={() => navigateTo('favourites')} onSettings={() => navigateTo('settings')} colors={COLORS} />
               </div>
             </div>
-            </LazySection>
-          </div>
+          </LazySection>
         </div>
       </div>
 

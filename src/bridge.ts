@@ -1,4 +1,5 @@
 import { Game, Fix } from './types'
+import { useUserStore } from './store/userStore'
 
 // ── SQLite Query Types ──
 export interface QueryGamesOpts {
@@ -502,63 +503,6 @@ export const bridge = {
     return {}
   },
 
-  // ── Discord Integration ──
-
-  async discordLogin(): Promise<{ success: boolean; user?: any; isInGuild?: boolean; message?: string; diagnostics?: any }> {
-    const api = getAPI()
-    if (api && api.discordLogin) return api.discordLogin()
-    return { success: false, message: 'Not available' }
-  },
-
-  async checkDiscordAuth(): Promise<{ authenticated: boolean; user?: any; isInGuild?: boolean }> {
-    const api = getAPI()
-    if (api && api.checkDiscordAuth) return api.checkDiscordAuth()
-    return { authenticated: false }
-  },
-
-  async discordLogout(): Promise<{ success: boolean }> {
-    const api = getAPI()
-    if (api && api.discordLogout) return api.discordLogout()
-    return { success: false }
-  },
-
-  async getSecretsDiag(): Promise<any> {
-    const api = getAPI()
-    if (api && api.getSecretsDiag) return api.getSecretsDiag()
-    return { loaded: false, keysFound: 'none' }
-  },
-
-
-  async setGameSharing(enabled: boolean): Promise<{ success: boolean }> {
-    const api = getAPI()
-    if (api && api.setGameSharing) return api.setGameSharing(enabled)
-    return { success: false }
-  },
-
-  async getGameSharing(): Promise<{ enabled: boolean }> {
-    const api = getAPI()
-    if (api && api.getGameSharing) return api.getGameSharing()
-    return { enabled: false }
-  },
-
-  async shareGameToDiscord(appid: string, gameName: string, coverUrl?: string, dlcCount?: number): Promise<{ success: boolean; message?: string }> {
-    const api = getAPI()
-    if (api && api.shareGameToDiscord) return api.shareGameToDiscord(appid, gameName, coverUrl, dlcCount)
-    return { success: false, message: 'Not available' }
-  },
-
-  async getDiscordStartupPref(): Promise<{ showOnStartup: boolean }> {
-    const api = getAPI()
-    if (api && api.getDiscordStartupPref) return api.getDiscordStartupPref()
-    return { showOnStartup: true }
-  },
-
-  async setDiscordStartupPref(pref: { showOnStartup: boolean }): Promise<{ success: boolean; message?: string }> {
-    const api = getAPI()
-    if (api && api.setDiscordStartupPref) return api.setDiscordStartupPref(pref)
-    return { success: false, message: 'Not available' }
-  },
-
   // ── Cancel download (optional appid — cancels all by default) ──
   async cancelDownload(appid?: string): Promise<{ success: boolean; aborted: number }> {
     const api = getAPI()
@@ -581,7 +525,11 @@ export const bridge = {
 
   async launchGame(appid: string): Promise<{ success: boolean; message?: string }> {
     const api = getAPI()
-    if (api && api.launchGame) return api.launchGame(appid)
+    if (api && api.launchGame) {
+      const r = await api.launchGame(appid)
+      if (r?.success) useUserStore.getState().logActivity(appid, 'launched')
+      return r
+    }
     return { success: false, message: 'Not available' }
   },
 

@@ -4,7 +4,9 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { ipcMain, app, BrowserWindow } = require('electron');
 const { botApi } = require('../utils/botApi.cjs');
-const { DISCORD_INVITE_URL } = require('./discord.cjs');
+const { secrets } = require('../utils/secrets.cjs');
+// Community/support invite link (overridable from secrets.json when an invite expires).
+const DISCORD_INVITE_URL = 'https://discord.gg/' + (secrets.discordInvite || 'GGB4TzDxY9');
 
 const LICENSE_FILE = path.join(app.getPath('userData'), 'ahg_license.json');
 const MACHINE_ID_FILE = path.join(app.getPath('userData'), 'ahg_machine_id.json');

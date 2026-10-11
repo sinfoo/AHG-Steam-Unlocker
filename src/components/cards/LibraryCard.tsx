@@ -6,6 +6,8 @@ import { COLORS } from '../../constants/colors'
 import { getGenreHue, getGenreTag, formatBytes } from '../../utils/gameHelpers'
 import type { Game } from '../../types'
 import type { ColorScheme } from '../../types/colors'
+import { useT } from '../../i18n'
+import { useGenreLabel } from '../../utils/genreLabel'
 
 // ── Singleton CSS keyframe injection (avoids duplicates across card instances) ──
 let _lcAnimInjected = false
@@ -49,6 +51,8 @@ export const LibraryCard = memo(function LibraryCard({
 }: {
   game: Game; index: number; onDelete: (appid: string) => void; onContextMenu?: (e: React.MouseEvent, game: Game) => void; colors: ColorScheme
 }) {
+  const t = useT()
+  const gl = useGenreLabel()
   const [isHovered, setIsHovered] = useState(false)
   const [btnHovered, setBtnHovered] = useState(false)
   const [coverUrl, setCoverUrl] = useState<string | null>(null)
@@ -106,58 +110,25 @@ export const LibraryCard = memo(function LibraryCard({
     setCoverUrl(null)
   }, [])
 
+  const genreTag = (() => { const g = getGenreTag(game); return g ? gl(g) : g })()
+
   return (
     <div
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(e, game); }}
-      className="group relative rounded-xl overflow-hidden cursor-pointer flex flex-col"
+      className="v2-card"
       style={{
-        /* Entry animation handoff: CSS card-entry runs on mount, then removed */
-        animation: mounted ? 'none' : 'card-entry 0.12s both',
-        animationDelay: Math.min(index * 20, 300) + 'ms',
-        /* Hover lift (only active after entry animation completes) */
-        transform: mounted ? (isHovered ? 'translateY(-4px)' : 'translateY(0)') : undefined,
-        transition: mounted
-          ? 'transform 0.08s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.08s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.08s cubic-bezier(0.4, 0, 0.2, 1)'
-          : undefined,
-        /* Always-active styles */
         zIndex: isHovered ? 20 : 1,
-        background: colors.bgCard,
-        border: `1px solid ${isHovered ? `hsla(${genreHue}, 50%, 45%, 0.4)` : 'rgba(255,255,255,0.06)'}`,
-        boxShadow: isHovered
-          ? `0 20px 60px hsla(${genreHue}, 50%, 20%, 0.35), 0 0 100px hsla(${genreHue}, 60%, 35%, 0.1), 0 0 0 1px hsla(${genreHue}, 50%, 50%, 0.25)`
-          : `0 4px 12px rgba(0,0,0,0.3)`,
+        animation: mounted ? 'none' : `v2-riseIn .4s var(--ease-out) ${Math.min(index * 0.03, 0.4)}s both`,
       }}
     >
       {/* Portrait image area — 2:3 aspect */}
-      <div className="relative overflow-hidden w-full" style={{ aspectRatio: '2/3' }}>
-        {/* Genre-based ambient glow */}
-        <div
-          className="absolute inset-0 pointer-events-none z-0"
-          style={{
-            background: `radial-gradient(ellipse at 50% 30%, hsla(${genreHue}, 70%, 50%, 0.15) 0%, transparent 70%)`,
-            opacity: isHovered ? 1 : 0.4,
-            transition: 'opacity 0.3s ease',
-          }}
-        />
-        {/* Portrait image or genre-colored placeholder / loading spinner */}
+      <div className="v2-card-cover">
         {coverError ? (
-          <div
-            className="w-full h-full flex flex-col items-center justify-center"
-            style={{
-              background: generatePlaceholderGradient(genreHue, 'card')
-            }}
-          >
-            <div className="absolute inset-0" style={{
-              background: generatePlaceholderGradient(genreHue, 'icon')
-            }} />
-            <span style={{
-              color: `hsl(${genreHue}, 70%, 70%)`,
-              fontSize: '2rem',
-              fontWeight: 'bold',
-              textShadow: `0 2px 12px hsla(${gradHues.h1}, 70%, 50%, 0.5)`
-            }}>
+          <div className="w-full h-full flex flex-col items-center justify-center" style={{ background: generatePlaceholderGradient(genreHue, 'card') }}>
+            <div className="absolute inset-0" style={{ background: generatePlaceholderGradient(genreHue, 'icon') }} />
+            <span style={{ color: `hsl(${genreHue}, 45%, 78%)`, fontSize: '2rem', fontWeight: 600, opacity: 0.8, position: 'relative' }}>
               {gameInitial}
             </span>
           </div>
@@ -185,150 +156,69 @@ export const LibraryCard = memo(function LibraryCard({
               loading={index < 8 ? 'eager' : 'lazy'}
               onLoad={handleImageLoad}
               onError={handleImageError}
-              className="w-full h-full object-cover transition-transform duration-500 ease-out"
+              className="w-full h-full object-cover"
               style={{
-                transform: isHovered ? 'scale(1.06)' : 'scale(1)',
                 opacity: imageLoaded ? 1 : lqip ? 0 : 1,
-                transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.08s cubic-bezier(0.4, 0, 0.2, 1)',
+                transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
               }}
             />
           </>
         ) : (
           /* Loading spinner while imageCache resolves */
-          <div
-            className="w-full h-full flex flex-col items-center justify-center"
-            style={{
-              background: generatePlaceholderGradient(genreHue, 'card')
-            }}
-          >
+          <div className="w-full h-full flex flex-col items-center justify-center" style={{ background: generatePlaceholderGradient(genreHue, 'card') }}>
             <div
               className="w-7 h-7 rounded-full"
-              style={{ border: `2px solid transparent`, borderTopColor: `hsl(${genreHue}, 70%, 70%)`, animation: 'gc-spin 0.8s linear infinite' }}
+              style={{ border: '2px solid transparent', borderTopColor: 'var(--acc)', animation: 'gc-spin 0.8s linear infinite' }}
             />
           </div>
         )}
-        {/* Premium glass hover overlay — stronger blur, genre-tinted gradient */}
-        <div
-          className="absolute inset-0 z-10 pointer-events-none"
-          style={{
-            WebkitBackdropFilter: isHovered ? 'blur(3px) saturate(1.1)' : 'blur(0px)',
-            transition: '-webkit-backdrop-filter 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.25s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-            opacity: isHovered ? 1 : 0,
-            background: isHovered
-              ? `linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.2) 30%, hsla(${genreHue}, 60%, 15%, 0.45) 55%, rgba(0,0,0,0.88) 100%)`
-              : `linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.4) 40%, rgba(0,0,0,0.85) 100%)`,
-            backdropFilter: isHovered ? 'blur(3px) saturate(1.1)' : 'blur(0px)',
-          }}
-        />
-        {/* Subtle shine sweep across glass on hover */}
-        <div
-          className="absolute inset-0 z-10 pointer-events-none overflow-hidden"
-          style={{
-            opacity: isHovered ? 1 : 0,
-            transition: 'opacity 0.3s ease',
-          }}
-        >
-          <div
-            className="absolute w-full h-full"
-            style={{
-              background: 'linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.06) 45%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.06) 55%, transparent 70%)',
-              transform: 'skewX(-15deg)',
-              left: isHovered ? undefined : '-100%',
-              animation: isHovered ? 'lc-shine-sweep 2.5s ease-in-out infinite' : 'none',
-              transition: 'left 0.3s ease',
-            }}
-          />
+
+        {/* Static readability gradient */}
+        <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(180deg,rgba(0,0,0,.35) 0%,transparent 22%,transparent 70%,rgba(0,0,0,.4) 100%)' }} />
+
+        {/* Installed marker (everything in the library is installed) */}
+        <div className="absolute top-2 start-2 z-10 pointer-events-none">
+          <span className="flex items-center gap-[5px] text-[10.5px] font-semibold px-[7px] py-[3px] rounded-[7px]"
+            style={{ color: '#d7ffe4', background: 'rgba(8,20,12,.75)', border: '1px solid rgba(34,197,94,.35)' }}>
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: COLORS.green, boxShadow: `0 0 8px ${COLORS.green}` }} />{t('app.card.installed')}
+          </span>
         </div>
-        {/* Content revealed on hover — name, tags, size */}
-        <div
-          className="absolute inset-x-0 bottom-0 z-20 px-3 pb-4 pt-12"
-          style={{
-            opacity: isHovered ? 1 : 0,
-            transform: isHovered ? 'translateY(0)' : 'translateY(12px)',
-            transition: 'opacity 0.18s cubic-bezier(0.4, 0, 0.2, 1), transform 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
-          }}
-        >
-          {/* Game name — with genre-tinted gradient background for readability */}
-          {showName && (
-            <>
-              <div className="absolute inset-x-0 bottom-0 h-16 pointer-events-none" style={{
-                background: `linear-gradient(0deg, hsla(${genreHue}, 40%, 5%, 0.85) 0%, transparent 100%)`,
-              }} />
-              <p
-                className="relative text-sm font-bold leading-tight mb-1.5 drop-shadow-lg"
-                style={{ color: `hsl(${genreHue}, 55%, 80%)` }}
-              >
-                {game.name}
-              </p>
-            </>
-          )}
-          {/* Platform/format tags */}
-          <div className="relative flex items-center gap-1.5 flex-wrap">
-            {game.platforms && game.platforms.length > 0 && game.platforms.map(p => (
-              <span key={p} className="text-[9px] font-medium px-1.5 py-0.5 rounded leading-none backdrop-blur-sm"
-                style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', border: `1px solid ${COLORS.whiteGlassBorder}` }}
-              >
-                {p === 'windows' ? 'Win' : p === 'mac' ? 'Mac' : p === 'linux' ? 'Linux' : p}
-              </span>
-            ))}
+
+        {/* Hover overlay — chips */}
+        <div className="v2-card-ov" style={{ pointerEvents: 'none' }}>
+          <div className="flex gap-1.5 flex-wrap">
+            {genreTag && <span className="text-[10.5px] px-[7px] py-[3px] rounded-md" style={{ color: '#d9d7ea', background: 'rgba(255,255,255,.1)' }}>{genreTag}</span>}
             {(game.type || '').toLowerCase() === 'dlc' && (
-              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded leading-none backdrop-blur-sm"
-                style={{ background: `${COLORS.green}33`, color: COLORS.green, border: `1px solid ${COLORS.green}40` }}
-              >
-                DLC
-              </span>
+              <span className="text-[10.5px] px-[7px] py-[3px] rounded-md" style={{ background: `${COLORS.green}33`, color: COLORS.green }}>DLC</span>
             )}
             {game.size ? (
-              <span className="flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded leading-none backdrop-blur-sm"
-                style={{ background: COLORS.whiteGlass, color: 'rgba(255,255,255,0.5)', border: `1px solid ${COLORS.whiteGlass}` }}
-              >
-                <HardDrive size={9} />
-                {formatBytes(game.size)}
+              <span className="mono flex items-center gap-1 text-[10.5px] px-[7px] py-[3px] rounded-md" style={{ color: '#d9d7ea', background: 'rgba(255,255,255,.1)' }}>
+                <HardDrive size={9} />{formatBytes(game.size)}
               </span>
             ) : null}
           </div>
         </div>
-        {/* Premium delete button — appears on hover, minimal */}
+
+        {/* Delete button — hover-revealed */}
         <button
-          onMouseEnter={() => setBtnHovered(true)}
-          onMouseLeave={() => setBtnHovered(false)}
-          onMouseDown={(e) => {
-            e.currentTarget.style.transform = isHovered ? 'scale(0.85)' : 'scale(0.8)';
-            e.currentTarget.style.filter = 'brightness(0.85)';
-          }}
-          onMouseUp={(e) => {
-            e.currentTarget.style.transform = isHovered
-              ? (btnHovered ? 'scale(1.1)' : 'scale(1)')
-              : 'scale(0.8)';
-            e.currentTarget.style.filter = '';
-          }}
-          className="absolute top-2.5 right-2.5 w-8 h-8 rounded-full flex items-center justify-center z-20 cursor-pointer"
-          style={{
-            background: btnHovered ? `${colors.red}cc` : 'rgba(0,0,0,0.5)',
-            backdropFilter: 'blur(4px)',
-            WebkitBackdropFilter: 'blur(4px)',
-            boxShadow: `0 4px 20px ${colors.red}30`,
-            opacity: isHovered ? 1 : 0,
-            transform: isHovered
-              ? (btnHovered ? 'scale(1.1)' : 'scale(1)')
-              : 'scale(0.8)',
-            transition: 'all 0.08s cubic-bezier(0.4, 0, 0.2, 1)',
-          }}
+          aria-label={t('app.card.removeNamed', { name: game.name ?? '' })}
+          title={t('app.card.removeFromLib')}
+          className="v2-card-fav z-20"
+          style={{ opacity: isHovered ? 1 : 0, transition: 'opacity .3s ease, background .15s, transform .15s' }}
           onClick={(e) => { e.stopPropagation(); onDelete(game.appid); }}
         >
-          <Trash2 size={14} className="text-white" />
+          <Trash2 size={14} />
         </button>
-        {/* Animated gradient border glow on hover */}
-        <div
-          className="absolute inset-0 rounded-xl pointer-events-none z-30"
-          style={{
-            '--gh-hue': genreHue,
-            animation: isHovered ? 'lc-glow-pulse 3.5s ease-in-out infinite' : 'none',
-            opacity: isHovered ? 1 : 0,
-            boxShadow: 'inset 0 0 0 0px transparent',
-            transition: 'opacity 0.2s ease, box-shadow 0.2s ease',
-          } as React.CSSProperties}
-        />
+      </div>
+
+      {/* Title + meta below the cover */}
+      <div className="flex flex-col gap-[3px] px-0.5 min-w-0">
+        <div className="text-[13.5px] font-semibold whitespace-nowrap overflow-hidden text-ellipsis" style={{ color: COLORS.text }}>
+          {showName ? game.name : t('app.card.appId', { id: game.appid })}
+        </div>
+        <div className="mono text-[11px] whitespace-nowrap overflow-hidden text-ellipsis" style={{ color: COLORS.textDim }}>
+          {[genreTag, game.size ? formatBytes(game.size) : null].filter(Boolean).join(' · ') || ' '}
+        </div>
       </div>
     </div>
   )
@@ -346,12 +236,14 @@ export const LibraryListCard = memo(function LibraryListCard({
 }: {
   game: Game; index: number; onDelete: (appid: string) => void; onContextMenu?: (e: React.MouseEvent, game: Game) => void; colors: ColorScheme; compactMode?: boolean
 }) {
+  const t = useT()
+  const gl = useGenreLabel()
   const [isHovered, setIsHovered] = useState(false)
   const [btnHovered, setBtnHovered] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [coverUrl, setCoverUrl] = useState<string | null>(null)
   const [coverError, setCoverError] = useState(true)
-  const genreTag = useMemo(() => getGenreTag(game), [game])
+  const genreTag = (() => { const g = getGenreTag(game); return g ? gl(g) : g })()
   const genreHue = useMemo(() => getGenreHue(game), [game])
 
   // Inject singleton styles once
@@ -396,11 +288,9 @@ export const LibraryListCard = memo(function LibraryListCard({
           ? 'all 0.08s cubic-bezier(0.4, 0, 0.2, 1)'
           : undefined,
         /* Always-active styles */
-        background: isHovered ? `linear-gradient(135deg, hsla(${genreHue}, 50%, 25%, 0.12), ${colors.bgCard})` : colors.bgCard,
-        border: `1px solid ${isHovered ? `hsla(${genreHue}, 50%, 45%, 0.35)` : colors.border}`,
-        boxShadow: isHovered
-          ? `0 8px 40px hsla(${genreHue}, 50%, 20%, 0.2), 0 0 60px hsla(${genreHue}, 60%, 35%, 0.06), 0 0 0 1px hsla(${genreHue}, 50%, 45%, 0.18)`
-          : 'none',
+        background: isHovered ? 'rgba(255,255,255,0.04)' : 'var(--s1, #0f0f1b)',
+        border: `1px solid ${isHovered ? 'color-mix(in oklch, var(--acc) 50%, transparent)' : 'rgba(255,255,255,0.07)'}`,
+        boxShadow: isHovered ? '0 20px 36px -22px color-mix(in oklch, var(--acc) 60%, transparent)' : 'none',
       }}
     >
       {/* Thumbnail with genre-accented styling */}
@@ -470,8 +360,7 @@ export const LibraryListCard = memo(function LibraryListCard({
       <div className="flex-1 min-w-0">
         <p
           style={{
-            color: isHovered ? `hsl(${genreHue}, 55%, 70%)` : colors.text,
-            transition: 'color 0.08s cubic-bezier(0.4, 0, 0.2, 1)',
+            color: colors.text,
           }}
           className="font-semibold truncate text-sm"
         >
@@ -511,7 +400,6 @@ export const LibraryListCard = memo(function LibraryListCard({
         className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
         style={{
           background: btnHovered ? `${colors.red}cc` : 'rgba(0,0,0,0.5)',
-          backdropFilter: 'blur(4px)',
           WebkitBackdropFilter: 'blur(4px)',
           opacity: isHovered ? 1 : 0,
           transform: isHovered

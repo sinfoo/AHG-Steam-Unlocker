@@ -9,6 +9,7 @@ import { useGameStore } from '../../store'
 import { CardShell } from './CardShell'
 import { InstallSpeedBadge } from './InstallSpeedBadge'
 import { getGenreHue, isRecentlyAdded, formatBytes } from '../../utils/gameHelpers'
+import { useT } from '../../i18n'
 
 // Transition constant — DESIGN.md: 80ms cubic-bezier(0.4, 0, 0.2, 1)
 const T = '0.08s cubic-bezier(0.4, 0, 0.2, 1)'
@@ -46,6 +47,7 @@ export const GameCard = memo(function GameCard({
   isInLibrary?: boolean; onRemoveFromLibrary?: (game: Game) => void
   compactMode?: boolean
 }) {
+  const t = useT()
   const genreHue = useMemo(() => getGenreHue(game), [game])
   // Subscribes only to this game's update flag — re-renders just this card when it flips.
   const hasUpdate = useGameStore(s => !!isInLibrary && s.gamesWithUpdates.has(String(game.appid)))
@@ -68,7 +70,7 @@ export const GameCard = memo(function GameCard({
           {/* ── Batch mode selector ── */}
           {batchMode && (
             <div
-              className="absolute top-3 left-3 z-30 w-7 h-7 rounded-full flex items-center justify-center cursor-pointer"
+              className="absolute top-3 start-3 z-30 w-7 h-7 rounded-full flex items-center justify-center cursor-pointer"
               style={{
                 background: isSelected ? colors.green : 'rgba(0,0,0,0.6)',
                 boxShadow: isSelected ? `0 0 20px ${colors.green}80` : 'none',
@@ -81,41 +83,10 @@ export const GameCard = memo(function GameCard({
 
           {viewMode === 'grid' ? (
             <>
-              {/* ══════ Grid Mode ══════ */}
+              {/* ══════ Grid Mode (v2) ══════ */}
 
-              {/* ── "New" badge for recently-added games ── */}
-              {isRecentlyAdded(game) && (
-                <div className="absolute top-3 left-3 z-20 px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(16,185,129,0.85), rgba(5,150,105,0.7))',
-                    color: 'white',
-                    boxShadow: '0 2px 8px rgba(16,185,129,0.35)',
-                  }}
-                >
-                  New
-                </div>
-              )}
-
-              {/* ── Install speed badge (below "New", above "Installed") ── */}
-              {game.size && !isInLibrary && (
-                <div className="absolute top-[36px] right-3 z-20">
-                  <InstallSpeedBadge sizeBytes={game.size} />
-                </div>
-              )}
-
-              {/* ── Cover Section (16:9) ── */}
-              <div
-                className="relative overflow-hidden card-sheen"
-                style={{ aspectRatio: '16/9' }}
-              >
-                {/* Genre-tinted placeholder background */}
-                <div
-                  className="absolute inset-0 pointer-events-none"
-                  style={{
-                    background: `linear-gradient(135deg, hsla(${genreHue}, 60%, 15%, 0.50), ${COLORS.bgDeep})`,
-                  }}
-                />
-
+              {/* ── Cover Section (16:9 — header art keeps the warm image cache hot) ── */}
+              <div className="relative overflow-hidden" style={{ aspectRatio: '16/9', background: 'var(--s2, #151524)' }}>
                 {/* Image with IndexedDB caching via GameCover */}
                 <GameCover
                   appid={game.appid}
@@ -128,99 +99,97 @@ export const GameCard = memo(function GameCard({
                   style={isHovered ? COVER_STYLE_HOVERED : COVER_STYLE_DEFAULT}
                 />
 
-                {/* Cinematic gradient overlay */}
+                {/* Top/bottom readability gradient */}
                 <div
-                  className="absolute inset-0 pointer-events-none"
-                  style={{
-                    background: 'linear-gradient(to top, rgba(10,10,15,0.95) 10%, rgba(10,10,15,0.30) 40%, transparent 60%)',
-                  }}
+                  className="absolute inset-0 pointer-events-none z-[2]"
+                  style={{ background: 'linear-gradient(180deg,rgba(0,0,0,.35) 0%,transparent 28%,transparent 62%,rgba(6,6,12,.55) 100%)' }}
                 />
 
-                {/* Genre vignette on hover — CSS only via class */}
-                <div className={`card-genre-vignette ${isHovered ? 'active' : ''}`}
-                  style={{ '--ghue': genreHue } as React.CSSProperties}
-                />
+                {/* ── Badges (top-left) ── */}
+                <div className="absolute top-2 start-2 end-12 z-20 flex items-center gap-1.5 pointer-events-none select-none">
+                  {isInLibrary ? (
+                    <span
+                      className="flex items-center gap-[5px] text-[10.5px] font-semibold px-[7px] py-[3px] rounded-[7px]"
+                      style={hasUpdate
+                        ? { color: '#fde68a', background: 'rgba(30,20,4,.78)', border: '1px solid rgba(245,158,11,.4)', }
+                        : { color: '#d7ffe4', background: 'rgba(8,20,12,.75)', border: '1px solid rgba(34,197,94,.35)', }}
+                    >
+                      {hasUpdate
+                        ? <DownloadIcon size={10} />
+                        : <span className="w-1.5 h-1.5 rounded-full" style={{ background: COLORS.green, boxShadow: `0 0 8px ${COLORS.green}` }} />}
+                      {hasUpdate ? t('app.card.update') : t('app.card.installed')}
+                    </span>
+                  ) : isRecentlyAdded(game) ? (
+                    <span
+                      className="mono text-[10.5px] font-semibold px-[7px] py-[3px] rounded-[7px] uppercase"
+                      style={{ letterSpacing: '.1em', color: '#fff', background: 'rgba(8,8,16,.75)', border: '1px solid color-mix(in oklch, var(--acc) 50%, transparent)', }}
+                    >
+                      {t('app.card.new')}
+                    </span>
+                  ) : null}
+                </div>
 
-                {/* ── AppID badge (top-left) ── */}
+                {/* ── Install speed badge ── */}
+                {game.size && !isInLibrary && (
+                  <div className="absolute bottom-2 start-2 z-20 pointer-events-none">
+                    <InstallSpeedBadge sizeBytes={game.size} />
+                  </div>
+                )}
+
+                {/* ── AppID chip (bottom-right, hover) ── */}
                 <div
-                  className="absolute top-2.5 left-2.5 z-20 px-1.5 py-0.5 rounded-md text-[9px] font-mono font-semibold opacity-0 group-hover:opacity-100"
+                  className="absolute bottom-2 end-2 z-20 mono px-1.5 py-0.5 rounded-md text-[10px] font-semibold opacity-0 group-hover:opacity-100 pointer-events-none"
                   style={{
-                    background: 'rgba(0,0,0,0.6)',
+                    background: 'rgba(8,8,16,.72)',
                     color: COLORS.textMuted,
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    backdropFilter: 'blur(4px)',
-                    WebkitBackdropFilter: 'blur(4px)',
-                    transition: `opacity ${T}`,
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    transition: 'opacity .3s ease',
                   }}
                 >
                   #{game.appid}
                 </div>
 
-                {/* ── Favorite button (top-right) ── */}
+                {/* ── Favorite button (top-right) — persistent red when favourited ── */}
                 <button
-                  className="absolute top-2.5 right-2.5 w-8 h-8 rounded-full flex items-center justify-center z-20 cursor-pointer opacity-0 group-hover:opacity-100 hover:scale-110 active:scale-[0.9] active:brightness-[0.8]"
+                  className="absolute top-2 end-2 w-[30px] h-[30px] rounded-[10px] flex items-center justify-center z-20 cursor-pointer active:scale-90"
+                  aria-label={isFavorite ? t('app.card.removeFav') : t('app.card.addFav')}
+                  aria-pressed={isFavorite}
                   onClick={(e) => { e.stopPropagation(); onFavorite() }}
                   style={{
-                    background: isFavorite ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.45)',
-                    backdropFilter: 'blur(8px)',
-                    WebkitBackdropFilter: 'blur(8px)',
-                    boxShadow: isFavorite
-                      ? `0 0 20px hsla(${genreHue}, 60%, 50%, 0.30), 0 0 40px hsla(${genreHue}, 60%, 50%, 0.10)`
-                      : '0 2px 8px rgba(0,0,0,0.3)',
-                    transition: `opacity ${T}, transform ${T}, box-shadow ${T}`,
+                    background: isFavorite ? 'rgba(239,68,68,.9)' : 'rgba(255,255,255,.08)',
+                    border: isFavorite ? '1px solid transparent' : '1px solid rgba(255,255,255,.16)',
+                    boxShadow: isFavorite ? '0 4px 14px rgba(239,68,68,.5)' : 'none',
+                    opacity: isFavorite || isHovered ? 1 : 0,
+                    transition: 'opacity .3s ease, background .15s, transform .15s',
                   }}
                 >
                   <div key={isFavorite ? 'beat' : 'idle'} className={isFavorite ? 'animate-heart-beat' : ''}>
-                    <Heart size={13} className={isFavorite ? 'text-white fill-white' : 'text-gray-300'} />
+                    <Heart size={14} className={isFavorite ? 'text-white fill-white' : 'text-white'} />
                   </div>
                 </button>
-
-                {/* ── Install / Update badge (top-right, below "New" badge) ── */}
-                {isInLibrary && (
-                  <div
-                    className="absolute top-2.5 right-2.5 z-20 px-2 py-0.5 rounded-lg text-[10px] font-bold flex items-center gap-1.5 pointer-events-none select-none"
-                    style={{
-                      background: hasUpdate ? 'rgba(245,158,11,0.18)' : 'rgba(34,197,94,0.18)',
-                      backdropFilter: 'blur(6px)',
-                      WebkitBackdropFilter: 'blur(6px)',
-                      color: hasUpdate ? COLORS.amber : COLORS.green,
-                      border: hasUpdate ? '1px solid rgba(245,158,11,0.30)' : '1px solid rgba(34,197,94,0.25)',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
-                    }}
-                  >
-                    {hasUpdate ? <DownloadIcon size={10} /> : <Check size={10} />}
-                    <span>{hasUpdate ? 'Update' : 'Installed'}</span>
-                  </div>
-                )}
               </div>
 
               {/* ── Info Panel ── */}
               <div className={`${compactMode ? 'p-3 space-y-2' : 'p-3.5 space-y-2.5'}`}>
-                {/* Title with genre-reactive color */}
-                <h3
-                  className="font-bold text-sm leading-tight line-clamp-2"
-                  style={{
-                    // Reserve 2 lines so 1-line and 2-line titles occupy equal height,
-                    // keeping every grid card the same height → uniform row gaps.
-                    minHeight: '2.5em', // ~2 lines at text-sm/leading-tight
-                    color: isHovered ? `hsl(${genreHue}, 60%, 78%)` : COLORS.white,
-                    textShadow: isHovered
-                      ? `0 0 30px hsla(${genreHue}, 60%, 50%, 0.30)`
-                      : '0 1px 2px rgba(0,0,0,0.5)',
-                    transition: `color ${T}, text-shadow ${T}`,
-                  }}
-                >
-                  {game.name}
-                </h3>
+                <div className="min-w-0">
+                  <h3
+                    className="text-[13.5px] font-semibold leading-tight line-clamp-2"
+                    style={{
+                      // Reserve 2 lines so every grid card is the same height → uniform row gaps.
+                      minHeight: '2.5em',
+                      color: COLORS.text,
+                    }}
+                  >
+                    {game.name}
+                  </h3>
+                </div>
 
                 {/* Metadata row */}
-                <div className="flex items-center gap-2 text-[11px]" style={{ color: COLORS.textMuted }}>
-                  {game.size ? (
-                    <span className="text-[10px] opacity-80">{formatBytes(game.size)}</span>
-                  ) : null}
+                <div className="mono flex items-center gap-2 text-[11px]" style={{ color: COLORS.textDim }}>
+                  {game.size ? <span>{formatBytes(game.size)}</span> : null}
                   {(game as any).release_date && (
                     <>
-                      <span className="opacity-40">•</span>
+                      {game.size ? <span className="opacity-40">·</span> : null}
                       <span>{(game as any).release_date.split('-')[0]}</span>
                     </>
                   )}
@@ -242,16 +211,16 @@ export const GameCard = memo(function GameCard({
                 <div className="flex flex-col gap-1.5 pt-0.5">
                   {isInLibrary ? (
                     <>
-                      <div className="gamecard-btn-added flex-1 text-[12px] font-bold py-2.5 px-3.5 rounded-xl flex items-center justify-center gap-2 leading-none">
+                      <div className="gamecard-btn-added flex-1 text-[12.5px] py-2 px-3 flex items-center justify-center gap-2 leading-none">
                         <Check size={13} />
-                        <span>You've already added this game</span>
+                        <span>{t('app.card.inLibrary')}</span>
                       </div>
                       {onRemoveFromLibrary && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onRemoveFromLibrary(game) }}
-                          className="gamecard-btn-remove flex-1 text-[12px] font-bold py-2.5 px-3.5 rounded-xl flex items-center justify-center gap-2 leading-none cursor-pointer pointer-events-auto"
+                          className="gamecard-btn-remove flex-1 text-[12.5px] py-2 px-3 flex items-center justify-center gap-2 leading-none cursor-pointer pointer-events-auto"
                         >
-                          Remove from library
+                          {t('app.card.removeFromLib')}
                         </button>
                       )}
                     </>
@@ -259,17 +228,17 @@ export const GameCard = memo(function GameCard({
                     <>
                       <button
                         onClick={(e) => { e.stopPropagation(); onInstallGame?.(game) }}
-                        className="gamecard-btn-steam flex-1 text-[12px] font-bold py-2.5 px-3.5 rounded-xl flex items-center justify-center gap-2 leading-none cursor-pointer pointer-events-auto"
+                        className="gamecard-btn-steam flex-1 text-[12.5px] py-2 px-3 flex items-center justify-center gap-2 leading-none cursor-pointer pointer-events-auto"
                       >
-                        <DownloadIcon size={13} />
-                        <span>Add to Steam</span>
+                        <DownloadIcon size={14} />
+                        <span>{t('app.hero.addToSteam')}</span>
                       </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); onInstallFromZip?.(game) }}
-                        className="gamecard-btn-zip flex-1 text-[12px] font-bold py-2.5 px-3.5 rounded-xl flex items-center justify-center gap-2 leading-none cursor-pointer pointer-events-auto"
+                        className="gamecard-btn-zip flex-1 text-[12.5px] py-2 px-3 flex items-center justify-center gap-2 leading-none cursor-pointer pointer-events-auto"
                       >
-                        <FolderOpen size={13} />
-                        <span>Install Zip</span>
+                        <FolderOpen size={14} />
+                        <span>{t('app.card.installZip')}</span>
                       </button>
                     </>
                   )}
@@ -281,11 +250,11 @@ export const GameCard = memo(function GameCard({
             <div className={`flex items-center w-full ${compactMode ? 'gap-3 p-3' : 'gap-4 p-4'}`}>
               {/* ── Left accent glow bar ── */}
               <div
-                className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full pointer-events-none"
+                className="absolute start-0 top-2 bottom-2 w-[3px] rounded-full pointer-events-none"
                 style={{
                   opacity: isHovered ? 1 : 0,
-                  background: `linear-gradient(180deg, hsla(${genreHue}, 65%, 55%, 0.80), hsla(${genreHue}, 60%, 40%, 0.20))`,
-                  boxShadow: isHovered ? `0 0 10px hsla(${genreHue}, 60%, 50%, 0.50)` : 'none',
+                  background: 'linear-gradient(180deg, var(--acc), transparent)',
+                  boxShadow: isHovered ? '0 0 10px color-mix(in oklch, var(--acc) 50%, transparent)' : 'none',
                   transition: `opacity ${T}`,
                 }}
               />
@@ -316,17 +285,18 @@ export const GameCard = memo(function GameCard({
                   {isRecentlyAdded(game) && (
                     <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shrink-0"
                       style={{
-                        background: 'linear-gradient(135deg, rgba(16,185,129,0.85), rgba(5,150,105,0.7))',
+                        background: 'rgba(8,8,16,.75)',
                         color: 'white',
+                        border: '1px solid color-mix(in oklch, var(--acc) 50%, transparent)',
                       }}
                     >
-                      New
+                      {t('app.card.new')}
                     </span>
                   )}
                   <h3
                     className="font-bold truncate"
                     style={{
-                      color: isHovered ? `hsl(${genreHue}, 60%, 72%)` : COLORS.white,
+                      color: COLORS.text,
                       transition: `color ${T}`,
                     }}
                   >
@@ -347,12 +317,10 @@ export const GameCard = memo(function GameCard({
                 >
                   <Heart
                     size={20}
-                    className={isFavorite ? 'text-white fill-white' : ''}
+                    className={isFavorite ? 'fill-current' : ''}
                     style={{
-                      color: isFavorite ? `hsl(${genreHue}, 60%, 70%)` : colors.textMuted,
-                      filter: isFavorite
-                        ? `drop-shadow(0 0 6px hsla(${genreHue}, 60%, 50%, 0.50))`
-                        : 'none',
+                      color: isFavorite ? COLORS.red : colors.textMuted,
+                      filter: 'none',
                     }}
                   />
                 </button>

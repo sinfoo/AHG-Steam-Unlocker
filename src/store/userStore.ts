@@ -6,7 +6,20 @@ type SetStateAction<T> = T | ((prev: T) => T)
 type LogEntry = { time: string; message: string; type: 'info' | 'success' | 'error' | 'warn' }
 type FixHealth = { appid: string; status: 'working' | 'outdated' | 'broken'; lastChecked: number; reports: number }
 
+export type ActivityKind = 'viewed' | 'added' | 'fix' | 'launched' | 'favourited' | 'installed'
+export interface ActivityEntry { appid: string; act: ActivityKind; ts: number }
+
+const ACT_KEY = 'ahg.activity'
+const ACT_CAP = 200
+const loadActivity = (): ActivityEntry[] => {
+  try { const a = JSON.parse(localStorage.getItem(ACT_KEY) || '[]'); return Array.isArray(a) ? a.slice(0, ACT_CAP) : [] } catch { return [] }
+}
+
 export interface UserState {
+  // Activity log (newest first) — feeds the Recent page timeline
+  activity: ActivityEntry[]
+  logActivity: (appid: string | number, act: ActivityKind) => void
+
   // Favorites & Recent
   favorites: Set<string>
   recentGames: string[]
@@ -69,6 +82,20 @@ export interface UserState {
 }
 
 export const useUserStore = create<UserState>((set) => ({
+  activity: loadActivity(),
+  logActivity: (appid, act) => {
+    try {
+      set((state) => {
+        const id = String(appid)
+        const now = Date.now()
+        const last = state.activity[0]
+        if (last && last.appid === id && last.act === act && now - last.ts < 60_000) return state
+        const activity = [{ appid: id, act, ts: now }, ...state.activity].slice(0, ACT_CAP)
+        try { localStorage.setItem(ACT_KEY, JSON.stringify(activity)) } catch { /* storage unavailable */ }
+        return { activity }
+      })
+    } catch { /* never break the caller */ }
+  },
   // Favorites & Recent
   favorites: new Set(),
   recentGames: [],

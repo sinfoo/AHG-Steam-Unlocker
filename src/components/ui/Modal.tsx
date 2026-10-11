@@ -1,3 +1,4 @@
+import { useT } from '../../i18n'
 import { memo, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X } from 'lucide-react'
@@ -28,6 +29,7 @@ export const Modal = memo(function Modal({
   size = 'md',
   showCloseButton = true,
 }: ModalProps) {
+  const t = useT()
   const handleEscape = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -63,9 +65,9 @@ export const Modal = memo(function Modal({
             alignItems: 'center',
             justifyContent: 'center',
             padding: '24px',
-            background: 'rgba(0,0,0,0.8)',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
+            background: 'rgba(4,4,10,0.6)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
           }}
           onClick={onClose}
         >
@@ -74,19 +76,19 @@ export const Modal = memo(function Modal({
             role="dialog"
             aria-modal="true"
             aria-labelledby={title ? 'modal-title' : undefined}
-            aria-label={title ? undefined : 'Dialog'}
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            aria-label={title ? undefined : t('ui.common.dialog')}
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            transition={{ duration: 0.25, ease: 'easeOut' }}
+            exit={{ opacity: 0, scale: 0.96, y: 12 }}
+            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
             style={{
               width: '100%',
               maxWidth: sizeWidths[size],
               maxHeight: 'calc(100vh - 48px)',
-              background: COLORS.bgCard,
-              border: `1px solid ${COLORS.border}`,
-              borderRadius: '1rem',
-              boxShadow: `0 24px 80px rgba(0,0,0,0.5)`,
+              background: '#0f0f1b',
+              border: '1px solid rgba(255,255,255,0.09)',
+              borderRadius: '24px',
+              boxShadow: '0 60px 120px -30px rgba(0,0,0,1)',
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
@@ -101,7 +103,7 @@ export const Modal = memo(function Modal({
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   padding: '16px 20px',
-                  borderBottom: title ? `1px solid ${COLORS.border}` : 'none',
+                  borderBottom: title ? '1px solid rgba(255,255,255,0.06)' : 'none',
                   flexShrink: 0,
                 }}
               >
@@ -111,6 +113,7 @@ export const Modal = memo(function Modal({
                     style={{
                       fontSize: '18px',
                       fontWeight: 700,
+                      letterSpacing: '-0.02em',
                       color: COLORS.text,
                       margin: 0,
                       lineHeight: 1.3,
@@ -126,11 +129,11 @@ export const Modal = memo(function Modal({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: '0.5rem',
-                      border: 'none',
-                      background: 'transparent',
+                      width: '34px',
+                      height: '34px',
+                      borderRadius: '11px',
+                      border: '1px solid rgba(255,255,255,0.12)',
+                      background: 'rgba(255,255,255,0.04)',
                       color: COLORS.textMuted,
                       cursor: 'pointer',
                       transition: 'all 80ms cubic-bezier(0.4, 0, 0.2, 1)',
@@ -141,10 +144,10 @@ export const Modal = memo(function Modal({
                       e.currentTarget.style.color = COLORS.text
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'transparent'
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
                       e.currentTarget.style.color = COLORS.textMuted
                     }}
-                    aria-label="Close modal"
+                    aria-label={t('ui.common.close')}
                   >
                     <X size={18} />
                   </button>

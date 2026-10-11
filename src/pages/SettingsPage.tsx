@@ -1,21 +1,38 @@
-import { useState, useEffect, useRef, memo } from 'react'
-import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion'
+import { useState, useEffect, useMemo, memo } from 'react'
 import {
   Settings, Palette, Zap, HardDrive, Info, Gamepad2,
-  FolderHeart, Heart, Clock, LayoutGrid, List,
-  RotateCw, RefreshCw, FolderOpen, Folder, Trash,
-  Search, Eye,
+  LayoutGrid, List,
+  RotateCw, RefreshCw, FolderOpen, Trash2, Search, Eye, Check, MessageCircle, ScrollText,
 } from 'lucide-react'
-import { COLORS } from '../constants/colors'
 import { useSettingsStore } from '../store/settingsStore'
 import { useGameStore } from '../store'
+import { useUIStore } from '../store/uiStore'
+import { PageBanner } from '../components/PageParts'
 import { useShallow } from 'zustand/react/shallow'
+import { useT, useLangStore, LANGUAGES, type TKey } from '../i18n'
+
+const EASE = 'cubic-bezier(.16,1,.3,1)'
+const MONO = "'Geist Mono Variable','Geist Mono',monospace"
+const ACC = 'var(--acc,#a77dff)'
+const mix = (n: number) => `color-mix(in oklch, ${ACC} ${n}%, transparent)`
+
+// accent keys are COLORS keys (settingsStore.accentColor)
+const ACCENTS: [string, TKey][] = [['violet', 'ui.settings.accent.violet'], ['blue', 'ui.settings.accent.blue'], ['green', 'ui.settings.accent.green'], ['pink', 'ui.settings.accent.pink'], ['amber', 'ui.settings.accent.amber']]
+
+const TABS: { id: string; label: TKey; icon: any }[] = [
+  { id: 'general', label: 'ui.settings.tab.general', icon: Settings },
+  { id: 'appearance', label: 'ui.settings.tab.appearance', icon: Palette },
+  { id: 'performance', label: 'ui.settings.tab.performance', icon: Zap },
+  { id: 'steam', label: 'ui.settings.tab.tools', icon: HardDrive },
+  { id: 'about', label: 'ui.settings.tab.about', icon: Info },
+]
 
 // ── Settings Page ──
-const SettingsPage = memo(function SettingsPage({ colors, accentColor, soundEnabled, setSoundEnabled, viewMode, setViewMode, compactMode, setCompactMode, games, installedGames, favorites, recentGames, showToast, bridge }: any) {
+const SettingsPage = memo(function SettingsPage({ colors, accentColor, setAccentColor, pureBlack, setPureBlack, reducedMotion, setReducedMotion, soundEnabled, setSoundEnabled, viewMode, setViewMode, compactMode, setCompactMode, games, installedGames, favorites, recentGames, showToast, bridge }: any) {
+  const t = useT()
+  const lang = useLangStore(s => s.lang)
+  const setLang = useLangStore(s => s.setLang)
   const [activeTab, setActiveTab] = useState('general')
-  const [notifications, setNotifications] = useState(true)
-  const [autoUpdates, setAutoUpdates] = useState(true)
 
   const [appVersion, setAppVersion] = useState('0.90')
   const [cacheSize, setCacheSize] = useState('0 MB')
@@ -26,17 +43,15 @@ const SettingsPage = memo(function SettingsPage({ colors, accentColor, soundEnab
   const { hideSearchBars, showOnlyOwned } = useSettingsStore(
     useShallow(s => ({ hideSearchBars: s.hideSearchBars, showOnlyOwned: s.showOnlyOwned }))
   )
+  const { notifications, autoUpdates } = useSettingsStore(useShallow(s => ({ notifications: s.notifications, autoUpdates: s.autoUpdates })))
+  const setNotifications = useSettingsStore(s => s.setNotifications)
+  const setAutoUpdates = useSettingsStore(s => s.setAutoUpdates)
   const setHideSearchBars = useSettingsStore(s => s.setHideSearchBars)
   const setShowOnlyOwned = useSettingsStore(s => s.setShowOnlyOwned)
-  
-  const tabs = [
-    { id: 'general', label: 'General', icon: Settings },
-    { id: 'appearance', label: 'Appearance', icon: Palette },
-    { id: 'performance', label: 'Performance', icon: Zap },
-    { id: 'steam', label: 'AHG Tools', icon: HardDrive },
-    { id: 'about', label: 'About', icon: Info },
-  ]
-  
+
+  const rm = !!reducedMotion
+  const rise = (delay = 0) => (rm ? undefined : `v2-riseIn .35s ${delay}ms ${EASE} both`)
+
   useEffect(() => {
     window.electronAPI?.getCustomSteamConfig?.().then((cfg: any) => {
       if (cfg) {
@@ -48,601 +63,238 @@ const SettingsPage = memo(function SettingsPage({ colors, accentColor, soundEnab
     bridge?.getAppVersion?.().then(setAppVersion).catch(() => {})
   }, [])
 
-  // ── Hero visibility guard ──
-  const heroRef = useRef<HTMLDivElement>(null)
-  const [isHeroVisible, setIsHeroVisible] = useState(true)
-  useEffect(() => {
-    const el = heroRef.current
-    if (!el) return
-    const observer = new IntersectionObserver(
-      ([entry]) => setIsHeroVisible(entry!.isIntersecting),
-      { rootMargin: '100px 0px' }
-    )
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [])
+  const tabIdx = Math.max(0, TABS.findIndex(x => x.id === activeTab))
+  const tab = TABS[tabIdx]!
 
-  // Scroll parallax for hero
-  const { scrollY } = useScroll()
-  const heroContentY = useTransform(scrollY, [0, 300], [0, 15])
+  const bannerGames = useMemo(() => (games as any[]).filter(g => g.header_image).slice(0, 4), [games])
+
+  const pathItems = [
+    { label: t('ui.settings.path.steam'), desc: t('ui.settings.path.steamDesc'), value: customSteamPath, fallback: t('ui.settings.path.steamDef'), key: 'steamPath', browseKey: 'steam' },
+    { label: t('ui.settings.path.depot'), desc: t('ui.settings.path.depotDesc'), value: customDepotCachePath, fallback: t('ui.settings.path.depotDef'), key: 'depotCachePath', browseKey: 'manifests' },
+    { label: t('ui.settings.path.plugin'), desc: t('ui.settings.path.pluginDesc'), value: customStPluginPath, fallback: t('ui.settings.path.pluginDef'), key: 'stPluginPath', browseKey: 'lua' },
+  ]
+
+  const quickTools = [
+    { label: t('ui.settings.tool.fixNoGames'), desc: t('ui.settings.tool.fixNoGamesDesc'), icon: Gamepad2, btn: t('ui.settings.btn.run'), action: () => { bridge.fixNoGames?.().then((r: any) => showToast(r?.success ? t('ui.settings.toast.fixed') : r?.message, r?.success ? 'success' : 'error')); } },
+    { label: t('ui.settings.tool.script'), desc: t('ui.settings.tool.scriptDesc'), icon: Eye, btn: t('ui.settings.btn.run'), action: () => { bridge.fixGamesNotShowing?.().then((r: any) => showToast(r?.success ? t('ui.settings.toast.done') : r?.message, r?.success ? 'success' : 'error')); } },
+    { label: t('ui.settings.btn.clearCache'), desc: t('ui.settings.tool.clearDesc'), icon: Trash2, btn: t('ui.settings.btn.clear'), danger: true, action: () => bridge.clearCache?.().then((r: any) => showToast(r?.success ? t('ui.settings.toast.cleared') : r?.message, r?.success ? 'success' : 'error')) },
+    { label: t('ui.settings.tool.scan'), desc: t('ui.settings.tool.scanDesc'), icon: Search, btn: t('ui.settings.btn.scan'), action: () => { bridge.scanNewManifests?.().then((r: any) => showToast(r?.success ? t('ui.settings.toast.scanDone') : r?.message, r?.success ? 'success' : 'error')); } },
+    { label: t('ui.settings.tool.update'), desc: t('ui.settings.tool.updateDesc'), icon: RefreshCw, btn: t('ui.settings.btn.check'), action: () => { bridge.checkForUpdates?.().then((r: any) => {
+      if (!r?.success) { showToast(r?.message || t('ui.settings.toast.updateFail'), 'error'); return; }
+      // r.success only means the check itself worked — branch on hasUpdate.
+      showToast(r.hasUpdate ? t('ui.settings.toast.updateAvail', { v: r.latestVersion }) : t('ui.settings.toast.upToDate'), r.hasUpdate ? 'info' : 'success');
+    }); } },
+  ]
+
+  const browse = async (item: typeof pathItems[number]) => {
+    const p = await window.electronAPI?.browsePath?.(item.browseKey)
+    if (p) {
+      if (item.key === 'steamPath') setCustomSteamPath(p)
+      else if (item.key === 'depotCachePath') setCustomDepotCachePath(p)
+      else if (item.key === 'stPluginPath') setCustomStPluginPath(p)
+      const cfg = await window.electronAPI?.getCustomSteamConfig?.() || {}
+      await window.electronAPI?.saveCustomSteamConfig?.({ ...cfg, [item.key]: p })
+      showToast(t('ui.settings.toast.pathUpdated', { name: item.label }), 'success')
+    }
+  }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto">
-      {/* Premium Hero Section */}
-      <div
-        ref={heroRef}
-        className="relative min-h-[160px] lg:min-h-[180px] overflow-hidden rounded-2xl mb-8"
-        style={{
-          background: `linear-gradient(135deg, ${colors.bgDark} 0%, ${colors.bgCard} 50%, ${colors.bgDark} 100%)`,
-          border: `1px solid ${colors[accentColor as keyof typeof colors]}20`,
-          boxShadow: `0 8px 32px ${colors[accentColor as keyof typeof colors]}10`,
-        }}
-      >
-        {/* Grid dot pattern overlay */}
-        <div
-          className="absolute inset-0 opacity-[0.04] pointer-events-none"
-          style={{
-            backgroundImage: 'radial-gradient(rgba(255,255,255,0.3) 1px, transparent 1px)',
-            backgroundSize: '24px 24px',
-          }}
-        />
+    <div style={{ padding: 24, width: '100%', maxWidth: 1680, margin: '0 auto', fontFamily: 'Geist, sans-serif', color: '#f3f2fa' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+        <PageBanner icon={Settings} color="#c9c8da" eyebrow={t('ui.settings.eyebrow')} title={t('ui.settings.title')} sub={t('ui.settings.subtitle')}
+          games={bannerGames} stats={[{ v: `v${appVersion}`, label: t('app.set.version') }]} reduced={rm} />
 
-        {/* Ambient glow orbs */}
-        <motion.div
-          className="absolute -right-12 -top-12 w-[180px] h-[180px] rounded-full blur-[70px] pointer-events-none"
-          style={{ background: `radial-gradient(circle, ${colors[accentColor as keyof typeof colors]}25 0%, transparent 70%)` }}
-          animate={isHeroVisible ? { x: [0, 15, 0], y: [0, -12, 0], scale: [1, 1.06, 1] } : {}}
-          transition={isHeroVisible ? { duration: 8, repeat: Infinity, ease: 'easeInOut' } : {}}
-        />
-        <motion.div
-          className="absolute -left-8 bottom-0 w-[140px] h-[140px] rounded-full blur-[50px] pointer-events-none"
-          style={{ background: `radial-gradient(circle, ${colors.blue}20 0%, transparent 70%)` }}
-          animate={isHeroVisible ? { x: [0, -12, 0], y: [0, 16, 0], scale: [1, 1.08, 1] } : {}}
-          transition={isHeroVisible ? { duration: 10, repeat: Infinity, ease: 'easeInOut', delay: 1 } : {}}
-        />
-
-        {/* Floating particles */}
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <motion.div
-              key={i}
-              className="absolute w-1 h-1 rounded-full"
-              style={{
-                background: colors[accentColor as keyof typeof colors],
-                left: `${15 + i * 24}%`,
-                top: `${25 + (i % 2) * 45}%`,
-                opacity: 0.1 + i * 0.04,
-              }}
-              animate={isHeroVisible ? {
-                y: [0, -(12 + i * 6), 0],
-                x: [0, (i % 2 === 0 ? 6 : -6), 0],
-                scale: [1, 1.3, 1],
-                opacity: [0.08 + i * 0.02, 0.2 + i * 0.04, 0.08 + i * 0.02],
-              } : {}}
-              transition={isHeroVisible ? {
-                duration: 4 + i * 1.2,
-                repeat: Infinity,
-                ease: 'easeInOut',
-                delay: i * 0.7,
-              } : {}}
-            />
-          ))}
-        </div>
-
-        {/* Content */}
-        <motion.div
-          className="relative z-10 flex flex-col items-center justify-center h-full min-h-[160px] lg:min-h-[180px] px-6 text-center"
-          style={{ y: isHeroVisible ? heroContentY : 0 }}
-        >
-          <h1
-            className="text-3xl lg:text-4xl font-bold mb-2 tracking-tight"
-            style={{
-              background: `linear-gradient(135deg, ${colors[accentColor as keyof typeof colors]} 0%, ${colors.pink} 50%, ${colors.text} 100%)`,
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-            }}
-          >
-            AHG Unlocker
-          </h1>
-          <div className="flex items-center gap-2 mb-2">
-            <span
-              className="px-3 py-0.5 rounded-full text-xs font-bold"
-              style={{
-                background: `${colors[accentColor as keyof typeof colors]}18`,
-                color: colors[accentColor as keyof typeof colors],
-                border: `1px solid ${colors[accentColor as keyof typeof colors]}25`,
-              }}
-            >
-              v1.2.3
-            </span>
-          </div>
-          <p className="text-sm font-medium" style={{ color: colors.textMuted }}>
-            Game & DLC Unlock Manager
-          </p>
-          <p className="text-xs mt-1.5 opacity-60" style={{ color: colors.textMuted }}>
-            Settings &mdash; Customize your AHG Unlocker experience
-          </p>
-        </motion.div>
-      </div>
-      
-      <div className="flex gap-6">
-        {/* Sidebar Tabs */}
-        <div className="w-64 flex-shrink-0">
-          <div className="sticky top-6 space-y-2">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className="w-full p-4 rounded-2xl flex items-center gap-3 text-left"
-                style={{
-                  background: activeTab === tab.id ? `${colors[accentColor as keyof typeof colors]}20` : colors.bgCard,
-                  border: `1px solid ${activeTab === tab.id ? colors[accentColor as keyof typeof colors] + '50' : colors.border}`,
-                  color: activeTab === tab.id ? colors[accentColor as keyof typeof colors] : colors.textSecondary,
-                }}
-              >
-                <tab.icon size={20} />
-                <span className="font-medium">{tab.label}</span>
-                {activeTab === tab.id && (
-                  <motion.div layoutId="activeTab" className="ml-auto w-2 h-2 rounded-full" style={{ background: colors[accentColor as keyof typeof colors] }} />
-                )}
+        <div style={{ display: 'grid', gridTemplateColumns: '220px minmax(0,1fr)', gap: 28, alignItems: 'start' }}>
+          {/* Tabs */}
+          <div role="tablist" style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 4, animation: rise(20) }}>
+            <span style={{ position: 'absolute', insetInlineStart: 0, insetInlineEnd: 0, top: 0, height: 42, borderRadius: 12, background: mix(14), border: `1px solid ${mix(32)}`, transform: `translateY(${tabIdx * 46}px)`, transition: rm ? 'none' : 'transform .45s cubic-bezier(.34,1.4,.5,1)' }} />
+            {TABS.map(tb => (
+              <button key={tb.id} role="tab" aria-selected={activeTab === tb.id} onClick={() => setActiveTab(tb.id)} className="v2-ctl"
+                style={{ position: 'relative', height: 42, border: 'none', background: 'transparent', borderRadius: 12, color: activeTab === tb.id ? '#fff' : '#a6a5bb', fontSize: 13.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 12, padding: '0 14px', cursor: 'pointer', textAlign: 'start', fontFamily: 'inherit' }}>
+                <tb.icon size={16} />{t(tb.label)}
               </button>
             ))}
           </div>
-        </div>
-        
-        {/* Content Area */}
-        <div className="flex-1 space-y-6">
-          {/* Stats Overview */}
-          <div className="grid grid-cols-4 gap-4">
-            {[
-              { label: 'Total Games', value: games.length.toLocaleString(), icon: Gamepad2, color: colors.violet },
-              { label: 'Installed', value: installedGames.length, icon: FolderHeart, color: colors.green },
-              { label: 'Favorites', value: favorites.size, icon: Heart, color: colors.pink },
-              { label: 'Recent', value: recentGames.length, icon: Clock, color: colors.blue },
-            ].map((stat, i) => (
-              <motion.div 
-                key={stat.label}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-                className="p-5 rounded-2xl"
-                style={{ background: colors.bgCard, border: `1px solid ${colors.border}` }}
-              >
-                <stat.icon size={24} style={{ color: stat.color }} className="mb-3" />
-                <p className="text-3xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
-                <p className="text-sm" style={{ color: colors.textMuted }}>{stat.label}</p>
-              </motion.div>
-            ))}
-          </div>
-          
-          {/* Tab Content with smooth transitions */}
-          <AnimatePresence mode="wait">
+
+          {/* Panel */}
+          <div key={tab.id} style={{ borderRadius: 22, background: 'color-mix(in oklch, var(--s2,#151524) 85%, transparent)', border: '1px solid rgba(255,255,255,.07)', padding: '8px 24px', animation: rise(40) }}>
             {activeTab === 'general' && (
-              <motion.div key="general" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.12 }}>
-                <SettingsSection title="General" icon={Settings} color={colors.violet}>
-                  {/* Audio */}
-                  <CategoryLabel title="Audio" color={colors[accentColor as keyof typeof colors]} />
-                  <ToggleSetting label="Sound Effects" desc="Play sounds on interactions" value={soundEnabled} onChange={setSoundEnabled} colors={colors} accentColor={colors[accentColor as keyof typeof colors]} />
-                  
-                  {/* Notifications */}
-                  <CategoryLabel title="Notifications" color={colors[accentColor as keyof typeof colors]} />
-                  <ToggleSetting label="Notifications" desc="Show system notifications" value={notifications} onChange={setNotifications} colors={colors} accentColor={colors[accentColor as keyof typeof colors]} />
-                  <ToggleSetting label="Auto Updates" desc="Check for updates automatically" value={autoUpdates} onChange={setAutoUpdates} colors={colors} accentColor={colors[accentColor as keyof typeof colors]} />
-                  
-                  {/* Filters */}
-                  <CategoryLabel title="Filters" color={colors[accentColor as keyof typeof colors]} />
-                  <ToggleSetting label="Hide Search Bars" desc="Hide search inputs on Browse, Achievements and Settings pages" value={hideSearchBars} onChange={setHideSearchBars} colors={colors} accentColor={colors[accentColor as keyof typeof colors]} />
-                  <ToggleSetting label="Show Only Owned Games" desc="Only display games in your Steam library" value={showOnlyOwned} onChange={setShowOnlyOwned} colors={colors} accentColor={colors[accentColor as keyof typeof colors]} />
-                </SettingsSection>
-              </motion.div>
+              <>
+                <Row rm={rm} i={0} label={t('ui.settings.notif')} desc={t('ui.settings.notifDesc')}><Switch value={notifications} onChange={setNotifications} rm={rm} /></Row>
+                <Row rm={rm} i={1} label={t('ui.settings.autoUpdate')} desc={t('ui.settings.autoUpdateDesc')}><Switch value={autoUpdates} onChange={setAutoUpdates} rm={rm} /></Row>
+                <Row rm={rm} i={2} label={t('ui.settings.sound')} desc={t('ui.settings.soundDesc')}><Switch value={soundEnabled} onChange={setSoundEnabled} rm={rm} /></Row>
+                <Row rm={rm} i={3} label={t('ui.settings.hideSearch')} desc={t('ui.settings.hideSearchDesc')}><Switch value={hideSearchBars} onChange={setHideSearchBars} rm={rm} /></Row>
+                <Row rm={rm} i={4} label={t('ui.settings.onlyOwned')} desc={t('ui.settings.onlyOwnedDesc')}><Switch value={showOnlyOwned} onChange={setShowOnlyOwned} rm={rm} /></Row>
+                <Row rm={rm} i={5} stack label={t('settings.language')} desc={t('settings.languageDesc')}>
+                  <div role="radiogroup" aria-label={t('settings.language')} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(130px,1fr))', gap: 8, width: '100%' }}>
+                    {LANGUAGES.map(l => {
+                      const on = lang === l.code
+                      return (
+                        <button key={l.code} role="radio" aria-checked={on} lang={l.code} dir={l.dir} onClick={() => setLang(l.code)} className="v2-seg-btn"
+                          style={{ height: 38, padding: '0 14px', borderRadius: 11, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', background: on ? mix(18) : 'rgba(0,0,0,.25)', color: on ? '#fff' : '#a6a5bb', boxShadow: on ? `inset 0 0 0 1px ${mix(46)}` : 'inset 0 0 0 1px rgba(255,255,255,.08)' }}>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.label}</span>
+                          {on && <Check size={14} color={ACC} />}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </Row>
+              </>
             )}
+
             {activeTab === 'appearance' && (
-              <motion.div key="appearance" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.12 }} className="space-y-6">
-
-                <SettingsSection title="Layout" icon={LayoutGrid} color={colors.green}>
-                  <div className="py-4">
-                    <p className="text-sm font-medium mb-3" style={{ color: colors.text }}>View Mode</p>
-                    <div className="flex gap-3">
-                      {['grid', 'list'].map((mode) => (
-                        <button
-                          key={mode}
-                          onClick={() => setViewMode(mode as any)}
-                          className="px-6 py-3 rounded-xl font-medium capitalize cursor-pointer hv-scale-03 tap-scale-97"
-                          style={{
-                            background: viewMode === mode ? colors[accentColor as keyof typeof colors] + '25' : colors.bgCard,
-                            border: `1px solid ${viewMode === mode ? colors[accentColor as keyof typeof colors] : colors.border}`,
-                            color: viewMode === mode ? colors[accentColor as keyof typeof colors] : colors.textSecondary,
-                          }}
-                        >
-                          {mode === 'grid' ? <LayoutGrid size={18} className="inline mr-2" /> : <List size={18} className="inline mr-2" />}
-                          {mode}
+              <>
+                <Row rm={rm} i={0} label={t('ui.settings.accent')} desc={t('ui.settings.accentDesc')}>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    {ACCENTS.map(([key, nameKey]) => {
+                      const name = t(nameKey)
+                      const hex = colors?.[key] as string
+                      const active = accentColor === key
+                      return (
+                        <button key={key} title={name} aria-label={name} aria-pressed={active} onClick={() => setAccentColor?.(key)}
+                          style={{ width: 32, height: 32, borderRadius: '50%', border: `2px solid ${active ? '#fff' : 'transparent'}`, background: hex, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, transition: 'transform .2s cubic-bezier(.34,1.56,.64,1)', boxShadow: '0 0 0 3px var(--s2,#151524) inset' }}
+                          onMouseEnter={e => { if (!rm) e.currentTarget.style.transform = 'scale(1.12)' }}
+                          onMouseLeave={e => { e.currentTarget.style.transform = 'none' }}>
+                          {active && <Check size={14} color="#0b0614" style={{ animation: rm ? undefined : 'v2-checkPop .18s both' }} />}
                         </button>
-                      ))}
-                    </div>
+                      )
+                    })}
                   </div>
-                  
-                  <ToggleSetting label="Compact Mode" desc="Show more games in less space" value={compactMode} onChange={setCompactMode} colors={colors} accentColor={colors[accentColor as keyof typeof colors]} />
-                </SettingsSection>
-              </motion.div>
+                </Row>
+                <Row rm={rm} i={1} label={t('ui.settings.pureBlack')} desc={t('ui.settings.pureBlackDesc')}><Switch value={!!pureBlack} onChange={setPureBlack} rm={rm} /></Row>
+                <Row rm={rm} i={2} label={t('ui.settings.compact')} desc={t('ui.settings.compactDesc')}><Switch value={compactMode} onChange={setCompactMode} rm={rm} /></Row>
+                <Row rm={rm} i={3} label={t('ui.settings.view')} desc={t('ui.settings.viewDesc')}>
+                  <div style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 12, background: 'rgba(0,0,0,.25)', border: '1px solid rgba(255,255,255,.08)' }}>
+                    {(['grid', 'list'] as const).map(mode => {
+                      const on = viewMode === mode
+                      return (
+                        <button key={mode} onClick={() => setViewMode(mode as any)} className="v2-seg-btn"
+                          style={{ height: 32, padding: '0 14px', borderRadius: 9, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 600, textTransform: 'capitalize', fontFamily: 'inherit', background: on ? mix(18) : 'transparent', color: on ? '#fff' : '#a6a5bb', boxShadow: on ? `inset 0 0 0 1px ${mix(36)}` : 'none' }}>
+                          {mode === 'grid' ? <LayoutGrid size={14} /> : <List size={14} />}{t(mode === 'grid' ? 'ui.settings.view.grid' : 'ui.settings.view.list')}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </Row>
+              </>
             )}
+
             {activeTab === 'performance' && (
-              <motion.div key="performance" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.12 }}>
-                <SettingsSection title="Performance" icon={Zap} color={colors.amber}>
-                  <div className="py-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-sm font-medium" style={{ color: colors.text }}>Cache Size</p>
-                      <span className="text-sm" style={{ color: colors.textMuted }}>{cacheSize}</span>
-                    </div>
-                    <button
-                      onClick={() => {
-                        bridge.clearCache?.().then((r: any) => {
-                          if (r?.success) {
-                            showToast('Cache cleared!', 'success')
-                            setCacheSize('0 MB')
-                          }
-                        })
-                      }}
-                      className="w-full p-4 rounded-xl text-left cursor-pointer hv-scale-01 tap-scale-98 tap-dim"
-                      style={{ background: colors.bgCard, border: `1px solid ${colors.border}` }}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium" style={{ color: colors.text }}>Clear Cache</p>
-                          <p className="text-xs" style={{ color: colors.textMuted }}>Remove temporary files</p>
-                        </div>
-                        <Trash size={20} style={{ color: colors.red }} />
-                      </div>
-                    </button>
-                  </div>
-                </SettingsSection>
-              </motion.div>
-            )}
-            {activeTab === 'steam' && (
-              <motion.div key="steam" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.12 }} className="space-y-6">
-                <SettingsSection title="Steam Management" icon={HardDrive} color={colors.cyan}>
-                  <ActionButton label="Restart Steam" desc="Close and relaunch Steam" icon={RotateCw} color={colors.blue} onClick={() => window.electronAPI?.restartSteam?.()} colors={colors} />
-                  <ActionButton label="Refresh Games" desc="Reload games list" icon={RefreshCw} color={colors.green} onClick={async () => {
-                    showToast('Refreshing games…', 'info')
-                    try {
-                      const g = await bridge.loadGames?.(true)
-                      if (Array.isArray(g) && g.length > 0) {
-                        useGameStore.getState().setGames(g)
-                        showToast(`Games refreshed — ${g.length.toLocaleString()} titles`, 'success')
-                      } else {
-                        showToast('No games returned from refresh', 'error')
+              <>
+                <Row rm={rm} i={0} label={t('ui.settings.reduced')} desc={t('ui.settings.reducedDesc')}><Switch value={!!reducedMotion} onChange={setReducedMotion} rm={rm} /></Row>
+                <Row rm={rm} i={1} label={t('ui.settings.imgCache')} desc={t('ui.settings.imgCacheDesc', { size: cacheSize })}>
+                  <ActBtn danger icon={Trash2} label={t('ui.settings.btn.clearCache')} onClick={() => {
+                    bridge.clearCache?.().then((r: any) => {
+                      if (r?.success) {
+                        showToast(t('ui.settings.toast.cacheCleared'), 'success')
+                        setCacheSize('0 MB')
                       }
-                    } catch (e: any) {
-                      showToast('Refresh failed: ' + (e?.message || e), 'error')
+                    })
+                  }} />
+                </Row>
+              </>
+            )}
+
+            {activeTab === 'steam' && (
+              <>
+                {pathItems.map((item, i) => (
+                  <Row key={item.key} rm={rm} i={i} label={item.label} desc={item.desc}>
+                    <div style={{ display: 'flex', gap: 8, width: 'min(420px,52%)', minWidth: 0 }}>
+                      <input readOnly value={item.value || item.fallback} title={item.value || item.fallback}
+                        style={{ flex: 1, minWidth: 0, height: 38, borderRadius: 10, border: '1px solid rgba(255,255,255,.09)', background: 'rgba(0,0,0,.25)', color: '#c9c8da', font: `12px ${MONO}`, padding: '0 12px', outline: 'none' }} />
+                      <ActBtn icon={FolderOpen} label={t('ui.settings.btn.browse')} small onClick={() => browse(item)} />
+                    </div>
+                  </Row>
+                ))}
+                <Row rm={rm} i={3} label={t('ui.settings.restartSteam')} desc={t('ui.settings.restartSteamDesc')}><ActBtn icon={RotateCw} label={t('ui.settings.btn.restart')} onClick={() => window.electronAPI?.restartSteam?.()} /></Row>
+                <Row rm={rm} i={4} label={t('ui.settings.refresh')} desc={t('ui.settings.refreshDesc')}><ActBtn icon={RefreshCw} label={t('ui.settings.btn.refresh')} onClick={async () => {
+                  showToast(t('ui.settings.toast.refreshing'), 'info')
+                  try {
+                    const g = await bridge.loadGames?.(true)
+                    if (Array.isArray(g) && g.length > 0) {
+                      useGameStore.getState().setGames(g)
+                      showToast(t('ui.settings.toast.refreshed', { n: g.length.toLocaleString() }), 'success')
+                    } else {
+                      showToast(t('ui.settings.toast.refreshEmpty'), 'error')
                     }
-                  }} colors={colors} />
-                  <ActionButton label="Open Steam Folder" desc="Open in File Explorer" icon={FolderOpen} color={colors.violet} onClick={() => window.electronAPI?.openSteamFolder?.()} colors={colors} />
-                </SettingsSection>
-
-                <SettingsSection title="Custom Steam Paths" icon={Folder} color={colors.amber}>
-                  <div className="space-y-3">
-                    {[
-                      { label: 'Steam Installation', value: customSteamPath, fallback: 'Default (auto-detected)', key: 'steamPath', browseKey: 'steam' },
-                      { label: 'Depot Cache', value: customDepotCachePath, fallback: 'Default (Steam depotcache)', key: 'depotCachePath', browseKey: 'manifests' },
-                      { label: 'STPlug-in (Lua)', value: customStPluginPath, fallback: 'Default (Steam config/stplug-in)', key: 'stPluginPath', browseKey: 'lua' },
-                    ].map((item) => (
-                      <div key={item.key} className="flex items-center justify-between p-4 rounded-xl group" style={{ background: colors.bgCard, border: `1px solid ${colors.border}`, transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)' }}>
-                        <div className="flex-1 min-w-0 mr-4">
-                          <p className="font-medium" style={{ color: colors.text }}>{item.label}</p>
-                          <p className="text-xs truncate" style={{ color: colors.textMuted }}>{item.value || item.fallback}</p>
-                        </div>
-                        <button
-                          onClick={async () => {
-                            const p = await window.electronAPI?.browsePath?.(item.browseKey)
-                            if (p) {
-                              if (item.key === 'steamPath') setCustomSteamPath(p)
-                              else if (item.key === 'depotCachePath') setCustomDepotCachePath(p)
-                              else if (item.key === 'stPluginPath') setCustomStPluginPath(p)
-                              const cfg = await window.electronAPI?.getCustomSteamConfig?.() || {}
-                              await window.electronAPI?.saveCustomSteamConfig?.({ ...cfg, [item.key]: p })
-                              showToast(`${item.label} path updated`, 'success')
-                            }
-                          }}
-                          className="px-4 py-2 rounded-xl text-xs font-bold shrink-0 cursor-pointer hv-scale-08 tap-scale-93 tap-dim"
-                          style={{ background: `${colors.amber}20`, color: colors.amber, border: `1px solid ${colors.amber}30`, transition: 'all 0.2s ease' }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.boxShadow = `0 4px 20px ${colors.amber}35`
-                            e.currentTarget.style.backgroundColor = `${colors.amber}30`
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.boxShadow = 'none'
-                            e.currentTarget.style.backgroundColor = `${colors.amber}20`
-                          }}
-                        >
-                          Browse
-                        </button>
-                      </div>
-                    ))}
-                    <button
-                      onClick={async () => {
-                        setCustomSteamPath('')
-                        setCustomDepotCachePath('')
-                        setCustomStPluginPath('')
-                        await window.electronAPI?.saveCustomSteamConfig?.({})
-                        showToast('Custom paths reset to defaults', 'info')
-                      }}
-                      className="w-full py-2.5 rounded-xl text-xs font-bold cursor-pointer hv-scale-02 tap-scale-97 tap-dim"
-                      style={{ background: `${colors.red}15`, color: colors.red, border: `1px solid ${colors.red}30`, transition: 'all 0.2s ease' }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.boxShadow = `0 4px 20px ${colors.red}30`
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.boxShadow = 'none'
-                      }}
-                    >
-                      Reset to Defaults
-                    </button>
-                  </div>
-                </SettingsSection>
-
-                <SettingsSection title="Quick Tools" icon={Zap} color={colors.amber}>
-                  <div className="grid grid-cols-2 gap-4">
-                    {[
-                      { label: 'Fix No Games', desc: 'Refresh game library', icon: Gamepad2, color: colors.blue, action: () => { bridge.fixNoGames?.().then((r: any) => showToast(r?.success ? 'Fixed!' : r?.message, r?.success ? 'success' : 'error')); }},
-                      { label: 'AHG Script', desc: 'Run AHG maintenance script', icon: Eye, color: colors.green, action: () => { bridge.fixGamesNotShowing?.().then((r: any) => showToast(r?.success ? 'Done!' : r?.message, r?.success ? 'success' : 'error')); }},
-                      { label: 'Clear Cache', desc: 'Clean temp files', icon: Trash, color: colors.red, action: () => bridge.clearCache?.().then((r: any) => showToast(r?.success ? 'Cleared!' : r?.message, r?.success ? 'success' : 'error'))},
-                      { label: 'Scan New Manifests', desc: 'Check for new game manifests', icon: Search, color: colors.cyan, action: () => { bridge.scanNewManifests?.().then((r: any) => showToast(r?.success ? 'Scan complete!' : r?.message, r?.success ? 'success' : 'error')); }},
-                      { label: 'Check for Updates', desc: 'Check AHG Unlocker updates', icon: RefreshCw, color: colors.pink, action: () => { bridge.checkForUpdates?.().then((r: any) => {
-                        if (!r?.success) { showToast(r?.message || 'Could not check for updates', 'error'); return; }
-                        // r.success only means the check itself worked — branch on hasUpdate.
-                        showToast(r.hasUpdate ? `Update available: v${r.latestVersion}` : "You're on the latest version", r.hasUpdate ? 'info' : 'success');
-                      }); }},
-                    ].map((tool) => (
-                      <button
-                        key={tool.label}
-                        onClick={tool.action}
-                        className="p-5 rounded-2xl text-left cursor-pointer group hv-scale-05-lift tap-scale tap-dim"
-                        style={{ background: colors.bgCard, border: `1px solid ${colors.border}`, transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)' }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.boxShadow = `0 12px 40px ${tool.color}35, 0 0 60px ${tool.color}15`
-                          e.currentTarget.style.background = `linear-gradient(135deg, ${tool.color}12 0%, ${colors.bgCard} 100%)`
-                          e.currentTarget.style.borderColor = tool.color + '40'
-                          const icon = e.currentTarget.querySelector('.hv-rot-scale') as HTMLElement
-                          if (icon) icon.style.background = `${tool.color}30`
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.boxShadow = 'none'
-                          e.currentTarget.style.background = colors.bgCard
-                          e.currentTarget.style.borderColor = colors.border
-                          const icon = e.currentTarget.querySelector('.hv-rot-scale') as HTMLElement
-                          if (icon) icon.style.background = `${tool.color}18`
-                        }}
-                      >
-                        <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-3 hv-rot-scale" style={{ background: `${tool.color}18` }}>
-                          <tool.icon size={24} style={{ color: tool.color }} />
-                        </div>
-                        <p className="font-bold" style={{ color: colors.text }}>{tool.label}</p>
-                        <p className="text-xs mt-1" style={{ color: colors.textMuted }}>{tool.desc}</p>
-                      </button>
-                    ))}
-                  </div>
-                </SettingsSection>
-
-              </motion.div>
+                  } catch (e: any) {
+                    showToast(t('ui.settings.toast.refreshFail', { err: e?.message || e }), 'error')
+                  }
+                }} /></Row>
+                <Row rm={rm} i={5} label={t('ui.settings.openSteam')} desc={t('ui.settings.openSteamDesc')}><ActBtn icon={FolderOpen} label={t('ui.settings.btn.open')} onClick={() => window.electronAPI?.openSteamFolder?.()} /></Row>
+                <Row rm={rm} i={6} label={t('ui.settings.resetPaths')} desc={t('ui.settings.resetPathsDesc')}>
+                  <ActBtn danger icon={RotateCw} label={t('ui.settings.btn.reset')} onClick={async () => {
+                    setCustomSteamPath('')
+                    setCustomDepotCachePath('')
+                    setCustomStPluginPath('')
+                    await window.electronAPI?.saveCustomSteamConfig?.({})
+                    showToast(t('ui.settings.toast.pathsReset'), 'info')
+                  }} />
+                </Row>
+                {quickTools.map((tool, i) => (
+                  <Row key={tool.label} rm={rm} i={7 + i} label={tool.label} desc={tool.desc}>
+                    <ActBtn danger={tool.danger} icon={tool.icon} label={tool.btn} onClick={tool.action} />
+                  </Row>
+                ))}
+              </>
             )}
+
             {activeTab === 'about' && (
-              <motion.div key="about" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.12 }} className="space-y-6">
-                {/* Founder Section First */}
-                <SettingsSection title="About The Founder" icon={Heart} color={colors.pink}>
-                  <div className="space-y-4">
-                      {/* Hero card */}
-                      <div className="relative overflow-hidden rounded-2xl" style={{ 
-                        background: 'linear-gradient(135deg, rgba(139,92,246,0.08) 0%, rgba(236,72,153,0.06) 50%, rgba(245,158,11,0.08) 100%)', 
-                        border: '1px solid rgba(139,92,246,0.15)',
-                        boxShadow: '0 12px 40px rgba(0,0,0,0.2)'
-                      }}>
-                        {/* Animated gradient border effect */}
-                        <div className="absolute top-0 left-0 right-0 h-[2px]" style={{
-                          background: `linear-gradient(90deg, ${COLORS.violet}, ${COLORS.pink}, ${COLORS.amber}, ${COLORS.violet})`,
-                          backgroundSize: '200% 100%',
-                          animation: 'shimmer 3s linear infinite'
-                        }} />
-                        
-                        <div className="p-6">
-                          <div className="flex items-center gap-5">
-                            {/* Avatar */}
-                            <div className="relative flex-shrink-0">
-                              <div className="w-20 h-20 rounded-2xl flex items-center justify-center" style={{ 
-                                background: `linear-gradient(135deg, ${COLORS.violet} 0%, ${COLORS.pink} 50%, ${COLORS.amber} 100%)`,
-                                backgroundSize: '200% 200%',
-                                boxShadow: `0 8px 32px ${COLORS.violetGlow}, 0 0 48px rgba(236,72,153,0.2)`,
-                                animation: 'shimmer 4s ease-in-out infinite'
-                              }}>
-                                <span className="text-3xl font-bold text-white drop-shadow-lg">S</span>
-                              </div>
-                              {/* Online indicator */}
-                              <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center" style={{ background: colors.bgCard, border: '2px solid rgba(139,92,246,0.3)' }}>
-                                <div className="w-3 h-3 rounded-full bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.6)]" />
-                              </div>
-                            </div>
-                            
-                            {/* Info */}
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <h4 className="text-xl font-bold" style={{ color: colors.text }}>Safwen</h4>
-                                <span className="px-2 py-0.5 rounded-md text-xs font-bold uppercase tracking-wider" style={{ background: `${colors.violet}20`, color: colors.violet, border: `1px solid ${colors.violet}30` }}>Developer</span>
-                              </div>
-                              <p className="text-sm" style={{ color: colors.textSecondary }}>
-                                 20 years old • Passionate developer
-                              </p>
-                              <p className="text-xs mt-1" style={{ color: colors.textMuted }}>
-                                Creating solutions for the gaming community
-                              </p>
-                            </div>
-                          </div>
-                          
-                          {/* Stats bar */}
-                          <div className="mt-5 pt-4 flex items-center gap-4" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                            <div className="flex-1 text-center p-3 rounded-xl" style={{ background: 'rgba(139,92,246,0.08)' }}>
-                              <p className="text-lg font-bold" style={{ color: colors.violet }}>170K+</p>
-                              <p className="text-xs uppercase tracking-wider font-bold" style={{ color: colors.textMuted }}>Games</p>
-                            </div>
-                            <div className="flex-1 text-center p-3 rounded-xl" style={{ background: 'rgba(236,72,153,0.08)' }}>
-                              <p className="text-lg font-bold" style={{ color: colors.pink }}>v1.2.3</p>
-                              <p className="text-xs uppercase tracking-wider font-bold" style={{ color: colors.textMuted }}>Version</p>
-                            </div>
-                            <div className="flex-1 text-center p-3 rounded-xl" style={{ background: 'rgba(245,158,11,0.08)' }}>
-                              <p className="text-lg font-bold" style={{ color: colors.amber }}>2026</p>
-                              <p className="text-xs uppercase tracking-wider font-bold" style={{ color: colors.textMuted }}>Founded</p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {/* Social links */}
-                      <div className="grid grid-cols-1 gap-3">
-                        <a
-                          href="https://discord.gg/ahg"
-                          target="_blank"
-                          className="flex flex-col items-center gap-3 p-4 rounded-2xl cursor-pointer relative group"
-                          style={{ 
-                            background: 'linear-gradient(180deg, rgba(88,101,242,0.12) 0%, rgba(71,82,196,0.06) 100%)',
-                            border: '1px solid rgba(88,101,242,0.2)',
-                            boxShadow: '0 8px 32px rgba(88,101,242,0.1), inset 0 1px 0 rgba(255,255,255,0.03)',
-                          }}
-                        >
-                          <div className="absolute inset-0 bg-gradient-to-t from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                          <div className="w-12 h-12 rounded-xl flex items-center justify-center relative z-10" style={{ 
-                            background: '#5865F2', // Discord brand color - intentional
-                            boxShadow: '0 6px 20px rgba(88,101,242,0.4)'
-                          }}>
-                            <svg width="24" height="24" viewBox="0 0 1024 1024">
-                              <circle cx="512" cy="512" r="512" fill="#5865F2"/> {/* Discord brand color - intentional */}
-                              <path d="M689.43 349a422.21 422.21 0 0 0-104.22-32.32 1.58 1.58 0 0 0-1.68.79 294.11 294.11 0 0 0-13 26.66 389.78 389.78 0 0 0-117.05 0 269.75 269.75 0 0 0-13.18-26.66 1.64 1.64 0 0 0-1.68-.79A421 421 0 0 0 334.44 349a1.49 1.49 0 0 0-.69.59c-66.37 99.17-84.55 195.9-75.63 291.41a1.76 1.76 0 0 0 .67 1.2 424.58 424.58 0 0 0 127.85 64.63 1.66 1.66 0 0 0 1.8-.59 303.45 303.45 0 0 0 26.15-42.54 1.62 1.62 0 0 0-.89-2.25 279.6 279.6 0 0 1-39.94-19 1.64 1.64 0 0 1-.16-2.72c2.68-2 5.37-4.1 7.93-6.22a1.58 1.58 0 0 1 1.65-.22c83.79 38.26 174.51 38.26 257.31 0a1.58 1.58 0 0 1 1.68.2c2.56 2.11 5.25 4.23 8 6.24a1.64 1.64 0 0 1-.14 2.72 262.37 262.37 0 0 1-40 19 1.63 1.63 0 0 0-.87 2.28 340.72 340.72 0 0 0 26.13 42.52 1.62 1.62 0 0 0 1.8.61 423.17 423.17 0 0 0 128-64.63 1.64 1.64 0 0 0 .67-1.18c10.68-110.44-17.88-206.38-75.7-291.42a1.3 1.3 0 0 0-.63-.63zM427.09 582.85c-25.23 0-46-23.16-46-51.6s20.38-51.6 46-51.6c25.83 0 46.42 23.36 46 51.6.02 28.44-20.37 51.6-46 51.6zm170.13 0c-25.23 0-46-23.16-46-51.6s20.38-51.6 46-51.6c25.83 0 46.42 23.36 46 51.6.01 28.44-20.17 51.6-46 51.6z" fill="#fff"/>
-                            </svg>
-                          </div>
-                          <span className="text-xs font-medium" style={{ color: '#5865F2' }}>Discord</span> {/* Discord brand color - intentional */}
-                        </a>
-                      </div>
-                       
-                      {/* Thank you card */}
-                      <div className="relative overflow-hidden p-5 rounded-2xl" style={{ 
-                        background: 'linear-gradient(135deg, rgba(34,197,94,0.08) 0%, rgba(16,185,129,0.05) 100%)', 
-                        border: '1px solid rgba(34,197,94,0.2)',
-                        boxShadow: '0 8px 32px rgba(34,197,94,0.08)'
-                      }}>
-                        <div className="absolute top-0 left-0 w-1 h-full" style={{ background: `linear-gradient(180deg, ${COLORS.green}, ${COLORS.green}cc)` }} />
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${colors.green}20` }}>
-                            <span className="text-xl">🎮</span>
-                          </div>
-                          <div>
-                            <p className="font-bold" style={{ color: colors.green }}>Thank you for your support!</p>
-                            <p className="text-xs" style={{ color: colors.textMuted }}>Enjoy AHG Steam Unlocker with 170,000+ games</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </SettingsSection>
-
-                <SettingsSection title="About AHG Unlocker" icon={Info} color={colors.violet}>
-                    <div className="text-center py-8">
-                      <div className="w-24 h-24 mx-auto mb-4 rounded-3xl flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${colors.violet}30 0%, ${colors.violet}15 100%)` }}>
-                        <Gamepad2 size={48} style={{ color: colors.violet }} />
-                      </div>
-                      <h3 className="text-2xl font-bold mb-2" style={{ color: colors.text }}>AHG Unlocker</h3>
-                      <p className="text-lg mb-4" style={{ color: colors.textMuted }}>Version {appVersion}</p>
-                      <p className="text-sm max-w-md mx-auto" style={{ color: colors.textSecondary }}>
-                        Your ultimate Steam game unlocker with 170,000+ games and growing. 
-                        Unlock any game with one click.
-                      </p>
-                    </div>
-                  </SettingsSection>
-              </motion.div>
+              <>
+                <Row rm={rm} i={0} label={t('ui.settings.tool.update')} desc={t('app.set.updatesDesc', { v: appVersion })}>
+                  <ActBtn icon={RefreshCw} label={t('ui.settings.tool.update')} onClick={quickTools[4]!.action} />
+                </Row>
+                <Row rm={rm} i={1} label={t('app.set.changelog')} desc={t('app.set.changelogDesc')}>
+                  <ActBtn icon={ScrollText} label={t('ui.settings.btn.open')} onClick={() => useUIStore.getState().setChangelogOpen(true)} />
+                </Row>
+                <Row rm={rm} i={2} label={t('ui.settings.about.community')} desc={t('ui.settings.about.communityDesc')}>
+                  <a href="https://discord.gg/ahg" target="_blank" rel="noreferrer" className="v2-ctl"
+                    style={{ height: 38, padding: '0 16px', borderRadius: 11, border: '1px solid rgba(255,255,255,.12)', background: 'rgba(255,255,255,.05)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', flex: 'none' }}>
+                    <MessageCircle size={14} />{t('ui.settings.about.join')}
+                  </a>
+                </Row>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 18, padding: '22px 0 18px' }}>
+                  <img src="./assets/ahg-logo.png" alt="" style={{ width: 72, height: 72, objectFit: 'contain', animation: rm ? undefined : 'v2-floatY 5s ease-in-out infinite', filter: `drop-shadow(0 10px 24px ${mix(55)})` }} />
+                  <div>
+                    <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-.02em' }}>AHG Unlocker</div>
+                    <div style={{ fontFamily: MONO, fontSize: 12, color: '#a6a5bb', marginTop: 4 }}>{t('ui.settings.about.version', { v: appVersion })}</div>
+                  </div>
+                </div>
+              </>
             )}
-          </AnimatePresence>
+          </div>
         </div>
       </div>
-    </motion.div>
+    </div>
   )
 })
 
-// Settings Section Component
-function SettingsSection({ title, icon: Icon, color, children }: { title: string; icon: any; color: string; children: React.ReactNode }) {
+function Row({ label, desc, children, i, rm, stack }: { label: string; desc: string; children: React.ReactNode; i: number; rm: boolean; stack?: boolean }) {
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="rounded-3xl overflow-hidden"
-      style={{ background: `linear-gradient(135deg, ${color}0a 0%, ${COLORS.bgCard} 100%)`, border: `1px solid ${color}25`, boxShadow: `0 0 40px ${color}08` }}
-    >
-      <div className="flex items-center gap-3 p-5" style={{ borderBottom: `2px solid ${color}20` }}>
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${color}30`, boxShadow: `0 0 20px ${color}20` }}>
-          <Icon size={20} style={{ color }} />
-        </div>
-        <h3 className="text-xl font-bold" style={{ color: COLORS.text }}>{title}</h3>
+    <div style={{ display: 'flex', flexDirection: stack ? 'column' : 'row', alignItems: stack ? 'stretch' : 'center', gap: stack ? 14 : 20, padding: '18px 0', borderBottom: '1px solid rgba(255,255,255,.06)', animation: rm ? undefined : `v2-riseIn .25s ${i * 20}ms ${EASE} both` }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14.5, fontWeight: 600 }}>{label}</div>
+        <div style={{ fontSize: 12.5, color: '#8b8aa3', marginTop: 3, lineHeight: 1.45 }}>{desc}</div>
       </div>
-      <div className="p-5 space-y-4">
-        {children}
-      </div>
-    </motion.div>
-  )
-}
-
-// Toggle Setting Component
-function ToggleSetting({ label, desc, value, onChange, colors, accentColor }: { label: string; desc: string; value: boolean; onChange: (v: boolean) => void; colors: any; accentColor?: string }) {
-  return (
-    <div className="flex items-center justify-between p-4 rounded-xl" style={{ background: `linear-gradient(135deg, ${colors.bgCard} 0%, ${colors.bgDark} 100%)`, border: `1px solid ${colors.border}` }}>
-      <div>
-        <p className="font-bold" style={{ color: colors.text }}>{label}</p>
-        <p className="text-sm" style={{ color: colors.textMuted }}>{desc}</p>
-      </div>
-      <button
-        onClick={() => onChange(!value)}
-        className="w-14 h-7 rounded-full p-1 cursor-pointer hv-scale tap-scale-90 tap-dim"
-        style={{ background: value ? (accentColor || colors.violet) : colors.bgHover, boxShadow: value ? `0 0 16px ${(accentColor || colors.violet)}50` : 'none' }}
-      >
-        <div 
-          className="w-5 h-5 bg-white rounded-full shadow-lg"
-          style={{ 
-            transform: value ? 'translateX(28px)' : 'translateX(0)',
-            transition: 'transform 80ms cubic-bezier(0.4, 0, 0.2, 1)'
-          }}
-        />
-      </button>
+      {children}
     </div>
   )
 }
 
-// Category Label Component
-function CategoryLabel({ title, color }: { title: string; color: string }) {
+function Switch({ value, onChange, rm }: { value: boolean; onChange: (v: boolean) => void; rm: boolean }) {
   return (
-    <div className="flex items-center gap-3 pt-4">
-      <span className="text-[11px] font-bold uppercase tracking-[0.15em]" style={{ color: `${color}cc` }}>{title}</span>
-      <div className="flex-1 h-px" style={{ background: `linear-gradient(90deg, ${color}25 0%, transparent 100%)` }} />
-    </div>
+    <button role="switch" aria-checked={value} onClick={() => onChange(!value)}
+      style={{ position: 'relative', width: 44, height: 26, flex: 'none', borderRadius: 13, border: 'none', cursor: 'pointer', background: value ? ACC : 'rgba(255,255,255,.14)', transition: rm ? 'none' : 'background .25s', padding: 0 }}>
+      <span style={{ position: 'absolute', top: 3, insetInlineStart: 3, width: 20, height: 20, borderRadius: '50%', background: '#fff', boxShadow: '0 2px 6px rgba(0,0,0,.4)', transform: `translateX(${value ? (document.documentElement.dir === 'rtl' ? -18 : 18) : 0}px)`, transition: rm ? 'none' : 'transform .35s cubic-bezier(.34,1.56,.64,1)' }} />
+    </button>
   )
 }
 
-// Action Button Component
-function ActionButton({ label, desc, icon: Icon, color, onClick, colors }: { label: string; desc: string; icon: any; color: string; onClick: () => void; colors: any }) {
+function ActBtn({ label, icon: Icon, onClick, danger, small }: { label: string; icon: any; onClick: () => void; danger?: boolean; small?: boolean }) {
   return (
-    <button
-      onClick={onClick}
-      className="w-full p-4 rounded-xl text-left flex items-center gap-4 cursor-pointer group hv-scale-03-lift tap-scale-97 tap-dim"
-      style={{ background: colors.bgCard, border: `1px solid ${colors.border}`, transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)' }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.boxShadow = `0 12px 40px ${color}35, 0 0 60px ${color}15`
-        e.currentTarget.style.background = `linear-gradient(135deg, ${color}18 0%, ${colors.bgCard} 100%)`
-        e.currentTarget.style.borderColor = color + '50'
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.boxShadow = 'none'
-        e.currentTarget.style.background = colors.bgCard
-        e.currentTarget.style.borderColor = colors.border
-      }}
-    >
-      <div className="w-12 h-12 rounded-xl flex items-center justify-center hv-rot-scale" style={{ background: `${color}30`, boxShadow: `0 0 20px ${color}20` }}>
-        <Icon size={24} style={{ color }} />
-      </div>
-      <div>
-        <p className="font-bold" style={{ color: colors.text }}>{label}</p>
-        <p className="text-sm" style={{ color: colors.textMuted }}>{desc}</p>
-      </div>
+    <button onClick={onClick} className="v2-ctl"
+      style={{ height: 38, padding: small ? '0 12px' : '0 16px', borderRadius: small ? 10 : 11, border: `1px solid ${danger ? 'rgba(239,68,68,.35)' : 'rgba(255,255,255,.12)'}`, background: danger ? 'rgba(239,68,68,.1)' : 'rgba(255,255,255,.05)', color: danger ? '#fca5a5' : '#fff', fontSize: small ? 12.5 : 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: small ? 6 : 8, flex: 'none', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+      <Icon size={14} />{label}
     </button>
   )
 }

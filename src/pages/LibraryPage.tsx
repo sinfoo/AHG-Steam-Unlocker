@@ -1,94 +1,55 @@
-import { useState, useMemo, memo, useRef, useCallback, useEffect, useDeferredValue } from 'react'
-import { motion } from 'framer-motion'
-import { FolderHeart, Layout, List, Search, X, Sparkles } from 'lucide-react'
-import '../styles/browse-animations.css'
-import { useGameStore, useUserStore, useSettingsStore } from '../store'
+import { useState, useMemo, memo, useCallback, useEffect, useDeferredValue } from 'react'
+import { FolderHeart, Search, X, Library, Heart, Ellipsis, HardDrive, Puzzle, Play, RefreshCw, CircleCheck, Wrench, Minus } from 'lucide-react'
+import { useGameStore, useUserStore, useSettingsStore, useReducedMotion } from '../store'
 import { useShallow } from 'zustand/react/shallow'
-import { COLORS } from '../constants/colors'
 import { useSetCurrentPage } from '../store/uiStore'
 import { useImagePrefetch } from '../hooks/useImagePrefetch'
 import { useDirectionalCoverPrefetch } from '../hooks/useDirectionalCoverPrefetch'
 import { useVirtualKeyboardNav } from '../hooks/useVirtualKeyboardNav'
-import { useVirtualizer } from '@tanstack/react-virtual'
 import { fuzzySearch } from '../hooks/useFuzzySearch'
 import type { PageHandlers } from '../types/pages'
 import { loadAllCachedImages, preloadLibraryImages } from '../services/imageCache'
-import { PortraitCard, LibraryListCard } from '../components/shared'
+import { bridge } from '../bridge'
+import { useFixState } from '../components/fixes/fixState'
+import { t as tr } from '../i18n'
+import GameCover from '../components/GameCover'
+import { IMAGE_TYPES } from '../services/imageCache'
+import { getGenreHue, getGenreTag, formatBytes } from '../utils/gameHelpers'
+import type { Game } from '../types'
+import { PageBanner, PageEmpty, VirtualRows, useVirtualGrid, MONO, ACC, panelStyle, rise } from '../components/PageParts'
 import { LibrarySkeleton } from '../components/Skeletons'
-import { PageHeroBackdrop } from '../components/PageHeroBackdrop'
-
-// ── Sub-components ──
-const EmptyState = memo(function EmptyState({ icon: Icon, title, subtitle, color, action }: {
-  icon: any; title: string; subtitle: string; color: string; action?: { label: string; onClick: () => void }
-}) {
-  return (
-    <div className="text-center py-24">
-      <motion.div
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
-        transition={{ type: 'spring', damping: 10 }}
-        className="relative w-24 h-24 mx-auto mb-6 rounded-3xl flex items-center justify-center"
-        style={{
-          background: `linear-gradient(135deg, ${color}25 0%, ${color}10 100%)`,
-          border: `1px solid ${color}30`,
-          boxShadow: `0 0 40px ${color}15, 0 0 80px ${color}08`,
-        }}
-      >
-        <div
-          className="absolute inset-0 rounded-3xl opacity-50"
-          style={{ background: `radial-gradient(circle at 50% 50%, ${color}15 0%, transparent 70%)` }}
-        />
-        <Icon size={44} style={{ color, position: 'relative', zIndex: 1 }} />
-      </motion.div>
-      <h3 className="text-2xl font-extrabold text-white mb-2 tracking-tight">{title}</h3>
-      <p className="text-base mb-7" style={{ color: COLORS.textMuted }}>{subtitle}</p>
-      {action && (
-        <motion.button
-          onClick={action.onClick}
-          whileHover={{ scale: 1.04, boxShadow: `0 0 30px ${color}40, 0 0 60px ${color}15` }}
-          whileTap={{ scale: 0.96, filter: 'brightness(0.85)' }}
-          className="px-7 py-3 rounded-xl text-sm font-bold inline-flex items-center gap-2 cursor-pointer"
-          style={{
-            background: `linear-gradient(135deg, ${color}25 0%, ${color}12 100%)`,
-            color,
-            border: `1px solid ${color}45`,
-            boxShadow: `0 4px 16px ${color}20`,
-            transition: 'all 80ms cubic-bezier(0.4, 0, 0.2, 1)',
-          }}
-        >
-          {action.label}
-        </motion.button>
-      )}
-    </div>
-  )
-})
+import { useT } from '../i18n'
+import { useGenreLabel } from '../utils/genreLabel'
 
 // ── Props ──
 interface LibraryPageProps {
-  handlers: Pick<PageHandlers, 'handleGameClick' | 'handleDeleteGame' | 'handleContextMenu' | 'toggleFavorite' | 'handleInstallGame' | 'handleInstallFromZip'>
+  handlers: Pick<PageHandlers, 'handleGameClick' | 'handleDeleteGame' | 'handleContextMenu' | 'toggleFavorite' | 'handleInstallGame' | 'handleInstallFromZip' | 'showToast'>
   colors: typeof import('../constants/colors').COLORS
 }
 
 // ── Page Component ──
 const LibraryPage = memo(function LibraryPage({ handlers, colors }: LibraryPageProps) {
+  const t = useT()
 
-  const { librarySearchQuery, setLibrarySearchQuery, setViewMode, games, knownDlcIds, installedGames, viewMode } = useGameStore(useShallow(s => ({
+  const { librarySearchQuery, setLibrarySearchQuery, games, knownDlcIds, installedGames, gamesWithUpdates, fixes } = useGameStore(useShallow(s => ({
     librarySearchQuery: s.librarySearchQuery,
     setLibrarySearchQuery: s.setLibrarySearchQuery,
-    setViewMode: s.setViewMode,
     games: s.games,
     knownDlcIds: s.knownDlcIds,
     installedGames: s.installedGames,
-    viewMode: s.viewMode,
+    gamesWithUpdates: s.gamesWithUpdates,
+    fixes: s.fixes,
   })))
   const deferredLibrarySearchQuery = useDeferredValue(librarySearchQuery)
 
   const favorites = useUserStore(s => s.favorites)
 
   const compactMode = useSettingsStore(s => s.compactMode)
+  const reduced = useReducedMotion()
+  const [tab, setTab] = useState<'all' | 'ready' | 'update' | 'fav'>('all')
 
   const setCurrentPage = useSetCurrentPage()
-  const { handleGameClick, handleDeleteGame, handleContextMenu } = handlers
+  const { handleGameClick, handleContextMenu, handleInstallGame, showToast } = handlers
 
   const [isLoading, setIsLoading] = useState(true)
   useEffect(() => {
@@ -115,17 +76,6 @@ const LibraryPage = memo(function LibraryPage({ handlers, colors }: LibraryPageP
     // Kick off background preloading for all installed games (chunked, idle-priority)
     preloadLibraryImages(installedGames)
   }, [installedGames])
-
-  // ── Hero visibility guard (saves GPU cycles when hero is off-screen) ──
-  const heroRef = useRef<HTMLDivElement>(null)
-  const [, setIsHeroVisible] = useState(true)
-  useEffect(() => {
-    const el = heroRef.current
-    if (!el || typeof IntersectionObserver === 'undefined') return
-    const obs = new IntersectionObserver(([entry]) => setIsHeroVisible(entry!.isIntersecting), { rootMargin: '100px 0px' })
-    obs.observe(el)
-    return () => obs.disconnect()
-  }, [])
 
   // Library filtering: exclude DLCs + soundtracks + software + truly nameless entries, filter by search
   const filteredLibraryGames = useMemo(() => {
@@ -181,317 +131,195 @@ const LibraryPage = memo(function LibraryPage({ handlers, colors }: LibraryPageP
     return fuzzyResults.length > 0
   }, [installedGames, deferredLibrarySearchQuery, dlcAppids])
 
-  // ── Virtual scrolling ──
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const [containerWidth, setContainerWidth] = useState(0)
-  
-  useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    const ro = new ResizeObserver(entries => {
-      for (const entry of entries) {
-        setContainerWidth(entry.contentRect.width)
-      }
-    })
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
+  // ── Tabs (All / Ready / Updates / Favourites) over the search-filtered set ──
+  const isUpd = useCallback((g: Game) => gamesWithUpdates.has(String(g.appid)), [gamesWithUpdates])
+  const counts = useMemo(() => {
+    const upd = filteredLibraryGames.filter(isUpd).length
+    return { all: filteredLibraryGames.length, ready: filteredLibraryGames.length - upd, update: upd, fav: filteredLibraryGames.filter(g => favorites.has(g.appid)).length }
+  }, [filteredLibraryGames, isUpd, favorites])
+  const shown = useMemo(
+    () => tab === 'all' ? filteredLibraryGames
+      : tab === 'fav' ? filteredLibraryGames.filter(g => favorites.has(g.appid))
+      : filteredLibraryGames.filter(g => isUpd(g) === (tab === 'update')),
+    [tab, filteredLibraryGames, favorites, isUpd],
+  )
+  const fixAppids = useMemo(() => new Set(fixes.filter(f => f.download_url || f.download_urls?.length).map(f => String(f.appid))), [fixes])
+  const appliedMap = useFixState(s => s.applied)
+  const appliedInLib = useMemo(() => installedGames.filter(g => appliedMap[g.appid]).length, [installedGames, appliedMap])
 
-  const CELL_WIDTH = 200
-  const GRID_GAP = 24
-  const ROW_GAP = 24
-  const effectiveColumns = viewMode === 'grid'
-    ? Math.max(1, Math.floor((containerWidth + GRID_GAP) / (CELL_WIDTH + GRID_GAP)))
-    : 1
-  const actualCellWidth = effectiveColumns > 1
-    ? (containerWidth - (effectiveColumns - 1) * GRID_GAP) / effectiveColumns
-    : CELL_WIDTH
-  const computedCardHeight = Math.ceil(actualCellWidth * 3 / 2)
-  const rowHeight = viewMode === 'grid' ? computedCardHeight + ROW_GAP : 88 + 8
-  const rowCount = Math.ceil(filteredLibraryGames.length / effectiveColumns)
-
-  const virtualizer = useVirtualizer({
-    count: rowCount,
-    getScrollElement: useCallback(() => scrollRef.current, []),
-    estimateSize: () => rowHeight,
-    overscan: 2,
+  // ── Virtual scrolling (list rows, as in the design) ──
+  const { scrollRef, columns, virtualizer } = useVirtualGrid(shown.length, {
+    grid: false, listRow: compactMode ? 72 : 102, overscan: 2,
   })
 
   useImagePrefetch(virtualizer, useCallback((rowIndex: number) => {
-    const startIdx = rowIndex * effectiveColumns
-    return filteredLibraryGames.slice(startIdx, startIdx + effectiveColumns)
-  }, [filteredLibraryGames, effectiveColumns]))
+    const startIdx = rowIndex * columns
+    return shown.slice(startIdx, startIdx + columns)
+  }, [shown, columns]))
 
-  useDirectionalCoverPrefetch(virtualizer, filteredLibraryGames, 20)
+  useDirectionalCoverPrefetch(virtualizer, shown, 20)
 
   // ── Keyboard navigation ──
   const { focusedIndex, keyboardProps } = useVirtualKeyboardNav(
-    virtualizer,
-    filteredLibraryGames,
-    (game) => handleGameClick(game),
-    effectiveColumns,
+    virtualizer, shown, (game) => handleGameClick(game), columns,
   )
 
+  const tabs = [['all', t('app.common.all'), counts.all], ['ready', t('app.lib.ready'), counts.ready], ['update', t('app.lib.updates'), counts.update], ['fav', t('app.nav.favourites'), counts.fav]] as const
+
+  const launch = useCallback(async (game: Game) => {
+    useUserStore.getState().addToRecent(game.appid)
+    try {
+      const r = await bridge.launchGame(game.appid)
+      if (!r?.success) showToast(r?.message || tr('app.lib.launchFail', { name: game.name ?? '' }), 'error')
+    } catch { showToast(tr('app.lib.launchFail', { name: game.name ?? '' }), 'error') }
+  }, [showToast])
+  const update = useCallback((game: Game) => { useGameStore.getState().setSelectedGame(game as any); void (handleInstallGame as (g?: Game) => Promise<void>)(game) }, [handleInstallGame])
+
   return (
-    <div key="library" className="lg:pl-8 px-5 pt-2 pb-6 flex flex-col h-full">
-      {/* ── Hero — Compact Premium ── */}
-      <motion.div
-        ref={heroRef}
-        className="relative min-h-[160px] lg:min-h-[180px] overflow-hidden rounded-2xl mb-8"
-        style={{
-          background: `linear-gradient(135deg, ${colors.bgDark} 0%, ${colors.bgCard} 50%, ${colors.bgDark} 100%)`,
-          border: `1px solid ${colors.violet}20`,
-          boxShadow: `0 8px 32px ${colors.violet}10, inset 0 0 30px ${colors.violet}03`,
-        }}
-        whileHover={{ scale: 1.003 }}
-        transition={{ duration: 0.3 }}
-      >
-        {/* Content-driven cover backdrop (your top installed game) */}
-        <PageHeroBackdrop game={filteredLibraryGames[0]} accent={colors.violet} />
+    <div key="library" className="flex flex-col h-full" style={{ padding: 24, gap: 18, maxWidth: 1680, margin: '0 auto', width: '100%' }}>
+      <PageBanner
+        icon={Library} color={ACC} eyebrow={t('app.side.yourGames')} title={t('app.nav.library')}
+        sub={t('app.lib.sub')}
+        games={installedGames.length ? shown.slice(0, 4) : []} reduced={reduced}
+        stats={[
+          { v: installedGames.length.toLocaleString(), label: t('app.lib.games') },
+          { v: counts.update.toLocaleString(), label: t('app.lib.updates'), color: counts.update ? '#fbbf24' : '#fff' },
+          { v: appliedInLib.toLocaleString(), label: t('app.lib.fixesApplied'), color: '#86efac' },
+        ]}
+      />
 
-        {/* Rotating ambient orbs */}
-        <div className="absolute -top-20 -right-10 w-[300px] h-[300px] rounded-full blur-[60px] animate-[heroOrbRotate_45s_linear_infinite] pointer-events-none"
-          style={{ background: `radial-gradient(circle, ${colors.violet}30 0%, transparent 70%)` }}
-        />
-        <div className="absolute -bottom-20 -left-10 w-[240px] h-[240px] rounded-full blur-[50px] animate-[heroOrbRotate_55s_linear_infinite] pointer-events-none"
-          style={{ animationDirection: 'reverse', background: `radial-gradient(circle, ${colors.blue}25 0%, transparent 70%)` }}
-        />
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[200px] h-[200px] rounded-full blur-[45px] animate-[heroOrbRotate_40s_linear_infinite] pointer-events-none"
-          style={{ background: `radial-gradient(circle, ${colors.purple}20 0%, transparent 70%)` }}
-        />
-
-        {/* Floating particles */}
-        {Array.from({ length: 10 }).map((_, i) => (
-          <div
-            key={`library-particle-${i}`}
-            className="absolute rounded-full pointer-events-none animate-[heroParticleFloat_8s_ease-in-out_infinite]"
-            style={{
-              width: 1.5 + (i % 3) * 1, height: 1.5 + (i % 3) * 1,
-              background: i % 2 === 0
-                ? `radial-gradient(circle, ${colors.violet}80 0%, transparent 100%)`
-                : `radial-gradient(circle, ${colors.blue}80 0%, transparent 100%)`,
-              left: `${(i * 10) % 100}%`, top: `${((i * 13 + 7) % 100)}%`,
-              animationDuration: `${6 + (i % 4) * 2}s`, animationDelay: `${(i % 8) * 0.3}s`,
-            }}
-          />
-        ))}
-
-        {/* Animated grid dot pattern */}
-        <div
-          className="absolute inset-0 animate-[gridDotPulse_5s_ease-in-out_infinite] pointer-events-none"
-          style={{
-            backgroundImage: `radial-gradient(circle, ${colors.violet}80 0.5px, transparent 0.5px)`,
-            backgroundSize: '24px 24px',
-            maskImage: 'linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 100%)',
-            WebkitMaskImage: 'linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 100%)',
-          }}
-        />
-
-        {/* Pulsing glow ring */}
-        <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200px] h-[200px] rounded-full pointer-events-none animate-[glowRingPulse_4s_ease-in-out_infinite,glowRingRotate_30s_linear_infinite]"
-          style={{
-            border: `1px solid ${colors.violet}20`,
-            boxShadow: `0 0 60px ${colors.violet}10, inset 0 0 60px ${colors.violet}05`,
-          }}
-        />
-
-        {/* Bottom vignette */}
-        <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(3,3,8,0.6) 100%)' }} />
-
-        {/* Light sweep animation */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div
-            className="absolute inset-0 animate-[lightSweep_8s_ease-in-out_2s_infinite]"
-            style={{ background: 'linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.04) 50%, transparent 70%)' }}
-          />
+      {/* Toolbar: tabs · search · view */}
+      <div className="shrink-0" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', animation: rise(reduced, '.35s', '.03s') }}>
+        <div role="tablist" aria-label={t('app.lib.filter')} style={{ display: 'flex', gap: 2, padding: 3, borderRadius: 12, background: 'var(--s2,#151524)', border: '1px solid rgba(255,255,255,.08)' }}>
+          {tabs.map(([id, label, n]) => {
+            const on = tab === id
+            return (
+              <button key={id} role="tab" aria-selected={on} onClick={() => setTab(id)} className="v2-seg-btn"
+                style={{ height: 32, padding: '0 14px', border: 'none', borderRadius: 9, background: on ? 'rgba(255,255,255,.1)' : 'transparent', color: on ? '#fff' : '#a6a5bb', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                {label}<span style={{ fontFamily: MONO, fontSize: 11, opacity: .65 }}>{n}</span>
+              </button>
+            )
+          })}
         </div>
-
-        {/* ── Content ── */}
-        <div className="relative z-10 flex flex-col items-center justify-center h-full min-h-[160px] lg:min-h-[180px] px-6 text-center">
-          {/* Top Row: Badge + Stats | View Toggle */}
-          <div className="flex items-center justify-between gap-4 w-full">
-            <motion.div
-              initial={{ opacity: 0, x: -14 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ type: 'spring', stiffness: 120, damping: 15, delay: 0.04 }}
-              className="flex items-center gap-2.5"
-            >
-              <span
-                className="text-[10px] font-semibold tracking-[0.18em] uppercase px-3 py-1 rounded-full flex items-center gap-1.5"
-                style={{
-                  background: `${colors.violet}25`,
-                  color: colors.violetLight,
-                  border: `1px solid ${colors.violet}40`,
-                }}
-              >
-                <FolderHeart size={10} />
-                Library
-              </span>
-              <div className="w-1.5 h-1.5 rounded-full shrink-0"
-                style={{ background: colors.violet, boxShadow: `0 0 8px ${colors.violet}` }}
-              />
-              <span className="text-[11px] font-medium" style={{ color: colors.textMuted }}>
-                {filteredLibraryGames.length.toLocaleString()} installed
-              </span>
-            </motion.div>
-
-            {/* View Toggle Button */}
-            <motion.div
-              initial={{ opacity: 0, x: 14 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ type: 'spring', stiffness: 100, damping: 20, delay: 0.18 }}
-              className="flex items-center gap-2"
-            >
-              <motion.button
-                onClick={() => setViewMode(v => v === 'grid' ? 'list' : 'grid')}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95, filter: 'brightness(0.85)' }}
-                className="h-9 px-4 rounded-xl flex items-center gap-2 text-xs font-semibold"
-                style={{ background: `${colors.bgCard}cc`, border: `1px solid ${colors.border}`, backdropFilter: 'blur(8px)' }}
-              >
-                {viewMode === 'grid' ? <Layout size={14} style={{ color: colors.violet }} /> : <List size={14} style={{ color: colors.textSecondary }} />}
-                <span style={{ color: viewMode === 'grid' ? colors.violet : colors.textSecondary }}>{viewMode === 'grid' ? 'Grid' : 'List'}</span>
-              </motion.button>
-            </motion.div>
-          </div>
-
-          {/* Title Block — Clean */}
-          <div className="flex flex-col justify-center flex-1">
-            <motion.h1
-              initial={{ opacity: 0, y: 16, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ type: 'spring', stiffness: 100, damping: 18, delay: 0.08, mass: 0.6 }}
-              className="text-3xl lg:text-4xl xl:text-5xl font-bold tracking-tight leading-tight"
-              style={{
-                background: `linear-gradient(135deg, ${colors.text} 15%, var(--accent) 85%, ${colors.purple} 100%)`,
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-              }}
-            >
-              My Library
-            </motion.h1>
-            <motion.p
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ type: 'spring', stiffness: 80, damping: 22, delay: 0.15 }}
-              className="text-xs mt-1 leading-relaxed"
-              style={{ color: colors.textDim }}
-            >
-              Your installed game collection
-            </motion.p>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Search Bar */}
-      <div className="flex flex-wrap gap-3 mb-5">
-        <div className="flex-1 relative min-w-[200px] max-w-sm">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2" size={16} style={{ color: COLORS.textMuted }} />
+        <span style={{ flex: 1 }} />
+        <div style={{ position: 'relative', width: 'min(280px,100%)' }}>
+          <Search size={15} style={{ position: 'absolute', insetInlineStart: 13, top: '50%', transform: 'translateY(-50%)', color: '#8b8aa3', pointerEvents: 'none' }} />
           <input
-            type="text"
-            placeholder="Search installed games..."
-            value={librarySearchQuery}
-            onChange={(e) => setLibrarySearchQuery(e.target.value)}
-            className="w-full h-10 pl-10 pr-4 rounded-xl text-sm outline-none transition-all"
-            style={{
-              background: colors.bgCard,
-              border: `1px solid ${librarySearchQuery ? colors.violet + '40' : colors.border}`,
-              color: colors.text,
-              boxShadow: librarySearchQuery ? `0 0 15px ${colors.violet}15` : 'none'
-            }}
+            type="text" aria-label={t('app.lib.search')} placeholder={t('app.lib.search')}
+            value={librarySearchQuery} onChange={(e) => setLibrarySearchQuery(e.target.value)}
+            className="v2-field"
+            style={{ width: '100%', height: 38, borderRadius: 12, border: '1px solid rgba(255,255,255,.09)', background: 'var(--s2,#151524)', color: '#fff', fontSize: 13, paddingInlineStart: 36, paddingInlineEnd: 34, outline: 'none' }}
           />
           {libraryFuzzyActive && (
-            <span
-              className="absolute right-12 top-1/2 -translate-y-1/2 text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded"
-              style={{ background: `${colors.violet}20`, color: colors.violetLight }}
-            >
-              Fuzzy
-            </span>
+            <span style={{ position: 'absolute', insetInlineEnd: 34, top: '50%', transform: 'translateY(-50%)', fontFamily: MONO, fontSize: 10, fontWeight: 600, letterSpacing: '.08em', padding: '2px 6px', borderRadius: 6, background: 'color-mix(in oklch, var(--acc,#a77dff) 18%, transparent)', color: ACC }}>{t('app.fixes.fuzzy')}</span>
           )}
           {librarySearchQuery && (
-            <motion.button
-              onClick={() => setLibrarySearchQuery('')}
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9, filter: 'brightness(0.85)' }}
-              className="absolute right-3 top-1/2 -translate-y-1/2"
-              style={{ color: colors.textMuted }}
-            >
+            <button onClick={() => setLibrarySearchQuery('')} aria-label={t('app.header.clearSearch')} className="v2-icobtn"
+              style={{ position: 'absolute', insetInlineEnd: 6, top: 6, width: 26, height: 26, border: 'none', borderRadius: 8, background: 'transparent', color: '#8b8aa3', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <X size={14} />
-            </motion.button>
+            </button>
           )}
         </div>
       </div>
 
       {/* Game listing — virtualized */}
-      <div ref={scrollRef} className="flex-1 min-h-0 overflow-auto outline-none" {...keyboardProps}>
+      <div
+        ref={scrollRef}
+        className="flex-1 min-h-0 overflow-auto outline-none"
+        style={!isLoading && shown.length > 0 ? { ...panelStyle, animation: rise(reduced, '.35s', '.05s') } : undefined}
+        {...keyboardProps}
+      >
         {isLoading ? (
-          <LibrarySkeleton colors={colors} columns={effectiveColumns > 1 ? effectiveColumns : 1} />
+          <LibrarySkeleton colors={colors} columns={columns > 1 ? columns : 1} />
         ) : installedGames.length === 0 ? (
-          <EmptyState icon={FolderHeart} title="No games installed" subtitle="Use 'Add to Steam' to install games" color={colors.violet} action={{ label: 'Browse Games', onClick: () => setCurrentPage('browse') }} />
-        ) : filteredLibraryGames.length === 0 ? (
-          <EmptyState icon={Search} title="No Results Found" subtitle={`No games match "${librarySearchQuery}"`} color={colors.violet} />
+          <PageEmpty reduced={reduced} icon={FolderHeart} tint={ACC} title={t('app.lib.emptyTitle')} subtitle={t('app.lib.emptySub')} action={{ label: t('app.common.browseGames'), onClick: () => setCurrentPage('browse') }} />
+        ) : shown.length === 0 ? (
+          <PageEmpty reduced={reduced} icon={tab === 'fav' && !librarySearchQuery ? Heart : Search} tint={ACC}
+            title={tab === 'fav' && !librarySearchQuery ? t('app.lib.noFavInstalled') : t('app.lib.noMatch')}
+            subtitle={librarySearchQuery ? t('app.lib.noMatchQ', { q: librarySearchQuery }) : t('app.lib.heartHint')} />
         ) : (
-          <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative', width: '100%' }}>
-            {virtualizer.getVirtualItems().map(virtualRow => {
-              const startIdx = virtualRow.index * effectiveColumns
-              const rowItems = filteredLibraryGames.slice(startIdx, startIdx + effectiveColumns)
-              return (
-                <div
-                  key={virtualRow.key}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: `${virtualRow.size}px`,
-                    transform: `translateY(${virtualRow.start}px)`,
-                    contain: 'layout style',
-                    display: effectiveColumns > 1 ? 'grid' : 'flex',
-                    gridTemplateColumns: effectiveColumns > 1 ? `repeat(${effectiveColumns}, 1fr)` : undefined,
-                    flexDirection: effectiveColumns > 1 ? undefined : 'column',
-                    gap: effectiveColumns > 1 ? GRID_GAP + 'px' : '0.5rem',
-                    alignItems: effectiveColumns > 1 ? 'start' : undefined,
-                  }}
-                >
-                  {rowItems.map((game, i) => {
-                    const gameIdx = startIdx + i
-                    const isFocused = gameIdx === focusedIndex
-                    const focusStyle: React.CSSProperties = {
-                      outline: isFocused ? `2px solid ${colors.violet}` : 'none',
-                      outlineOffset: '2px',
-                      borderRadius: '12px',
-                      transform: isFocused ? 'scale(1.02)' : 'scale(1)',
-                      transition: 'all 80ms cubic-bezier(0.4, 0, 0.2, 1)',
-                    }
-                    if (viewMode === 'list') {
-                      return (
-                        <div key={game.appid} style={focusStyle}>
-                          <LibraryListCard game={game} index={gameIdx} onDelete={handleDeleteGame} onContextMenu={handleContextMenu} colors={colors} compactMode={compactMode} />
-                        </div>
-                      )
-                    }
-                    return (
-                      <div key={game.appid} style={focusStyle}>
-                        <PortraitCard
-                          game={game}
-                          index={gameIdx}
-                          isFavorite={favorites.has(game.appid)}
-                          isInstalled={true}
-                          onClick={() => handleGameClick(game)}
-                          onFavorite={() => handlers.toggleFavorite(game.appid)}
-                          onDelete={() => handleDeleteGame(game.appid)}
-                          onContextMenu={handleContextMenu}
-                          colors={colors}
-                        />
-                      </div>
-                    )
-                  })}
-                </div>
-              )
-            })}
-          </div>
+          <VirtualRows items={shown} grid={false} columns={columns} virtualizer={virtualizer} renderItem={(game, idx) => {
+            const focused = idx === focusedIndex
+            return (
+              <div key={game.appid} style={{ outline: focused ? `2px solid ${ACC}` : 'none', outlineOffset: -2, transition: 'outline-color 80ms cubic-bezier(0.4, 0, 0.2, 1)' }}>
+                <LibraryRow game={game} compact={compactMode} reduced={reduced} delay={Math.min(idx * 0.02, 0.3)}
+                  hasUpdate={isUpd(game)} fixState={appliedMap[game.appid] ? 'applied' : fixAppids.has(String(game.appid)) ? 'available' : 'none'}
+                  onOpen={handleGameClick} onLaunch={launch} onUpdate={update} onContextMenu={handleContextMenu} />
+              </div>
+            )
+          }} />
         )}
+      </div>
+    </div>
+  )
+})
+
+// ── List row (design: cover, title/genre, status, meta, actions) ──
+const COL_LABEL: React.CSSProperties = { fontFamily: MONO, fontSize: 10, fontWeight: 600, letterSpacing: '.14em', color: '#6f6e86' }
+
+const LibraryRow = memo(function LibraryRow({ game, compact, reduced, delay, hasUpdate, fixState, onOpen, onLaunch, onUpdate, onContextMenu }: {
+  game: Game; compact: boolean; reduced: boolean; delay: number; hasUpdate: boolean; fixState: 'applied' | 'available' | 'none'
+  onOpen: (g: Game) => void; onLaunch: (g: Game) => void; onUpdate: (g: Game) => void; onContextMenu: (e: React.MouseEvent, g: Game) => void
+}) {
+  const t = useT()
+  const gl = useGenreLabel()
+  const rawTag = getGenreTag(game)
+  const tag = rawTag ? gl(rawTag) : rawTag
+  const dlc = game.dlc_count ?? (game.dlc ? Object.keys(game.dlc).length : 0)
+  const size = game.size ? formatBytes(game.size) : ''
+  const w = compact ? 40 : 52
+  const sc = hasUpdate ? '#fbbf24' : '#4ade80'
+  const fx = fixState === 'applied' ? { c: '#86efac', I: CircleCheck, l: t('app.fix.applied') } : fixState === 'available' ? { c: '#fbbf24', I: Wrench, l: t('app.lib.fixAvail') } : { c: '#6f6e86', I: Minus, l: t('app.lib.fixNone') }
+  return (
+    <div
+      className="v2-lrow"
+      onContextMenu={(e) => onContextMenu(e, game)}
+      style={{
+        height: compact ? 72 : 102, display: 'flex', alignItems: 'center', gap: 28, boxSizing: 'border-box',
+        paddingBlock: compact ? 8 : 14, paddingInlineStart: compact ? 16 : 20, paddingInlineEnd: compact ? 14 : 18, borderBottom: '1px solid rgba(255,255,255,.045)',
+        animation: reduced ? undefined : `v2-riseIn .3s cubic-bezier(.16,1,.3,1) ${delay}s both`,
+      }}
+    >
+      <div onClick={() => onOpen(game)} style={{ flex: '1 1 240px', display: 'flex', alignItems: 'center', gap: 16, minWidth: 0, cursor: 'pointer' }}>
+        <div style={{ width: w, height: Math.round(w * 1.42), flex: 'none', borderRadius: 10, overflow: 'hidden', background: '#10101c', boxShadow: '0 10px 24px -10px rgba(0,0,0,.9)' }}>
+          <GameCover appid={game.appid} name={game.name} localHeader={game.header_image || undefined}
+            preferredImageTypes={IMAGE_TYPES.PORTRAIT} genreHue={getGenreHue(game)} webglDisabled className="w-full h-full" />
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 15.5, fontWeight: 650, color: '#f3f2fa', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{game.name}</div>
+          <div style={{ fontSize: 12.5, color: '#8b8aa3', marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{[tag, t('app.card.appId', { id: game.appid })].filter(Boolean).join(' · ')}</div>
+        </div>
+      </div>
+      <div className="hidden md:flex" style={{ gap: 28, flex: 'none' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 108 }}>
+          <span style={COL_LABEL}>{t('app.lib.status')}</span>
+          <span style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 7, height: 24, padding: '0 9px', borderRadius: 8, background: hasUpdate ? 'rgba(245,158,11,.12)' : 'rgba(34,197,94,.12)', color: sc, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: sc, boxShadow: `0 0 8px ${sc}` }} />{hasUpdate ? t('app.lib.updateAvail') : t('app.lib.ready')}
+          </span>
+        </div>
+        <div className="hidden lg:flex" style={{ flexDirection: 'column', gap: 6, minWidth: 96 }}>
+          <span style={COL_LABEL}>{t('app.lib.size')}</span>
+          <span style={{ fontSize: 13, color: '#c9c8da', lineHeight: '24px', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}><HardDrive size={14} />{size || '—'}</span>
+        </div>
+        <div className="hidden xl:flex" style={{ flexDirection: 'column', gap: 6, minWidth: 70 }}>
+          <span style={COL_LABEL}>DLC</span>
+          <span style={{ fontSize: 13, color: dlc ? '#c9c8da' : '#6f6e86', lineHeight: '24px', display: 'flex', alignItems: 'center', gap: 6 }}><Puzzle size={14} />{dlc || '—'}</span>
+        </div>
+        <div className="hidden lg:flex" style={{ flexDirection: 'column', gap: 6, minWidth: 86 }}>
+          <span style={COL_LABEL}>{t('app.lib.fixes')}</span>
+          <span style={{ fontSize: 13, color: fx.c, lineHeight: '24px', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}><fx.I size={14} />{fx.l}</span>
+        </div>
+      </div>
+      <div style={{ flex: 'none', display: 'flex', gap: 8, marginInlineStart: 'auto' }}>
+        <button onClick={() => hasUpdate ? onUpdate(game) : onLaunch(game)} className="v2-pill"
+          aria-label={`${hasUpdate ? t('app.card.update') : t('app.lib.launch')} ${game.name ?? ''}`}
+          style={{ height: 38, minWidth: 108, padding: '0 14px', borderRadius: 11, border: 'none', background: hasUpdate ? '#f59e0b' : 'var(--acc,#a77dff)', color: hasUpdate ? '#1f1300' : '#0b0614', fontSize: 13, fontWeight: 650, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, transition: 'transform .15s, filter .15s' }}>
+          {hasUpdate ? <RefreshCw size={14} /> : <Play size={14} />}{hasUpdate ? t('app.card.update') : t('app.lib.launch')}
+        </button>
+        <button onClick={(e) => onContextMenu(e, game)} aria-label={t('app.lib.moreNamed', { name: game.name ?? '' })} title={t('app.lib.more')} className="v2-icobtn"
+          style={{ width: 38, height: 38, flex: 'none', borderRadius: 11, border: '1px solid rgba(255,255,255,.09)', background: 'transparent', color: '#a6a5bb', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Ellipsis size={16} />
+        </button>
       </div>
     </div>
   )

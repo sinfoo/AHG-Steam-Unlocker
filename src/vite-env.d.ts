@@ -201,17 +201,6 @@ interface ElectronAPI {
   } | null>
   registerDlcs?: (appid: string, dlcIds: string[], dlcDetails?: Record<string, { name: string; header_image?: string }>, sourceRepo?: string) => Promise<{ success: boolean; message: string; count: number }>
 
-  // ── v0.8 Discord Integration ──
-  discordLogin?: () => Promise<{ success: boolean; user?: any; isInGuild?: boolean; message?: string; diagnostics?: any }>
-  checkDiscordAuth?: () => Promise<{ authenticated: boolean; user?: any; isInGuild?: boolean }>
-  discordLogout?: () => Promise<{ success: boolean }>
-  setGameSharing?: (enabled: boolean) => Promise<{ success: boolean }>
-  getGameSharing?: () => Promise<{ enabled: boolean }>
-  shareGameToDiscord?: (appid: string, gameName: string, coverUrl?: string, dlcCount?: number) => Promise<{ success: boolean; message?: string }>
-  getDiscordStartupPref?: () => Promise<{ showOnStartup: boolean }>
-  setDiscordStartupPref?: (pref: { showOnStartup: boolean }) => Promise<{ success: boolean; message?: string }>
-  getSecretsDiag?: () => Promise<any>
-
   // ── v0.8 Restart App (after update) ──
   restartApp?: () => Promise<void>
 

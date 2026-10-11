@@ -11,12 +11,12 @@ const variantStyles: Record<
   NonNullable<BadgeProps['variant']>,
   { bg: string; color: string }
 > = {
-  default: { bg: COLORS.bgHover, color: COLORS.textMuted },
+  default: { bg: 'rgba(255,255,255,0.1)', color: '#e4e3f0' },
   success: { bg: COLORS.greenDim, color: COLORS.green },
   warning: { bg: COLORS.amberDim, color: COLORS.amber },
   error: { bg: COLORS.redDim, color: COLORS.red },
   info: { bg: COLORS.blueDim, color: COLORS.blue },
-  violet: { bg: COLORS.violetDim, color: COLORS.violetLight },
+  violet: { bg: 'color-mix(in oklch, var(--acc,#a77dff) 16%, transparent)', color: 'var(--acc,#a77dff)' },
 }
 
 const sizeStyles: Record<
@@ -45,7 +45,7 @@ export const Badge = memo(function Badge({
         padding: s.padding,
         fontSize: s.fontSize,
         fontWeight: 600,
-        borderRadius: '0.5rem',
+        borderRadius: '8px',
         background: v.bg,
         color: v.color,
         whiteSpace: 'nowrap',

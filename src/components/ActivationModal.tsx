@@ -1,6 +1,7 @@
+import { useT, t as tNow, type TKey } from '../i18n'
 import { memo, useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Key, XCircle, Loader2, MessageCircle, ExternalLink, Shield, CheckCircle2, ArrowLeft } from 'lucide-react'
+import { X, Key, Loader2, MessageCircle, ExternalLink, ArrowLeft, ClipboardPaste, ArrowRight, Check, PlusCircle, Wrench, Puzzle, AlertCircle } from 'lucide-react'
 import { COLORS } from '../constants/colors'
 
 interface ActivationModalProps {
@@ -39,9 +40,38 @@ function FloatingEmoji({ emoji, index }: { emoji: string; index: number }) {
   )
 }
 
+const MONO = "'Geist Mono Variable','Geist Mono',ui-monospace,monospace"
+const ACC = 'var(--acc, #a77dff)'
+const KEY_LEN = 16
+
+// Poster wall: bundled local posters (offline-safe) over gradient tiles
+const WALL_COLS = Array.from({ length: 5 }, (_, c) => ({
+  anim: `${c % 2 ? 'v2-colDown' : 'v2-colUp'} ${26 + c * 4}s ease-in-out infinite alternate`,
+  tiles: Array.from({ length: 6 }, (_, r) => {
+    const h = (c * 67 + r * 41 + 250) % 360
+    return {
+      bg: `url(./assets/posters/p${(c * 3 + r * 5) % 16}.webp) center/cover, linear-gradient(160deg, hsl(${h} 55% 34%), hsl(${(h + 50) % 360} 60% 14%))`,
+      delay: `${(c * 0.08 + r * 0.06).toFixed(2)}s`,
+    }
+  }),
+}))
+
 const ROFL_EMOJIS = ['😂', '🤣', '😭', '💀', '🗿', '🤡', '😹', '🙏']
+const STEPS: TKey[] = ['ui.act.step1', 'ui.act.step2', 'ui.act.step3']
+
+const pillStyle: React.CSSProperties = {
+  height: 34, padding: '0 12px', borderRadius: 10,
+  background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.1)',
+  backdropFilter: 'blur(10px)', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 7,
+}
+const primaryBtn: React.CSSProperties = {
+  position: 'relative', height: 54, border: 'none', borderRadius: 15, background: ACC, color: '#0b0614',
+  fontSize: 15, fontWeight: 650, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+  overflow: 'hidden', boxShadow: `0 18px 40px -14px ${ACC}`, transition: 'transform .08s, filter .08s',
+}
 
 export const ActivationModal = memo(function ActivationModal({ isOpen, onActivated }: ActivationModalProps) {
+  const t = useT()
   const [licenseKey, setLicenseKey] = useState('')
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle')
@@ -49,6 +79,7 @@ export const ActivationModal = memo(function ActivationModal({ isOpen, onActivat
   const [showSupport, setShowSupport] = useState(false)
   const [showMeme, setShowMeme] = useState(false)
   const [showSkipHint, setShowSkipHint] = useState(false)
+  const [focused, setFocused] = useState(false)
   const gifRef = useRef<HTMLImageElement>(null)
 
   useEffect(() => {
@@ -72,14 +103,14 @@ export const ActivationModal = memo(function ActivationModal({ isOpen, onActivat
 
   const handleActivate = async () => {
     if (!licenseKey.trim() || loading) return
-    
+
     setLoading(true)
     setStatus('idle')
     setErrorMessage('')
-    
+
     try {
       const result = await window.electronAPI?.activateLicense?.(licenseKey.trim())
-      
+
       if (result?.success) {
         setStatus('success')
         setTimeout(() => {
@@ -87,13 +118,13 @@ export const ActivationModal = memo(function ActivationModal({ isOpen, onActivat
         }, 2000)
       } else {
         setStatus('error')
-        setErrorMessage(result?.message || 'Invalid License Key')
+        setErrorMessage(result?.message || tNow('ui.act.invalid'))
       }
     } catch {
       setStatus('error')
-      setErrorMessage('Network error. Please try again.')
+      setErrorMessage(tNow('ui.act.network'))
     }
-    
+
     setLoading(false)
   }
 
@@ -122,6 +153,18 @@ export const ActivationModal = memo(function ActivationModal({ isOpen, onActivat
     setTimeout(() => setShowSkipHint(true), 2000)
   }
 
+  const keyCells = Math.max(KEY_LEN, Math.ceil(licenseKey.length / 4) * 4)
+  const keyGroups = Array.from({ length: keyCells / 4 }, (_, g) => Array.from({ length: 4 }, (_, k) => g * 4 + k))
+  const keyPct = Math.min(100, (licenseKey.length / KEY_LEN) * 100)
+  const maskedKey = `••••  ••••  ••••  ${licenseKey.slice(-4).padEnd(4, '•')}`
+  const hasKey = !!licenseKey.trim()
+  const isErr = status === 'error'
+  const ring = isErr
+    ? 'linear-gradient(135deg,#f87171,#7f1d1d)'
+    : focused || hasKey
+      ? `linear-gradient(135deg, ${ACC}, rgba(255,255,255,.12))`
+      : 'rgba(255,255,255,.1)'
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -129,450 +172,336 @@ export const ActivationModal = memo(function ActivationModal({ isOpen, onActivat
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: 'rgba(0, 0, 0, 0.9)', backdropFilter: 'blur(30px)' }}
+          className="fixed inset-0 z-50 grid md:grid-cols-[minmax(0,1.15fr)_minmax(400px,1fr)] overflow-hidden"
+          style={{ background: '#06060c', color: '#f3f2fa' }}
+          role="dialog"
+          aria-modal="true"
+          aria-label={t('ui.act.aria')}
         >
-          <motion.div
-            initial={{ scale: 0.85, opacity: 0, y: 30 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.85, opacity: 0, y: 30 }}
-            transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-            className="w-full max-w-md mx-4 relative"
-          >
-            {/* Card */}
-            <div 
-              className="rounded-3xl p-8 relative overflow-hidden"
-              style={{ 
-background: showMeme
-                    ? `linear-gradient(180deg, ${COLORS.bgCard} 0%, ${COLORS.bgDeep} 100%)` // intentional dynamic color
-                  : status === 'success' 
-                    ? `linear-gradient(180deg, ${COLORS.bgCard} 0%, ${COLORS.green}12 100%)`
-                    : `linear-gradient(180deg, ${COLORS.bgCard} 0%, ${COLORS.violet}08 100%)`,
-                border: `1px solid ${showMeme ? 'rgba(239,68,68,0.3)' : status === 'success' ? COLORS.green + '50' : COLORS.border}`,
-                boxShadow: showMeme
-                  ? `0 0 80px ${COLORS.redDim}, 0 20px 60px rgba(0,0,0,0.5)`
-                  : status === 'success'
-                    ? `0 0 80px ${COLORS.green}30, 0 20px 60px rgba(0,0,0,0.5)`
-                    : `0 20px 60px rgba(0, 0, 0, 0.5), 0 0 60px ${COLORS.violet}15`
-              }}
-            >
-              {/* ── Meme Mode ── */}
-              {showMeme ? (
-                <>
-                  {/* Floating ROFL emojis */}
-                  {ROFL_EMOJIS.map((emoji, i) => (
-                    <FloatingEmoji key={i} emoji={emoji} index={i} />
-                  ))}
-
-                  {/* GIF */}
-                  <div className="flex justify-center mb-4 relative z-10">
-                    <motion.div
-                      initial={{ scale: 0, rotate: -20 }}
-                      animate={{ scale: 1, rotate: 0 }}
-                      transition={{ type: 'spring', stiffness: 200, damping: 12, delay: 0.2 }}
-                      className="w-52 h-64 rounded-2xl overflow-hidden"
-                      style={{
-                        boxShadow: '0 20px 60px rgba(0,0,0,0.5), 0 0 80px rgba(239,68,68,0.2)',
-                        border: '2px solid rgba(239,68,68,0.2)'
-                      }}
-                    >
-                      <img
-                        ref={gifRef}
-                        src="./gif/rabi3.gif"
-                        alt="Nice try!"
-                        className="w-full h-full object-cover"
-                        decoding="async"
-                        fetchPriority="low"
-                        onError={(e) => {
-                          // Fallback: try absolute path
-                          (e.target as HTMLImageElement).src = 'gif/rabi3.gif'
-                        }}
-                      />
-                    </motion.div>
+          {/* ── Left: poster wall + hero ── */}
+          <div className="relative overflow-hidden hidden md:block" style={{ animation: 'v2-actLeft .6s cubic-bezier(.16,1,.3,1) both' }}>
+            <div className="absolute inset-0" style={{ perspective: 1200 }}>
+              <div className="absolute flex" style={{ inset: '-25% -30% -25% -10%', gap: 14, transform: 'rotateY(-20deg) rotateZ(-6deg)', opacity: 0.75 }}>
+                {WALL_COLS.map((col, ci) => (
+                  <div key={ci} className="flex-1 flex flex-col" style={{ gap: 14, animation: col.anim }}>
+                    {col.tiles.map((t, ti) => (
+                      <div key={ti} style={{ width: '100%', aspectRatio: '2/3', borderRadius: 12, background: t.bg, animation: 'v2-coverIn .8s cubic-bezier(.16,1,.3,1) both', animationDelay: t.delay, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.06)' }} />
+                    ))}
                   </div>
-
-                  {/* "Seriously?" gradient text */}
-                  <motion.h2
-                    initial={{ opacity: 0, y: 20, scale: 0.8 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    transition={{ delay: 0.4, type: 'spring', stiffness: 150 }}
-                    className="text-3xl font-black text-center mb-2 relative z-10"
-                    style={{
-                      background: `linear-gradient(135deg, ${COLORS.red}, ${COLORS.amber}, ${COLORS.pink}, ${COLORS.red})`, // intentional dynamic color
-                      backgroundSize: '200% 200%',
-                      WebkitBackgroundClip: 'text',
-                      WebkitTextFillColor: 'transparent',
-                      animation: 'gradient-shift 2s ease infinite',
-                    }}
-                  >
-                    Seriously?
-                  </motion.h2>
-
-                  <motion.p
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.6 }}
-                    className="text-center text-sm mb-6 relative z-10"
-                    style={{ color: COLORS.textMuted }}
-                  >
-                    You thought you could just skip the license? 😂
-                  </motion.p>
-
-                  <motion.p
-                    initial={{ opacity: 0, scale: 0 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: 0.8, type: 'spring' }}
-                    className="text-center text-2xl mb-6 relative z-10"
-                  >
-                    💀🤡🗿
-                  </motion.p>
-
-                  {/* Back to Activation Button */}
-                  <motion.button
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 1 }}
-                    whileHover={{ 
-                      scale: 1.05,
-                      boxShadow: '0 0 40px rgba(245,158,11,0.5), 0 0 80px rgba(245,158,11,0.2)'
-                    }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={handleBackToActivation}
-                    className="w-full h-14 rounded-2xl font-bold text-white flex items-center justify-center gap-3 relative z-10"
-                    style={{
-                      background: `linear-gradient(135deg, ${COLORS.amber}, ${COLORS.amber}cc)`, // intentional gradient variation
-                      boxShadow: '0 4px 25px rgba(245,158,11,0.4)',
-                    }}
-                  >
-                    <ArrowLeft size={18} />
-                    <span className="text-lg">Back to Activation</span>
-                  </motion.button>
-
-                  {/* Subtle text */}
-                  <motion.p
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 1.2 }}
-                    className="text-center text-xs mt-4 relative z-10"
-                    style={{ color: 'rgba(255,255,255,0.2)' }}
-                  >
-                    (nice try though 😏)
-                  </motion.p>
-                </>
-              ) : (
-                <>
-                  {/* ── Close Button with Skip Hint ── */}
-                  {status !== 'success' && (
-                    <div className="absolute top-4 right-4 z-20">
-                      {/* Floating hint circle */}
-                      {showSkipHint && (
-                        <motion.div
-                          className="absolute top-10 right-0 pointer-events-none z-20"
-                          initial={{ opacity: 0, y: -8, scale: 0.7 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          transition={{ type: 'spring', stiffness: 220, damping: 13 }}
-                        >
-                          <motion.div
-                            animate={{ y: [0, 3, 0] }}
-                            transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-                            className="relative px-3 py-1.5 rounded-full text-[11px] font-extrabold whitespace-nowrap"
-                            style={{
-                              background: `linear-gradient(135deg, ${COLORS.amber}, ${COLORS.red})`,
-                              color: '#fff',
-                              boxShadow: `0 8px 22px ${COLORS.amber}55, inset 0 1px 0 rgba(255,255,255,0.25)`,
-                            }}
-                          >
-                            want to skip? 😏
-                            {/* glow pulse */}
-                            <motion.span
-                              className="absolute inset-0 rounded-full"
-                              style={{ boxShadow: `0 0 0 2px ${COLORS.amber}` }}
-                              animate={{ opacity: [0.5, 0, 0.5], scale: [1, 1.25, 1] }}
-                              transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
-                            />
-                            {/* tail pointing UP toward the X (kept inside the modal) */}
-                            <span
-                              className="absolute -top-1 right-3 w-2.5 h-2.5 rotate-45"
-                              style={{ background: COLORS.amber }}
-                            />
-                          </motion.div>
-                        </motion.div>
-                      )}
-                      <button
-                        onClick={handleCloseClick}
-                        className="p-2 rounded-xl transition-all hover:bg-white/10 relative"
-                        style={{ color: COLORS.textMuted }}
-                        title="Close (or try to...)"
-                      >
-                        <X size={20} />
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Status Icon */}
-                  <div className="flex justify-center mb-6">
-                    {status === 'success' ? (
-                      <div className="relative w-24 h-24 flex items-center justify-center">
-                        {/* Expanding celebration rings */}
-                        {[0, 0.25, 0.5].map((delay, i) => (
-                          <motion.span
-                            key={i}
-                            className="absolute rounded-full"
-                            style={{ border: `2px solid ${COLORS.green}` }}
-                            initial={{ width: 72, height: 72, opacity: 0.55 }}
-                            animate={{ width: 150, height: 150, opacity: 0 }}
-                            transition={{ duration: 1.4, delay, repeat: Infinity, ease: 'easeOut' }}
-                          />
-                        ))}
-                        {/* Sparkle particles bursting outward */}
-                        {Array.from({ length: 10 }).map((_, i) => {
-                          const ang = (i / 10) * Math.PI * 2
-                          return (
-                            <motion.span
-                              key={'spark' + i}
-                              className="absolute w-1.5 h-1.5 rounded-full"
-                              style={{ background: i % 2 ? COLORS.green : COLORS.violet, boxShadow: `0 0 8px ${i % 2 ? COLORS.green : COLORS.violet}` }}
-                              initial={{ x: 0, y: 0, opacity: 0, scale: 0 }}
-                              animate={{ x: Math.cos(ang) * 60, y: Math.sin(ang) * 60, opacity: [0, 1, 0], scale: [0, 1, 0.4] }}
-                              transition={{ duration: 0.9, delay: 0.15 + (i % 5) * 0.03, ease: 'easeOut' }}
-                            />
-                          )
-                        })}
-                        <motion.div
-                          initial={{ scale: 0, rotate: -180 }}
-                          animate={{ scale: 1, rotate: 0 }}
-                          transition={{ type: 'spring', stiffness: 200, damping: 12 }}
-                          className="relative w-24 h-24 rounded-full flex items-center justify-center"
-                          style={{
-                            background: `linear-gradient(135deg, ${COLORS.green}40 0%, ${COLORS.green}15 100%)`,
-                            boxShadow: `0 0 60px ${COLORS.green}55, inset 0 1px 0 rgba(255,255,255,0.2)`
-                          }}
-                        >
-                          <CheckCircle2 size={48} style={{ color: COLORS.green }} />
-                        </motion.div>
-                      </div>
-                    ) : (
-                      <div 
-                        className="w-20 h-20 rounded-full flex items-center justify-center"
-                        style={{ 
-                          background: `linear-gradient(135deg, ${COLORS.violet}30 0%, ${COLORS.violet}10 100%)`,
-                          boxShadow: `0 0 50px ${COLORS.violet}40`
-                        }}
-                      >
-                        <Shield size={36} style={{ color: COLORS.violet }} />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Title */}
-                  <h2
-                    className="text-2xl font-extrabold text-center mb-2 tracking-tight"
-                    style={status === 'success'
-                      ? { background: `linear-gradient(135deg, ${COLORS.green}, ${COLORS.violetLight || COLORS.violet})`, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }
-                      : { color: COLORS.text }}
-                  >
-                    {status === 'success' ? "You're all set!" : 'License Activation'}
-                  </h2>
-
-                  {/* Subtitle */}
-                  <p
-                    className="text-center text-sm mb-6"
-                    style={{ color: COLORS.textMuted }}
-                  >
-                    {status === 'success'
-                      ? 'License activated — welcome to AHG Steam Unlocker.'
-                      : 'Enter your license key to unlock all features'}
-                  </p>
-
-                  {status !== 'success' && !showSupport && (
-                    <>
-                      {/* Input with Paste Button */}
-                      <div className="relative mb-4">
-                        <div 
-                          className="absolute inset-0 rounded-2xl transition-all"
-                          style={{ 
-                            background: `linear-gradient(135deg, ${COLORS.violet}12 0%, ${COLORS.bgDeep} 100%)`,
-                            border: status === 'error' 
-                              ? `1px solid ${COLORS.red}50` 
-                              : `1px solid ${licenseKey ? COLORS.violet + '40' : COLORS.border}`
-                          }}
-                        />
-                        <Key 
-                          className="absolute left-4 top-1/2 -translate-y-1/2 z-10" 
-                          size={18} 
-                          style={{ color: licenseKey ? COLORS.violet : COLORS.textMuted }} 
-                        />
-                        <input
-                          type="text"
-                          placeholder="Enter license key"
-                          value={licenseKey}
-                          onChange={(e) => setLicenseKey(e.target.value.toUpperCase())}
-                          onKeyDown={handleKeyPress}
-                          className="w-full h-14 pl-12 pr-16 rounded-2xl text-base font-mono text-white placeholder-gray-500 focus:outline-none transition-all relative z-10"
-                          style={{ background: 'transparent' }}
-                          autoFocus
-                        />
-                        <motion.button
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={async () => {
-                            try {
-                              const text = await navigator.clipboard.readText()
-                              setLicenseKey(text.trim().toUpperCase())
-                            } catch {}
-                          }}
-                          title="Paste from clipboard"
-                          className="absolute right-3 top-1/2 -translate-y-1/2 z-10 p-2 rounded-xl"
-                          style={{ background: COLORS.violet + '20' }}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={COLORS.violet} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                          </svg>
-                        </motion.button>
-                      </div>
-
-                      {/* Error Message */}
-                      {status === 'error' && errorMessage && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="mb-4 px-4 py-3 rounded-xl flex items-center gap-3"
-                          style={{ background: COLORS.redDim }}
-                        >
-                          <XCircle size={18} className="text-red-500" />
-                          <span className="text-sm text-red-400">{errorMessage}</span>
-                        </motion.div>
-                      )}
-
-                      {/* Activate Button */}
-                      <motion.button
-                        whileHover={{ scale: loading ? 1 : 1.02 }}
-                        whileTap={{ scale: loading ? 1 : 0.98 }}
-                        onClick={handleActivate}
-                        disabled={!licenseKey.trim() || loading}
-                        className="w-full h-14 rounded-2xl font-bold text-white flex items-center justify-center gap-3 mb-4"
-                        style={{ 
-                          background: licenseKey.trim() && !loading 
-                            ? `linear-gradient(135deg, ${COLORS.violet} 0%, ${COLORS.cyan} 100%)`
-                            : COLORS.violet + '50',
-                          boxShadow: licenseKey.trim() && !loading 
-                            ? `0 4px 25px ${COLORS.violet}50` 
-                            : 'none',
-                          cursor: licenseKey.trim() && !loading ? 'pointer' : 'not-allowed'
-                        }}
-                      >
-                        {loading ? (
-                          <>
-                            <Loader2 size={20} className="animate-spin" />
-                            <span>Activating...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Shield size={18} />
-                            <span className="text-lg">Activate License</span>
-                          </>
-                        )}
-                      </motion.button>
-
-                      {/* Contact Support */}
-                      <motion.button
-                        whileHover={{ scale: 1.02, backgroundColor: 'rgba(255,255,255,0.05)' }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => setShowSupport(true)}
-                        className="w-full h-12 rounded-xl font-medium flex items-center justify-center gap-2"
-                        style={{ 
-                          background: 'transparent',
-                          color: COLORS.textMuted
-                        }}
-                      >
-                        <MessageCircle size={16} />
-                        Contact Support
-                      </motion.button>
-                    </>
-                  )}
-
-                  {showSupport && (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="text-center py-4"
-                    >
-                      <MessageCircle 
-                        size={48} 
-                        className="mx-auto mb-4"
-                        style={{ color: '#5865F2' }} // Discord brand color - intentional
-                      />
-                      <h3 
-                        className="text-xl font-bold mb-2"
-                        style={{ color: COLORS.text }}
-                      >
-                        Need Help?
-                      </h3>
-                      <p 
-                        className="text-sm mb-6"
-                        style={{ color: COLORS.textMuted }}
-                      >
-                        Join our Discord community for support
-                      </p>
-                      <motion.button
-                        whileHover={{ scale: 1.02, boxShadow: '0 4px 30px #5865F250' }} // Discord brand color - intentional
-                        whileTap={{ scale: 0.98 }}
-                        onClick={openDiscord}
-                        className="w-full h-12 rounded-xl font-bold text-white flex items-center justify-center gap-2"
-                        style={{ 
-                          background: '#5865F2', // Discord brand color - intentional
-                          boxShadow: '0 4px 20px #5865F240'
-                        }}
-                      >
-                        <MessageCircle size={18} />
-                        Join Discord
-                        <ExternalLink size={14} />
-                      </motion.button>
-                      
-                      <button
-                        onClick={() => setShowSupport(false)}
-                        className="w-full mt-4 py-2 text-sm font-medium"
-                        style={{ color: COLORS.textMuted }}
-                      >
-                        Back
-                      </button>
-                    </motion.div>
-                  )}
-
-                  {/* Success Animation */}
-                  {status === 'success' && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.3 }}
-                      className="text-center mt-4"
-                    >
-                      <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        transition={{ delay: 0.5, type: 'spring' }}
-                        className="flex justify-center gap-2 mb-3"
-                      >
-                        {[0, 1, 2].map((i) => (
-                          <motion.div
-                            key={i}
-                            animate={{ scale: [1, 1.3, 1], opacity: [0.5, 1, 0.5] }}
-                            transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
-                            className="w-2 h-2 rounded-full"
-                            style={{ background: COLORS.violet }}
-                          />
-                        ))}
-                      </motion.div>
-                      <p className="text-green-400 font-medium">
-                        Redirecting to the app...
-                      </p>
-                    </motion.div>
-                  )}
-                </>
-              )}
+                ))}
+              </div>
             </div>
-          </motion.div>
+            <div className="absolute inset-0" style={{ background: 'linear-gradient(90deg, rgba(6,6,12,.25) 0%, rgba(6,6,12,.5) 60%, #0f0f1b 100%), linear-gradient(0deg, #06060c 0%, rgba(6,6,12,.35) 55%, rgba(6,6,12,.15) 100%)' }} />
+            <div className="absolute flex flex-col" style={{ insetInlineStart: 'clamp(28px,5vw,64px)', bottom: 'clamp(28px,7vh,72px)', insetInlineEnd: '12%', gap: 18 }}>
+              <div className="flex items-center gap-3" style={{ animation: 'v2-riseIn .4s .15s both' }}>
+                <img src="./assets/ahg-logo.png" alt="" style={{ width: 40, height: 40, objectFit: 'contain' }} />
+                <span style={{ fontFamily: MONO, fontSize: 11, letterSpacing: '.3em', color: '#c9c8da' }}>AHG UNLOCKER</span>
+              </div>
+              <h1 style={{ margin: 0, fontSize: 'clamp(38px,4.4vw,68px)', fontWeight: 750, letterSpacing: '-.045em', lineHeight: 0.95, animation: 'v2-riseIn .5s .22s both' }}>
+                {t('ui.act.heroA')}<br /><span style={{ color: ACC }}>{t('ui.act.heroB')}</span>
+              </h1>
+              <div style={{ fontSize: 15, color: '#c9c8da', maxWidth: 440, lineHeight: 1.5, animation: 'v2-riseIn .5s .3s both' }}>
+                {t('ui.act.heroSub')}
+              </div>
+              <div className="flex flex-wrap gap-2" style={{ animation: 'v2-riseIn .5s .38s both' }}>
+                <span style={pillStyle}><PlusCircle size={14} style={{ color: ACC }} />{t('ui.act.pill1')}</span>
+                <span style={pillStyle}><Wrench size={14} style={{ color: '#fbbf24' }} />{t('ui.act.pill2')}</span>
+                <span style={pillStyle}><Puzzle size={14} style={{ color: '#4ade80' }} />{t('ui.act.pill3')}</span>
+                <span style={{ ...pillStyle, fontFamily: MONO, fontSize: 12 }}>{t('ui.act.pill4')}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Right: form panel ── */}
+          <div
+            className="relative flex items-center justify-center overflow-y-auto"
+            style={{ padding: 40, scrollbarWidth: 'none', background: `radial-gradient(ellipse at 70% 20%, color-mix(in oklch, ${ACC} 14%, transparent), transparent 60%), #0f0f1b`, borderInlineStart: '1px solid rgba(255,255,255,.06)' }}
+          >
+            {status === 'success' && (
+              <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(circle at 50% 38%, rgba(34,197,94,.16), transparent 55%)', animation: 'v2-fadeIn .6s both' }} />
+            )}
+
+            {/* Close button + skip hint */}
+            {status !== 'success' && !showMeme && (
+              <div className="absolute top-4 end-4 z-20">
+                {showSkipHint && (
+                  <div className="absolute top-10 end-0 pointer-events-none z-20" style={{ animation: 'v2-popIn .3s cubic-bezier(.16,1,.3,1) both' }}>
+                    <div className="relative px-3 py-1.5 rounded-full whitespace-nowrap" style={{ fontSize: 11, fontWeight: 800, background: `linear-gradient(135deg, ${COLORS.amber}, ${COLORS.red})`, color: '#fff', boxShadow: `0 8px 22px ${COLORS.amber}55` }}>
+                      {t('ui.act.skip')}
+                      <span className="absolute -top-1 end-3 w-2.5 h-2.5 rotate-45" style={{ background: COLORS.amber }} />
+                    </div>
+                  </div>
+                )}
+                <button
+                  onClick={handleCloseClick}
+                  className="p-2 rounded-xl transition-colors hover:bg-white/10 relative"
+                  style={{ color: '#8b8aa3' }}
+                  title={t('ui.act.closeTitle')}
+                  aria-label={t('ui.common.close')}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            )}
+
+            {showMeme ? (
+              /* ── Meme mode ── */
+              <div className="relative w-full" style={{ maxWidth: 400 }}>
+                {ROFL_EMOJIS.map((emoji, i) => (
+                  <FloatingEmoji key={i} emoji={emoji} index={i} />
+                ))}
+                <div className="flex justify-center mb-4 relative z-10">
+                  <motion.div
+                    initial={{ scale: 0, rotate: -20 }}
+                    animate={{ scale: 1, rotate: 0 }}
+                    transition={{ type: 'spring', stiffness: 200, damping: 12, delay: 0.2 }}
+                    className="w-52 h-64 rounded-2xl overflow-hidden"
+                    style={{ boxShadow: '0 20px 60px rgba(0,0,0,0.5), 0 0 80px rgba(239,68,68,0.2)', border: '2px solid rgba(239,68,68,0.2)' }}
+                  >
+                    <img
+                      ref={gifRef}
+                      src="./gif/rabi3.gif"
+                      alt="Nice try!"
+                      className="w-full h-full object-cover"
+                      decoding="async"
+                      fetchPriority="low"
+                      onError={(e) => {
+                        // Fallback: try absolute path
+                        (e.target as HTMLImageElement).src = 'gif/rabi3.gif'
+                      }}
+                    />
+                  </motion.div>
+                </div>
+                <motion.h2
+                  initial={{ opacity: 0, y: 20, scale: 0.8 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ delay: 0.4, type: 'spring', stiffness: 150 }}
+                  className="text-center mb-2 relative z-10"
+                  style={{ fontSize: 34, fontWeight: 800, letterSpacing: '-.04em', background: `linear-gradient(135deg, ${COLORS.red}, ${COLORS.amber}, ${COLORS.pink}, ${COLORS.red})`, backgroundSize: '200% 200%', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', animation: 'gradient-shift 2s ease infinite' }}
+                >
+                  {t('ui.act.seriously')}
+                </motion.h2>
+                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }} className="text-center text-sm mb-4 relative z-10" style={{ color: '#a6a5bb' }}>
+                  {t('ui.act.thought')}
+                </motion.p>
+                <motion.p initial={{ opacity: 0, scale: 0 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.8, type: 'spring' }} className="text-center text-2xl mb-6 relative z-10">
+                  💀🤡🗿
+                </motion.p>
+                <motion.button
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 1 }}
+                  onClick={handleBackToActivation}
+                  className="w-full relative z-10 hover:brightness-110 active:scale-[.98]"
+                  style={{ ...primaryBtn, background: COLORS.amber, boxShadow: `0 18px 40px -14px ${COLORS.amber}` }}
+                >
+                  <ArrowLeft size={17} className="rtl-flip" />
+                  <span>{t('ui.act.backToAct')}</span>
+                </motion.button>
+                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.2 }} className="text-center text-xs mt-4 relative z-10" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                  {t('ui.act.nice')}
+                </motion.p>
+              </div>
+            ) : status === 'success' ? (
+              /* ── Success: license card ── */
+              <div className="relative w-full flex flex-col" style={{ maxWidth: 440, gap: 30 }}>
+                <div className="flex justify-center" style={{ perspective: 1200 }}>
+                  <div
+                    className="relative w-full overflow-hidden"
+                    style={{ maxWidth: 400, aspectRatio: '1.586', borderRadius: 22, transformStyle: 'preserve-3d', background: `linear-gradient(135deg, color-mix(in oklch, ${ACC} 55%, #0b0614) 0%, #15122b 45%, #0c0a18 100%)`, border: '1px solid rgba(255,255,255,.16)', boxShadow: `0 40px 80px -30px color-mix(in oklch, ${ACC} 70%, transparent), inset 0 1px 0 rgba(255,255,255,.18)`, animation: 'v2-cardIn 1.1s cubic-bezier(.16,1,.3,1) both, v2-cardFloat 5s 1.1s ease-in-out infinite' }}
+                  >
+                    <img src="./assets/ahg-logo.png" alt="" className="absolute" style={{ insetInlineEnd: -60, bottom: -70, width: 280, height: 280, objectFit: 'contain', opacity: 0.18, filter: 'blur(1px)' }} />
+                    <div className="absolute inset-0" style={{ background: 'repeating-linear-gradient(115deg, transparent 0 18px, rgba(255,255,255,.025) 18px 19px)' }} />
+                    <div className="absolute top-0 bottom-0" style={{ width: '45%', background: 'linear-gradient(90deg,transparent,rgba(255,255,255,.28),transparent)', animation: 'v2-sheen 1.4s .7s cubic-bezier(.6,0,.2,1) both' }} />
+                    <div className="absolute inset-0 flex flex-col" style={{ padding: '22px 24px' }}>
+                      <div className="flex items-center gap-2.5">
+                        <img src="./assets/ahg-logo.png" alt="" style={{ width: 34, height: 34, objectFit: 'contain' }} />
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 750, lineHeight: 1 }}>AHG</div>
+                          <div style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '.28em', color: '#d8c8ff', marginTop: 3 }}>UNLOCKER</div>
+                        </div>
+                        <span className="flex-1" />
+                        <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 600, letterSpacing: '.18em', padding: '4px 9px', borderRadius: 7, background: 'rgba(255,255,255,.12)', border: '1px solid rgba(255,255,255,.18)' }}>{t('ui.act.cardLicense')}</span>
+                      </div>
+                      <div style={{ width: 44, height: 32, borderRadius: 7, marginTop: 20, background: 'linear-gradient(135deg,#f5d77a,#b8913a)', boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.25)' }} />
+                      <div className="flex-1" />
+                      <div dir="ltr" style={{ fontFamily: MONO, fontSize: 'clamp(14px,2.4vw,19px)', fontWeight: 500, letterSpacing: '.14em', textShadow: '0 2px 10px rgba(0,0,0,.5)' }}>{maskedKey}</div>
+                      <div className="flex items-end" style={{ marginTop: 12 }}>
+                        <div>
+                          <div style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '.2em', color: '#b9b0d9' }}>{t('ui.act.cardStatus')}</div>
+                          <div style={{ fontSize: 14, fontWeight: 650, marginTop: 3 }}>{t('ui.act.cardActive')}</div>
+                        </div>
+                        <span className="flex-1" />
+                        <div className="text-end">
+                          <div style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '.2em', color: '#b9b0d9' }}>{t('ui.act.cardActivated')}</div>
+                          <div style={{ fontFamily: MONO, fontSize: 13, fontWeight: 600, marginTop: 3 }}>{new Date().toLocaleDateString()}</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="absolute" style={{ insetInlineEnd: 26, top: 84, padding: '6px 12px', border: '2px solid #4ade80', borderRadius: 10, color: '#4ade80', fontFamily: MONO, fontSize: 13, fontWeight: 700, letterSpacing: '.2em', transform: 'rotate(-12deg)', background: 'rgba(4,33,15,.35)', animation: 'v2-stamp .45s 1s cubic-bezier(.34,1.56,.64,1) both' }}>{t('ui.act.cardVerified')}</div>
+                  </div>
+                </div>
+                <div className="text-center flex flex-col gap-2">
+                  <div style={{ fontSize: 'clamp(30px,3vw,40px)', fontWeight: 750, letterSpacing: '-.04em', lineHeight: 1, animation: 'v2-riseIn .4s .45s both' }}>{t('ui.act.in')}</div>
+                  <div style={{ fontSize: 14, color: '#a6a5bb', animation: 'v2-riseIn .4s .52s both' }}>{t('ui.act.activated')}</div>
+                </div>
+                <div className="flex flex-col" style={{ padding: '8px 16px', borderRadius: 16, background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.07)', animation: 'v2-riseIn .4s .6s both' }}>
+                  {STEPS.map((label, i) => {
+                    const tm = 1 + i * 0.6
+                    return (
+                      <div key={label} className="flex items-center gap-3" style={{ height: 36, animation: `v2-riseIn .3s ${tm - 0.35}s both` }}>
+                        <span className="relative shrink-0" style={{ width: 22, height: 22 }}>
+                          <span className="absolute" style={{ inset: 2, borderRadius: '50%', border: '2px solid rgba(255,255,255,.15)', borderTopColor: '#fff', animation: `v2-spin .7s linear infinite, v2-fadeOut .15s ${tm}s forwards` }} />
+                          <span className="absolute inset-0 flex items-center justify-center" style={{ borderRadius: '50%', background: '#22c55e', animation: `v2-checkPop .35s ${tm}s cubic-bezier(.34,1.56,.64,1) both` }}>
+                            <Check size={13} style={{ color: '#04210f' }} strokeWidth={3} />
+                          </span>
+                        </span>
+                        <span className="flex-1" style={{ fontSize: 14, color: '#e4e3f0' }}>{t(label)}</span>
+                        <span style={{ fontFamily: MONO, fontSize: 11, color: '#4ade80', animation: `v2-fadeIn .2s ${tm}s both` }}>OK</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <p className="text-center" style={{ fontSize: 12.5, color: '#4ade80', animation: 'v2-fadeIn .4s 1.4s both' }}>{t('ui.act.redirect')}</p>
+              </div>
+            ) : (
+              /* ── Key entry ── */
+              <div className="w-full flex flex-col" style={{ maxWidth: 480, gap: 24 }}>
+                <div style={{ animation: 'v2-riseIn .4s .12s both' }}>
+                  <div style={{ fontFamily: MONO, fontSize: 11, letterSpacing: '.22em', color: ACC }}>{t('ui.act.eyebrow')}</div>
+                  <h2 style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-.03em', marginTop: 10 }}>{t('ui.act.enterKey')}</h2>
+                  <div style={{ fontSize: 14, color: '#a6a5bb', marginTop: 6 }}>{t('ui.act.findKey')}</div>
+                </div>
+
+                {!showSupport ? (
+                  <>
+                    <div className="flex flex-col" style={{ gap: 12, animation: 'v2-riseIn .4s .18s both' }}>
+                      <div style={{ animation: isErr ? 'v2-shake .4s' : undefined }}>
+                        <label
+                          className="relative block cursor-text"
+                          style={{ height: 76, borderRadius: 18, padding: 1, background: ring, transition: 'background .25s, box-shadow .25s', boxShadow: focused ? `0 0 28px -6px color-mix(in oklch, ${ACC} 55%, transparent)` : 'none' }}
+                        >
+                          <input
+                            type="text"
+                            value={licenseKey}
+                            onChange={(e) => setLicenseKey(e.target.value.toUpperCase())}
+                            onKeyDown={handleKeyPress}
+                            onFocus={() => setFocused(true)}
+                            onBlur={() => setFocused(false)}
+                            spellCheck={false}
+                            autoComplete="off"
+                            aria-label={t('ui.act.keyAria')}
+                            autoFocus
+                            className="absolute inset-0 w-full h-full cursor-text"
+                            style={{ opacity: 0, zIndex: 2, fontSize: 16 }}
+                          />
+                          <div className="relative h-full overflow-hidden flex items-center" style={{ borderRadius: 17, background: 'linear-gradient(180deg,#14142a,#0c0c18)', gap: 12, padding: '0 12px 0 14px' }}>
+                            <span className="flex items-center justify-center shrink-0" style={{ width: 42, height: 42, borderRadius: 12, background: isErr ? 'rgba(248,113,113,.14)' : hasKey ? `color-mix(in oklch, ${ACC} 20%, transparent)` : 'rgba(255,255,255,.06)', color: isErr ? '#f87171' : hasKey ? ACC : '#8b8aa3', transition: 'all .25s' }}>
+                              <Key size={19} />
+                            </span>
+                            <div dir="ltr" className="flex-1 min-w-0 flex items-center" style={{ gap: 4, font: `600 clamp(14px,1.45vw,21px) ${MONO}` }}>
+                              {keyGroups.map((cells, gi) => (
+                                <span key={gi} className="contents">
+                                  {gi > 0 && <span style={{ flex: 'none', color: '#44435a', fontWeight: 400 }}>–</span>}
+                                  <span className="flex-1 min-w-0 flex">
+                                    {cells.map((ci) => {
+                                      const ch = licenseKey[ci]
+                                      return (
+                                        <span key={ci} className="relative flex-1 min-w-0 text-center" style={{ color: ch ? '#fff' : '#3a3950' }}>
+                                          {ch ? <span style={{ display: 'inline-block', animation: 'v2-charPop .18s cubic-bezier(.16,1,.3,1) both' }}>{ch}</span> : '·'}
+                                          {focused && ci === licenseKey.length && (
+                                            <span className="absolute" style={{ left: '50%', bottom: -6, width: 14, marginLeft: -7, height: 2, borderRadius: 1, background: ACC, boxShadow: `0 0 8px ${ACC}`, animation: 'v2-blink 1s steps(1) infinite' }} />
+                                          )}
+                                        </span>
+                                      )
+                                    })}
+                                  </span>
+                                </span>
+                              ))}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  const text = await navigator.clipboard.readText()
+                                  setLicenseKey(text.trim().toUpperCase())
+                                } catch {}
+                              }}
+                              title={t('ui.act.paste')}
+                              aria-label={t('ui.act.paste')}
+                              className="relative flex items-center justify-center shrink-0 hover:bg-white/10 hover:text-white"
+                              style={{ zIndex: 3, width: 36, height: 36, borderRadius: 10, border: '1px solid rgba(255,255,255,.1)', background: 'rgba(255,255,255,.05)', color: '#c9c8da', transition: 'all .08s' }}
+                            >
+                              <ClipboardPaste size={15} />
+                            </button>
+                            <span className="absolute start-0 bottom-0" style={{ height: 2, width: `${keyPct}%`, background: `linear-gradient(90deg, color-mix(in oklch, ${ACC} 40%, transparent), ${ACC})`, boxShadow: `0 0 12px ${ACC}`, transition: 'width .25s cubic-bezier(.16,1,.3,1)' }} />
+                            {loading && (
+                              <span className="absolute top-0 bottom-0 pointer-events-none" style={{ width: '35%', background: `linear-gradient(90deg,transparent,color-mix(in oklch, ${ACC} 30%, transparent),transparent)`, animation: 'v2-sheen 1s ease-in-out infinite' }} />
+                            )}
+                          </div>
+                        </label>
+                      </div>
+                      <div className="flex items-center gap-2.5" style={{ minHeight: 18 }} aria-live="polite">
+                        {isErr && errorMessage ? (
+                          <span className="flex items-center gap-1.5" style={{ fontSize: 12.5, color: '#fca5a5', animation: 'v2-riseIn .25s both' }}>
+                            <AlertCircle size={14} />{errorMessage}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: 12.5, color: '#8b8aa3' }}>{t('ui.act.pasteOrType')}</span>
+                        )}
+                        <span className="flex-1" />
+                        <span style={{ fontFamily: MONO, fontSize: 11.5, color: licenseKey.length >= KEY_LEN ? '#4ade80' : '#6f6e86' }}>{licenseKey.length}/{KEY_LEN}</span>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleActivate}
+                      disabled={!hasKey || loading}
+                      className="hover:brightness-110 active:scale-[.98] disabled:hover:brightness-100 disabled:active:scale-100"
+                      style={{ ...primaryBtn, opacity: hasKey ? 1 : 0.45, cursor: hasKey && !loading ? 'pointer' : 'not-allowed', animation: 'v2-riseIn .4s .24s both' }}
+                    >
+                      {loading && <span className="absolute inset-0" style={{ background: 'rgba(255,255,255,.35)', transformOrigin: 'left', animation: 'v2-keyFill .8s cubic-bezier(.6,0,.2,1) both' }} />}
+                      {loading ? <Loader2 size={18} className="relative animate-spin" /> : null}
+                      <span className="relative">{loading ? t('ui.act.activating') : t('ui.act.activate')}</span>
+                      {!loading && <ArrowRight size={17} className="relative rtl-flip" />}
+                    </button>
+
+                    <div className="flex items-center gap-3" style={{ color: '#6f6e86', fontSize: 12, animation: 'v2-fadeIn .4s .3s both' }}>
+                      <span className="flex-1" style={{ height: 1, background: 'rgba(255,255,255,.08)' }} />{t('ui.act.or')}<span className="flex-1" style={{ height: 1, background: 'rgba(255,255,255,.08)' }} />
+                    </div>
+                    <button
+                      onClick={() => setShowSupport(true)}
+                      className="flex items-center justify-center gap-2.5 text-white hover:bg-[rgba(88,101,242,.28)]"
+                      style={{ height: 50, borderRadius: 15, border: '1px solid rgba(88,101,242,.45)', background: 'rgba(88,101,242,.14)', fontSize: 14, fontWeight: 600, transition: 'background .1s', animation: 'v2-riseIn .4s .3s both' }}
+                    >
+                      <MessageCircle size={18} />
+                      {t('ui.act.contact')}
+                    </button>
+                  </>
+                ) : (
+                  <div className="flex flex-col" style={{ gap: 16, animation: 'v2-riseIn .3s both' }}>
+                    <div className="text-center py-2">
+                      <MessageCircle size={44} className="mx-auto mb-3" style={{ color: '#5865F2' }} />
+                      <h3 style={{ fontSize: 20, fontWeight: 700 }}>{t('ui.act.needHelp')}</h3>
+                      <p style={{ fontSize: 14, color: '#a6a5bb', marginTop: 4 }}>{t('ui.act.joinSupport')}</p>
+                    </div>
+                    <button
+                      onClick={openDiscord}
+                      className="flex items-center justify-center gap-2 text-white hover:brightness-110 active:scale-[.98]"
+                      style={{ height: 50, borderRadius: 15, background: '#5865F2', fontSize: 14, fontWeight: 600, boxShadow: '0 18px 40px -14px #5865F2', transition: 'transform .08s, filter .08s' }}
+                    >
+                      <MessageCircle size={18} />
+                      {t('ui.settings.about.join')}
+                      <ExternalLink size={14} />
+                    </button>
+                    <button onClick={() => setShowSupport(false)} className="py-2 hover:text-white" style={{ fontSize: 13, color: '#8b8aa3', transition: 'color .1s' }}>
+                      {t('ui.common.back')}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </motion.div>
       )}
     </AnimatePresence>

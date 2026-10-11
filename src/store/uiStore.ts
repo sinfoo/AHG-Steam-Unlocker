@@ -27,7 +27,12 @@ export interface UIState {
   
   // Toasts
   toasts: Array<{ id: number; message: string; type: ToastType }>
-  
+  /** In-memory history of the last 8 toasts (header notification bell) */
+  notifHistory: Array<{ id: number; message: string; type: ToastType; time: number }>
+  notifUnread: number
+  pushNotif: (n: { id: number; message: string; type: ToastType }) => void
+  markNotifsRead: () => void
+
   // Context menu
   contextMenu: { x: number; y: number; game: Game } | null
   contextMenuGame: Game | null
@@ -37,9 +42,6 @@ export interface UIState {
   
   // Sidebar
   sidebarOpen: boolean
-  
-  // Discord startup modal
-  startupDiscordModal: boolean
   
   // Batch selection
   batchSelectMode: boolean
@@ -69,7 +71,6 @@ export interface UIState {
   setSidebarOpen: (value: SetStateAction<boolean>) => void
   setBatchSelectMode: (value: SetStateAction<boolean>) => void
   setBatchSelected: (value: SetStateAction<Set<string>>) => void
-  setStartupDiscordModal: (value: SetStateAction<boolean>) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -94,6 +95,13 @@ export const useUIStore = create<UIState>((set) => ({
   
   // Toasts
   toasts: [],
+  notifHistory: [],
+  notifUnread: 0,
+  pushNotif: (n) => set((state) => ({
+    notifHistory: [{ ...n, time: Date.now() }, ...state.notifHistory].slice(0, 8),
+    notifUnread: Math.min(state.notifUnread + 1, 8),
+  })),
+  markNotifsRead: () => set({ notifUnread: 0 }),
   
   // Context menu
   contextMenu: null,
@@ -104,9 +112,6 @@ export const useUIStore = create<UIState>((set) => ({
   
   // Sidebar
   sidebarOpen: true,
-  
-  // Discord startup modal
-  startupDiscordModal: false,
   
   // Batch selection
   batchSelectMode: false,
@@ -179,9 +184,6 @@ export const useUIStore = create<UIState>((set) => ({
   })),
   setBatchSelected: (batchSelected) => set((state) => ({
     batchSelected: typeof batchSelected === 'function' ? batchSelected(state.batchSelected) : batchSelected
-  })),
-  setStartupDiscordModal: (startupDiscordModal) => set((state) => ({
-    startupDiscordModal: typeof startupDiscordModal === 'function' ? startupDiscordModal(state.startupDiscordModal) : startupDiscordModal
   })),
 }))
 

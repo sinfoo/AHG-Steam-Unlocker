@@ -5,7 +5,7 @@
 // shipped "green" this session:
 //   • image-cache:// protocol actually serves bytes (hero art / covers)   [protocol.handle fix]
 //   • padding utilities apply (.p-3 === 12px)                             [@layer base fix]
-//   • body font is Inter/Segoe, not the Orbitron splash font             [comment-`*/` fix]
+//   • body font is Geist, not the Orbitron splash font             [comment-`*/` fix]
 //   • no broken <img> after load
 //   • no severe renderer console errors
 //
@@ -63,7 +63,7 @@ async function main() {
   // wait for the app shell to render (sidebar) — up to 25s through splash/activation
   let ready = false;
   for (let i = 0; i < 25; i++) {
-    try { if (await page.evaluate(() => !!document.querySelector('aside') && getComputedStyle(document.body).fontFamily.length > 0)) { ready = true; break; } } catch {}
+    try { if (await page.evaluate(() => !!document.querySelector('nav') && getComputedStyle(document.body).fontFamily.length > 0)) { ready = true; break; } } catch {}
     await sleep(1000);
   }
   await sleep(2500); // let images settle
@@ -71,7 +71,7 @@ async function main() {
   const checks = [];
   const add = (name, pass, detail) => checks.push({ name, pass, detail });
 
-  if (!ready) add('app-render', false, 'app shell (aside) never rendered');
+  if (!ready) add('app-render', false, 'app shell (nav) never rendered');
   else add('app-render', true, '');
 
   try {
@@ -125,7 +125,7 @@ async function main() {
     });
 
     add('padding-utility', r.p3 === '12px', 'p-3 computed padding = ' + r.p3 + ' (expected 12px)');
-    add('body-font', /^Inter/.test(r.bodyFont) && !/Orbitron/i.test(r.bodyFont), 'body font = ' + r.bodyFont.slice(0, 40));
+    add('body-font', /^"?Geist/.test(r.bodyFont) && !/Orbitron/i.test(r.bodyFont), 'body font = ' + r.bodyFont.slice(0, 40));
     add('no-broken-imgs', r.brokenImgs <= 1, r.brokenImgs + ' broken of ' + r.totalImgs + ' imgs');
     if (r.icStatus !== undefined) {
       add('image-cache-protocol', r.icStatus === 200 && r.icBytes > 0, 'fetch(image-cache://) → ' + r.icStatus + ' (' + (r.icBytes || 0) + ' bytes, ' + r.icMs + 'ms)');

@@ -7,7 +7,7 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
   leftIcon?: React.ReactNode
 }
 
-const transitionCSS = 'all 80ms cubic-bezier(0.4, 0, 0.2, 1)'
+const transitionCSS = 'all 150ms cubic-bezier(.16,1,.3,1)'
 
 export const Input = memo(forwardRef<HTMLInputElement, InputProps>(
   ({ label, error, leftIcon, disabled, style, ...rest }, ref) => {
@@ -18,9 +18,9 @@ export const Input = memo(forwardRef<HTMLInputElement, InputProps>(
         {label && (
           <label
             style={{
-              fontSize: '13px',
-              fontWeight: 500,
-              color: COLORS.textSecondary,
+              fontSize: '12px',
+              fontWeight: 600,
+              color: COLORS.textDim,
               userSelect: 'none',
             }}
           >
@@ -32,7 +32,7 @@ export const Input = memo(forwardRef<HTMLInputElement, InputProps>(
             <span
               style={{
                 position: 'absolute',
-                left: '12px',
+                insetInlineStart: '12px',
                 top: '50%',
                 transform: 'translateY(-50%)',
                 color: COLORS.textMuted,
@@ -57,18 +57,18 @@ export const Input = memo(forwardRef<HTMLInputElement, InputProps>(
             }}
             style={{
               width: '100%',
-              height: '40px',
-              padding: leftIcon ? '0 16px 0 40px' : '0 16px',
+              height: '44px',
+              paddingBlock: 0, paddingInline: leftIcon ? '40px 16px' : '16px',
               fontSize: '14px',
               fontWeight: 400,
               color: COLORS.text,
-              background: COLORS.bgMid,
-              border: `1px solid ${error ? COLORS.red : focused ? COLORS.violet : COLORS.border}`,
-              borderRadius: '0.75rem',
+              background: 'rgba(0,0,0,0.25)',
+              border: `1px solid ${error ? COLORS.red : focused ? 'var(--acc,#a77dff)' : 'rgba(255,255,255,0.09)'}`,
+              borderRadius: '12px',
               outline: 'none',
               transition: transitionCSS,
               boxShadow: focused
-                ? `0 0 0 2px ${COLORS.violetDim}, 0 0 0 1px ${COLORS.violet}`
+                ? '0 0 0 4px color-mix(in oklch, var(--acc,#a77dff) 18%, transparent)'
                 : error
                   ? `0 0 0 1px ${COLORS.red}`
                   : 'none',

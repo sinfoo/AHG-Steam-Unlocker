@@ -41,7 +41,6 @@ filesOPENCODE/                # Project root
 │   │   ├── GameDetailPage.tsx
 │   │   ├── Sidebar.tsx
 │   │   ├── ActivationModal.tsx
-│   │   ├── DiscordLoginModal.tsx
 │   │   ├── CommandPalette.tsx
 │   │   ├── ChangelogModal.tsx
 │   │   ├── FixExtractModal.tsx

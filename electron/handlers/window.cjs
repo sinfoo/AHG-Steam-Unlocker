@@ -14,10 +14,7 @@ const { loadDlcInfoCache, fetchDlcInfos } = require('../utils/steamApi.cjs');
 // Note: startPythonBackend and resolveGuildId were referenced from a planned
 // appLifecycle.cjs extraction that was never created. Both are handled inline:
 //   - Python backend: started in setupAppLifecycle() below
-//   - resolveGuildId: self-contained in discord.cjs
 
-let discordOAuthServer = null;
-let resolvedGuildId = null;
 
 function createWindow() {
   const preloadPath = app.isPackaged
@@ -260,19 +257,30 @@ function registerWindowIpc() {
   });
 
   // Connectivity check — runs in main process via Node.js https, bypasses browser CORS
+  // Online if ANY probe gets an HTTP response (any status). A single host (Steam) is often
+  // blocked by DNS/ISP/VPN or slow while the main process is busy loading, which caused
+  // false "no internet" modals.
   ipcMain.handle('check-connectivity', wrapHandler('check-connectivity', async () => {
     const https = require('https');
+    const probes = [
+      'https://www.cloudflare.com/cdn-cgi/trace',
+      'https://www.gstatic.com/generate_204',
+      'https://github.com',
+      'https://store.steampowered.com',
+    ];
     return new Promise((resolve) => {
-      const controller = new AbortController();
-      const timer = setTimeout(() => { controller.abort(); resolve(false); }, 5000);
-      const req = https.get('https://store.steampowered.com', { signal: controller.signal, timeout: 5000 }, (res) => {
-        clearTimeout(timer);
-        resolve(res.statusCode >= 200 && res.statusCode < 400);
-      });
-      req.on('error', () => { clearTimeout(timer); resolve(false); });
-      req.on('timeout', () => { req.destroy(); clearTimeout(timer); resolve(false); });
+      let pending = probes.length;
+      let done = false;
+      const finish = (v) => { if (!done) { done = true; clearTimeout(timer); resolve(v); } };
+      const timer = setTimeout(() => finish(false), 9000);
+      for (const url of probes) {
+        const req = https.get(url, { timeout: 8000 }, (res) => { res.resume(); finish(true); });
+        const fail = () => { req.destroy(); if (--pending === 0) finish(false); };
+        req.on('error', fail);
+        req.on('timeout', fail);
+      }
     });
-  }, { windowMs: 10000, maxCalls: 5 }));
+  }, { windowMs: 10000, maxCalls: 20 }));
 }
 
 // ── App lifecycle setup ──

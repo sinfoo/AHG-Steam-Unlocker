@@ -319,24 +319,7 @@ async function downloadWithDepotDownloader(appid, depotCache, luaPath, sendLog) 
 
 // Try LuaTools/ManifestHub free APIs as fallback (after GitHub mirrors)
 async function tryLuaToolsApis(appid, depotCache, luaPath, sendLog, signal) {
-  // Try Morrenus if API key is configured
-  const DISCORD_DATA_PATH = path.join(app.getPath('userData'), 'discord_auth.json');
-  let morrenusKey = null;
-  try {
-    if (fs.existsSync(DISCORD_DATA_PATH)) {
-      const authData = JSON.parse(fs.readFileSync(DISCORD_DATA_PATH, 'utf-8'));
-      morrenusKey = authData.morrenusApiKey || null;
-    }
-  } catch (e) {
-    console.error('[INSTALL] Error reading Discord auth for Morrenus key:', e.message);
-  }
-
-  // Build API list: Morrenus first if key available, then free APIs
-  const apis = [];
-  if (morrenusKey) {
-    apis.push({ name: 'Morrenus', url: 'https://hubcapmanifest.com/api/v1/manifest/<appid>?api_key=' + morrenusKey });
-  }
-  apis.push(...state.LUATOOLS_APIS);
+  const apis = [...state.LUATOOLS_APIS];
 
   if (apis.length === 0) return null;
   if (signal && signal.aborted) { sendLog('Operation aborted'); return null; }

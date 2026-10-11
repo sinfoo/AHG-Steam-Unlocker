@@ -1,3 +1,4 @@
+import { useT } from '../i18n'
 import { memo, useEffect, useRef, useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { CheckCircle2, AlertCircle, Loader2, RotateCw, X, Layers } from 'lucide-react'
@@ -41,6 +42,7 @@ export const GameInstallModal = memo(function GameInstallModal({
   dlcCount = 0, dlcs = [], totalInstalled = 0,
   onRestartSteam, onClose, onDismiss, onCancel
 }: GameInstallModalProps) {
+  const t = useT()
   const logsEndRef = useRef<HTMLDivElement>(null)
   const [copySuccess, setCopySuccess] = useState(false)
 
@@ -117,7 +119,7 @@ export const GameInstallModal = memo(function GameInstallModal({
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
           className="fixed inset-0 z-[300] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)' }}
+          style={{ background: 'rgba(4,4,10,0.6)', backdropFilter: 'blur(10px)' }}
           onClick={(e) => { if (e.target === e.currentTarget && !isActive) onDismiss() }}
         >
           <motion.div
@@ -125,11 +127,11 @@ export const GameInstallModal = memo(function GameInstallModal({
             animate={{ scale: 1, y: 0, opacity: 1 }}
             exit={{ scale: 0.92, y: 30, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 350, damping: 28 }}
-            className="w-full max-w-md rounded-3xl overflow-hidden"
+            className="w-full max-w-md rounded-[24px] overflow-hidden"
             style={{
-              background: COLORS.bgCard,
+              background: '#0f0f1b',
               border: `1px solid ${getBorderColor()}`,
-              boxShadow: `0 32px 100px rgba(0,0,0,0.6), 0 0 80px ${getGlow()}`
+              boxShadow: '0 60px 120px -30px rgba(0,0,0,1)'
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -215,22 +217,23 @@ export const GameInstallModal = memo(function GameInstallModal({
                 </motion.div>
                 <div className="flex-1 min-w-0">
                   <h3 className="text-lg font-bold text-white truncate">
-                    {gameAppid === 'batch' ? 'Batch Install'
-                      : status === 'done' ? 'Installation Complete'
-                      : status === 'error' ? 'Installation Failed'
-                      : status === 'dlc' ? 'Adding DLCs'
-                      : 'Adding to Steam'}
+                    {gameAppid === 'batch' ? t('ui.gi.batch')
+                      : status === 'done' ? t('ui.gi.complete')
+                      : status === 'error' ? t('ui.gi.failed')
+                      : status === 'dlc' ? t('ui.gi.addingDlc')
+                      : t('ui.gi.adding')}
                   </h3>
                   <p className="text-sm truncate" style={{ color: COLORS.textSecondary }}>
                     {gameName}
                   </p>
-                  <p className="text-xs" style={{ color: COLORS.textDim }}>App #{gameAppid}</p>
+                  <p className="text-xs" style={{ color: COLORS.textDim }}>{t('ui.gi.appNum', { id: gameAppid })}</p>
                 </div>
                 {!isActive && (
                   <motion.button
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
                     onClick={onClose}
+                    aria-label={t('ui.common.close')}
                     className="w-8 h-8 rounded-xl flex items-center justify-center"
                     style={{ background: COLORS.bgHover }}
                   >
@@ -259,7 +262,7 @@ export const GameInstallModal = memo(function GameInstallModal({
                   />
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                <div className="absolute bottom-3 left-3 flex items-center gap-2">
+                <div className="absolute bottom-3 start-3 flex items-center gap-2">
                   <div className="px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5" style={{
                     background: status === 'done' ? COLORS.green :
                       status === 'error' ? COLORS.red :
@@ -268,13 +271,13 @@ export const GameInstallModal = memo(function GameInstallModal({
                     color: COLORS.white
                   }}>
                     {status === 'installing' ? (
-                      <><Loader2 size={10} className="animate-spin" /> Adding to Steam...</>
+                      <><Loader2 size={10} className="animate-spin" /> {t('ui.gi.addingDots')}</>
                     ) : status === 'dlc' ? (
-                      <><Layers size={10} /> Adding DLCs...</>
+                      <><Layers size={10} /> {t('ui.gi.addingDlcDots')}</>
                     ) : status === 'done' ? (
-                      <><CheckCircle2 size={10} /> Added to Steam</>
+                      <><CheckCircle2 size={10} /> {t('ui.gi.added')}</>
                     ) : (
-                      <><AlertCircle size={10} /> Failed</>
+                      <><AlertCircle size={10} /> {t('ui.gi.failedShort')}</>
                     )}
                   </div>
                 </div>
@@ -289,10 +292,10 @@ export const GameInstallModal = memo(function GameInstallModal({
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-medium" style={{ color: COLORS.textMuted }}>
-                    {status === 'installing' ? 'Adding to Steam...'
-                      : status === 'dlc' ? 'Processing DLCs...'
-                      : status === 'done' ? 'Complete'
-                      : 'Failed'}
+                    {status === 'installing' ? t('ui.gi.addingDots')
+                      : status === 'dlc' ? t('ui.gi.processingDlc')
+                      : status === 'done' ? t('ui.gi.completeShort')
+                      : t('ui.gi.failedShort')}
                   </span>
                   <span className="text-xs font-bold" style={{
                     color: status === 'done' ? COLORS.green :
@@ -338,7 +341,7 @@ export const GameInstallModal = memo(function GameInstallModal({
                         <motion.div
                           key={i}
                           className="w-1 h-1 rounded-full"
-                          style={{ background: 'rgba(255,255,255,0.5)', marginLeft: `${9 * i}%` }}
+                          style={{ background: 'rgba(255,255,255,0.5)', marginInlineStart: `${9 * i}%` }}
                           animate={{ opacity: [0, 0.8, 0], scale: [0.5, 1.2, 0.5] }}
                           transition={{
                             duration: 1.5,
@@ -375,7 +378,7 @@ export const GameInstallModal = memo(function GameInstallModal({
                         status === 'dlc' ? COLORS.amber :
                         COLORS.violet
                     }} />
-                    <span className="text-xs font-semibold" style={{ color: COLORS.textMuted }}>Activity</span>
+                    <span className="text-xs font-semibold" style={{ color: COLORS.textMuted }}>{t('ui.gi.activity')}</span>
                     <span className="text-xs px-1.5 py-0.5 rounded font-bold" style={{ background: `${COLORS.violet}20`, color: COLORS.violet }}>
                       {logs.length}
                     </span>
@@ -387,7 +390,7 @@ export const GameInstallModal = memo(function GameInstallModal({
                     className="text-xs px-2 py-1 rounded-lg font-medium flex items-center gap-1"
                     style={{ background: `${COLORS.textDim}20`, color: copySuccess ? COLORS.green : COLORS.textDim }}
                   >
-                    {copySuccess ? 'Copied!' : 'Copy'}
+                    {copySuccess ? t('ui.common.copied') : t('ui.common.copy')}
                   </motion.button>
                 </div>
                 <div className="max-h-36 overflow-y-auto p-3 space-y-1.5">
@@ -451,20 +454,20 @@ export const GameInstallModal = memo(function GameInstallModal({
                 >
                   <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
                     <CheckCircle2 size={14} style={{ color: COLORS.green }} />
-                    Summary
+                    {t('ui.gi.summary')}
                   </h4>
                   <div className="space-y-2.5">
                     <div className="flex items-center justify-between p-2.5 rounded-xl" style={{ background: COLORS.bgHover }}>
-                      <span className="text-xs" style={{ color: COLORS.textMuted }}>Game</span>
-                      <span className="text-xs font-bold text-white truncate ml-2">{gameName}</span>
+                      <span className="text-xs" style={{ color: COLORS.textMuted }}>{t('ui.common.game')}</span>
+                      <span className="text-xs font-bold text-white truncate ms-2">{gameName}</span>
                     </div>
                     <div className="flex items-center justify-between p-2.5 rounded-xl" style={{ background: COLORS.bgHover }}>
-                      <span className="text-xs" style={{ color: COLORS.textMuted }}>DLCs Added</span>
-                      <span className="text-xs font-bold" style={{ color: dlcCount > 0 ? COLORS.amber : COLORS.textMuted }}>{dlcCount > 0 ? `${dlcCount} DLCs` : 'None found'}</span>
+                      <span className="text-xs" style={{ color: COLORS.textMuted }}>{t('ui.gi.dlcsAdded')}</span>
+                      <span className="text-xs font-bold" style={{ color: dlcCount > 0 ? COLORS.amber : COLORS.textMuted }}>{dlcCount > 0 ? t('ui.gi.nDlcs', { n: dlcCount }) : t('ui.gi.noneFound')}</span>
                     </div>
                     <div className="flex items-center justify-between p-2.5 rounded-xl" style={{ background: COLORS.bgHover }}>
-                      <span className="text-xs" style={{ color: COLORS.textMuted }}>Library Total</span>
-                      <span className="text-xs font-bold" style={{ color: COLORS.violet }}>{totalInstalled} games</span>
+                      <span className="text-xs" style={{ color: COLORS.textMuted }}>{t('ui.gi.libraryTotal')}</span>
+                      <span className="text-xs font-bold" style={{ color: COLORS.violet }}>{t('ui.gi.nGames', { n: totalInstalled })}</span>
                     </div>
                   </div>
 
@@ -472,9 +475,9 @@ export const GameInstallModal = memo(function GameInstallModal({
                   {dlcs.length > 0 && (
                     <div className="mt-4">
                       <h5 className="text-xs font-bold mb-2.5 flex items-center gap-1.5" style={{ color: COLORS.amber }}>
-                        <Layers size={12} /> Installed DLCs ({dlcs.length})
+                        <Layers size={12} /> {t('ui.gi.installedDlcs', { n: dlcs.length })}
                       </h5>
-                      <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                      <div className="space-y-2 max-h-40 overflow-y-auto pe-1">
                         {dlcs.map((dlc, i) => (
                           <motion.div
                             key={dlc.appid}
@@ -521,10 +524,10 @@ export const GameInstallModal = memo(function GameInstallModal({
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={onRestartSteam}
-                      className="w-full py-4 rounded-2xl font-bold text-white text-base flex items-center justify-center gap-3 relative overflow-hidden cursor-pointer"
+                      className="w-full py-4 rounded-2xl font-bold  text-base flex items-center justify-center gap-3 relative overflow-hidden cursor-pointer"
                       style={{
-                        background: `linear-gradient(135deg, ${COLORS.green}, ${COLORS.green}cc)`,
-                        boxShadow: `0 8px 32px ${COLORS.green}40`
+                        background: 'var(--acc,#a77dff)',
+                        boxShadow: '0 16px 40px -14px var(--acc,#a77dff)'
                       }}
                     >
                       <motion.div
@@ -534,7 +537,7 @@ export const GameInstallModal = memo(function GameInstallModal({
                         transition={{ duration: 1.5, repeat: Infinity }}
                       />
                       <RotateCw size={18} />
-                      Restart Steam
+                      {t('ui.gi.restartSteam')}
                     </motion.button>
                     <motion.button
                       whileHover={{ scale: 1.02 }}
@@ -547,7 +550,7 @@ export const GameInstallModal = memo(function GameInstallModal({
                         color: COLORS.textSecondary
                       }}
                     >
-                      I'll restart later
+                      {t('ui.gi.restartLater')}
                     </motion.button>
                   </>
                 ) : status === 'error' ? (
@@ -561,7 +564,7 @@ export const GameInstallModal = memo(function GameInstallModal({
                       boxShadow: `0 8px 32px ${COLORS.red}40`
                     }}
                   >
-                    Close
+                    {t('ui.common.close')}
                   </motion.button>
                 ) : (
                   <div className="space-y-2">
@@ -574,7 +577,7 @@ export const GameInstallModal = memo(function GameInstallModal({
                       }}
                     >
                       <Loader2 size={16} className="animate-spin" />
-                      {status === 'dlc' ? 'Adding DLCs...' : 'Adding to Steam...'}
+                      {status === 'dlc' ? t('ui.gi.addingDlcDots') : t('ui.gi.addingDots')}
                     </div>
                     <motion.button
                       whileHover={{ scale: 1.02 }}
@@ -587,7 +590,7 @@ export const GameInstallModal = memo(function GameInstallModal({
                         color: COLORS.textDim
                       }}
                     >
-                      Cancel
+                      {t('ui.common.cancel')}
                     </motion.button>
                   </div>
                 )}

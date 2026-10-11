@@ -1,6 +1,7 @@
+import { t } from '../i18n'
 import { useCallback } from 'react'
 import { bridge } from '../bridge'
-import { useInstallStore, useDownloadStore, useModalStore, useGameStore } from '../store'
+import { useInstallStore, useDownloadStore, useModalStore, useGameStore, useUserStore } from '../store'
 import { useToastNotifications } from './useToastNotifications'
 import { achievementRefs } from './achievementRefs'
 import type { Fix, Game } from '../types'
@@ -17,12 +18,12 @@ export function useFixApplication() {
           window.electronAPI?.saveInstalled?.(next.map(g => g.appid))
           return next
         })
-        showToast(`App ${appid} removed from Steam`, 'success')
+        showToast(t('ui.toast.appRemoved', { id: appid }), 'success')
       } else {
-        showToast(`Failed to remove: ${result?.message || 'Unknown error'}`, 'error')
+        showToast(t('ui.toast.removeFail', { err: result?.message || t('ui.err.unknown') }), 'error')
       }
     } catch (e: any) {
-      showToast(`Failed to remove: ${e?.message || 'Unknown error'}`, 'error')
+      showToast(t('ui.toast.removeFail', { err: e?.message || t('ui.err.unknown') }), 'error')
     }
   }, [showToast])
 
@@ -38,18 +39,18 @@ export function useFixApplication() {
 
     if (!downloadUrl) {
       if (gameUrl) {
-        showToast(`Opening: ${fix.name} on online-fix.me...`, 'info')
+        showToast(t('ui.toast.opening', { name: fix.name }), 'info')
         addLog(`Opening game page...`, 'info')
         try {
           await (window as any).electronAPI?.openExternal?.(gameUrl)
-          showToast('Opened - download from there!', 'success')
+          showToast(t('ui.toast.opened'), 'success')
           addLog('✓ Opened in browser', 'success')
         } catch (e) {
-          showToast('Error: ' + e, 'error')
+          showToast(t('ui.fx.err', { err: String(e) }), 'error')
           addLog('✗ Error: ' + e, 'error')
         }
       } else {
-        showToast('No download available', 'error')
+        showToast(t('ui.toast.noDl'), 'error')
         addLog('✗ No URL', 'error')
       }
       return
@@ -57,10 +58,10 @@ export function useFixApplication() {
 
     useDownloadStore.getState().setDownloadProgress(0)
     useDownloadStore.getState().setDownloadStatus('downloading')
-    useDownloadStore.getState().setDownloadMessage('Preparing download...')
+    useDownloadStore.getState().setDownloadMessage(t('ui.dlm.preparing'))
     useDownloadStore.getState().setDownloadDetails(null)
     addLog(`Downloading: ${fix.name}...`, 'info')
-    showToast(`Downloading ${fix.name}...`, 'info')
+    showToast(t('ui.toast.downloading', { name: fix.name }), 'info')
 
     const controller = new AbortController()
     useInstallStore.getState().setActiveDownloadAbort(controller)
@@ -79,9 +80,10 @@ export function useFixApplication() {
 
       if (result?.success) {
         useDownloadStore.getState().setDownloadStatus('done')
-        useDownloadStore.getState().setDownloadMessage('Fix downloaded successfully!')
+        useDownloadStore.getState().setDownloadMessage(t('ui.dlm.fixDone'))
         addLog('✓ Saved to ' + (result?.message || 'downloads'), 'success')
-        showToast('Fix downloaded!', 'success')
+        showToast(t('ui.toast.fixDownloaded'), 'success')
+        useUserStore.getState().logActivity(fix.appid, 'fix')
         achievementRefs.trackFixApplied()
         setTimeout(() => {
           useModalStore.getState().setExtractFileName(fix.name)
@@ -91,11 +93,11 @@ export function useFixApplication() {
       } else {
         if (result?.message === 'Download cancelled') {
           useDownloadStore.getState().setDownloadStatus('error')
-          useDownloadStore.getState().setDownloadMessage('Download cancelled')
+          useDownloadStore.getState().setDownloadMessage(t('ui.dlm.cancelled'))
           addLog('Download cancelled', 'info')
         } else {
           useDownloadStore.getState().setDownloadStatus('error')
-          useDownloadStore.getState().setDownloadMessage(result?.message || 'Download failed')
+          useDownloadStore.getState().setDownloadMessage(result?.message || t('ui.upd.dlFailed'))
           addLog('✗ ' + (result?.message || 'Failed'), 'error')
           if (!gameUrl) {
             addLog('✗ No game URL available', 'error')
@@ -104,8 +106,8 @@ export function useFixApplication() {
       }
     } catch (e) {
       useDownloadStore.getState().setDownloadStatus('error')
-      useDownloadStore.getState().setDownloadMessage('Error: ' + e)
-      showToast('Error: ' + e, 'error')
+      useDownloadStore.getState().setDownloadMessage(t('ui.fx.err', { err: String(e) }))
+      showToast(t('ui.fx.err', { err: String(e) }), 'error')
       addLog('✗ Error: ' + e, 'error')
     } finally {
       useInstallStore.getState().setActiveDownloadAbort(null)

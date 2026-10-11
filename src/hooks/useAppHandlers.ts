@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import { useCallback } from 'react'
 import { useGameStore, useUIStore, useUserStore, useDownloadStore, useFixGamesStore } from '../store'
 import type { Game, QueuedGame } from '../types'
@@ -15,7 +16,6 @@ export interface HandlerDeps {
   // Local state — modal visibility
   setGameActionModalOpen: (v: boolean) => void
   setGameActionModalGame: (v: Game | null) => void
-  setDiscordSuccessOpen: (v: boolean) => void
   setContextMenu: (v: any) => void
 
   // Local state — modal data
@@ -77,10 +77,11 @@ export function useAppHandlers(d: HandlerDeps): AppHandlers {
     const next = new Set(current)
     if (next.has(appid)) {
       next.delete(appid)
-      d.showToast('Removed from favourites', 'favorites')
+      d.showToast(t('ui.toast.favRemoved'), 'favorites')
     } else {
       next.add(appid)
-      d.showToast('Added to favourites', 'favorites')
+      useUserStore.getState().logActivity(appid, 'favourited')
+      d.showToast(t('ui.toast.favAdded'), 'favorites')
       d.trackFavoriteAdded(next.size)
     }
     window.electronAPI?.saveFavorites?.(Array.from(next))
@@ -93,6 +94,7 @@ export function useAppHandlers(d: HandlerDeps): AppHandlers {
     d.setGameActionModalOpen(true)
     requestAnimationFrame(() => {
       const recentPrev = useUserStore.getState().recentGames
+      useUserStore.getState().logActivity(game.appid, 'viewed')
       const recentNext = [game.appid, ...recentPrev.filter((p: string) => p !== game.appid)].slice(0, 30)
       useUserStore.setState({ recentGames: recentNext })
       window.electronAPI?.saveRecent?.(recentNext)
@@ -137,7 +139,7 @@ export function useAppHandlers(d: HandlerDeps): AppHandlers {
   const contextMenuCopyAppId = useCallback((game: Game) => {
     d.setContextMenu(null)
     navigator.clipboard.writeText(game.appid)
-    d.showToast('App ID copied!', 'success')
+    d.showToast(t('ui.toast.appIdCopied'), 'success')
   }, [d.showToast])
 
   const contextMenuOpenSteam = useCallback((game: Game) => {
@@ -149,7 +151,7 @@ export function useAppHandlers(d: HandlerDeps): AppHandlers {
     d.setContextMenu(null)
     const text = `Check out ${game.name} on AHG Steam Unlocker! (App ID: ${game.appid})`
     navigator.clipboard.writeText(text)
-    d.showToast('Game info copied to clipboard!', 'success')
+    d.showToast(t('ui.toast.infoCopied'), 'success')
   }, [d.showToast])
 
   const contextMenuToggleFavorite = useCallback((game: Game) => {
@@ -166,12 +168,12 @@ export function useAppHandlers(d: HandlerDeps): AppHandlers {
         const next = current.filter((g: any) => g.appid !== game.appid)
         window.electronAPI?.saveInstalled?.(next.map((g: any) => g.appid))
         useGameStore.getState().setInstalledGames(next)
-        d.showToast(`Removed ${game.name} from library`, 'success')
+        d.showToast(t('ui.toast.removedLib', { name: game.name ?? '' }), 'success')
       } else {
-        d.showToast(`Failed to remove: ${result?.message || 'Unknown error'}`, 'error')
+        d.showToast(t('ui.toast.removeFail', { err: result?.message || t('ui.err.unknown') }), 'error')
       }
     } catch (e: any) {
-      d.showToast(`Failed to remove: ${e?.message || 'Unknown error'}`, 'error')
+      d.showToast(t('ui.toast.removeFail', { err: e?.message || t('ui.err.unknown') }), 'error')
     }
   }, [d.showToast])
 
@@ -230,7 +232,7 @@ export function useAppHandlers(d: HandlerDeps): AppHandlers {
     if (current.some((item: QueuedGame) => item.game.appid === game.appid)) return
     useDownloadStore.getState().setDownloadQueue([...current, { game, status: 'pending' as const, progress: 0 }])
     useDownloadStore.getState().setShowDownloadQueue(true)
-    d.showToast(`${game.name} added to download queue`, 'info')
+    d.showToast(t('ui.toast.queued', { name: game.name ?? '' }), 'info')
   }, [d.showToast])
 
   const removeFromDownloadQueue = useCallback((appid: string) => {
@@ -254,14 +256,14 @@ export function useAppHandlers(d: HandlerDeps): AppHandlers {
         if (result?.success) {
           useDownloadStore.getState().setDownloadQueue((prev: QueuedGame[]) =>
             prev.map(i => i.game.appid === item.game.appid ? { ...i, status: 'done' as const, progress: 100 } : i))
-          d.showToast(`${item.game.name} installed!`, 'success')
+          d.showToast(t('ui.toast.installedName', { name: item.game.name ?? '' }), 'success')
         } else {
           throw new Error(result?.message || 'Install failed')
         }
       } catch (e) {
         useDownloadStore.getState().setDownloadQueue((prev: QueuedGame[]) =>
           prev.map(i => i.game.appid === item.game.appid ? { ...i, status: 'error' as const, error: String(e) } : i))
-        d.showToast(`Failed to install ${item.game.name}`, 'error')
+        d.showToast(t('ui.toast.installFailed', { name: item.game.name ?? '' }), 'error')
       }
     }
     d.downloadQueueRunningRef.current = false

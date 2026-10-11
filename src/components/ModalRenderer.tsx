@@ -1,11 +1,12 @@
+import { useT } from '../i18n'
 import { memo, Suspense, lazy } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { DARK_COLORS } from '../constants/colors'
 import { RefreshCw, AlertTriangle, CheckCircle2, MessageCircle } from 'lucide-react'
 
 // ── Internal store reads — prevents App.tsx from subscribing to modal state ──
-import { useAppInstallState, useAppUIState, useAppSettingsState, useAppUserState, useAppGameState, useAppDiscordState } from '../hooks/useAppState'
-import type { AppInstallRenderState, AppUIRenderState, AppSettingsRenderState, AppUserRenderState, AppGameRenderState } from '../hooks/useAppState'
+import { useAppInstallState, useAppUIState, useAppUserState, useAppGameState } from '../hooks/useAppState'
+import type { AppInstallRenderState, AppUIRenderState, AppUserRenderState, AppGameRenderState } from '../hooks/useAppState'
 import { useAppSetters } from '../hooks/useAppSetters'
 
 // ── Lazy imports (same pattern as App.tsx) ──
@@ -16,8 +17,6 @@ const ThankYouModal = lazy(() => import('./ThankYouModal').then(m => ({ default:
 const GameInstallModal = lazy(() => import('./GameInstallModal').then(m => ({ default: m.GameInstallModal })))
 const FixExtractModal = lazy(() => import('./FixExtractModal').then(m => ({ default: m.FixExtractModal })))
 const NoInternetModal = lazy(() => import('./NoInternetModal').then(m => ({ default: m.NoInternetModal })))
-const DiscordLoginModal = lazy(() => import('./DiscordLoginModal').then(m => ({ default: m.DiscordLoginModal })))
-const DiscordSuccessModal = lazy(() => import('./DiscordSuccessModal').then(m => ({ default: m.DiscordSuccessModal })))
 const ToastContainer = lazy(() => import('./ToastContainer').then(m => ({ default: m.ToastContainer })))
 const DownloadProgressModal = lazy(() => import('./DownloadProgressModal').then(m => ({ default: m.DownloadProgressModal })))
 const AchievementsModal = lazy(() => import('./AchievementsModal').then(m => ({ default: m.AchievementsModal })))
@@ -30,14 +29,12 @@ const GameActionModal = lazy(() => import('./GameActionModal').then(m => ({ defa
 const DLCManager = lazy(() => import('./DLCManager').then(m => ({ default: m.DLCManager })))
 
 // ── Props: only local state + action callbacks.
-// Store-based state (install, discord, UI) is read internally via useApp*State hooks.
+// Store-based state (install, UI) is read internally via useApp*State hooks.
 // This prevents App.tsx from re-rendering on every install progress / modal toggle.
 export interface ModalRendererProps {
   COLORS: typeof DARK_COLORS
 
   // Local state (not in Zustand stores)
-  startupDiscordModal: boolean
-  discordSuccessOpen: boolean
   gameActionModalOpen: boolean
   gameActionModalGame: any
   dlcManagerOpen: boolean
@@ -48,8 +45,6 @@ export interface ModalRendererProps {
   setAchievements: (v: any) => void
 
   // Local state setters
-  setStartupDiscordModal: (v: boolean) => void
-  setDiscordSuccessOpen: (v: boolean) => void
   setGameActionModalOpen: (v: boolean) => void
   setDlcManagerOpen: (v: boolean) => void
   setDlcManagerGame: (v: any) => void
@@ -82,12 +77,11 @@ export interface ModalRendererProps {
 
 const ModalRenderer = memo(function ModalRenderer({ modalProps }: { modalProps: ModalRendererProps }) {
   // ── Read store-based state internally (not from App.tsx) ──
+  const t = useT()
   const install: AppInstallRenderState = useAppInstallState()
   const ui: AppUIRenderState = useAppUIState()
-  const settings: AppSettingsRenderState = useAppSettingsState()
   const user: AppUserRenderState = useAppUserState()
   const game: AppGameRenderState = useAppGameState()
-  const discordStore = useAppDiscordState()
   const setters = useAppSetters()
 
   const {
@@ -101,20 +95,13 @@ const ModalRenderer = memo(function ModalRenderer({ modalProps }: { modalProps: 
     updateModalOpen, changelogOpen, changelogVersion, activationOpen, thankYouOpen,
   } = ui
   const {
-    gameSharingEnabled,
-  } = settings
-  const {
     logs,
   } = user
   const {
     installedGames,
   } = game
   const {
-    discordModalOpen, discordUser,
-  } = discordStore
-  const {
-    setInstallModalOpen, setDiscordModalOpen,
-    setDiscordConnected, setDiscordUser, setGameSharingEnabled,
+    setInstallModalOpen,
     setUpdateModalOpen, setChangelogOpen,
     setIsActivated, setActivationOpen, setThankYouOpen,
     setExtractModalOpen,
@@ -126,13 +113,11 @@ const ModalRenderer = memo(function ModalRenderer({ modalProps }: { modalProps: 
   const {
     COLORS,
     // Local state
-    startupDiscordModal, discordSuccessOpen,
     gameActionModalOpen, gameActionModalGame,
     dlcManagerOpen, dlcManagerGame,
     // Local data
     achievements,
     // Local setters
-    setStartupDiscordModal, setDiscordSuccessOpen,
     setGameActionModalOpen, setDlcManagerOpen, setDlcManagerGame,
     // Callbacks
     handleInstallGame, handleInstallFromZip,
@@ -165,48 +150,10 @@ const ModalRenderer = memo(function ModalRenderer({ modalProps }: { modalProps: 
         dlcCount={dlcCount}
         dlcs={installedDlcs}
         totalInstalled={installedGames.length}
-        onRestartSteam={() => { setInstallModalOpen(false); restartSteam(); showToast('Restarting Steam...', 'info'); }}
+        onRestartSteam={() => { setInstallModalOpen(false); restartSteam(); showToast(t('ui.toast.restartingSteam'), 'info'); }}
         onClose={() => setInstallModalOpen(false)}
         onDismiss={() => setInstallModalOpen(false)}
         onCancel={() => { cancelDownload(installGameInfo?.appid) }}
-      />
-      </Suspense>
-
-      <Suspense fallback={null}>{/* Discord Login Modal */}
-      <DiscordLoginModal
-        isOpen={discordModalOpen}
-        startupMode={startupDiscordModal}
-        onClose={() => { setDiscordModalOpen(false); setStartupDiscordModal(false) }}
-        onConnected={async (user: any) => {
-          setDiscordConnected(true)
-          setDiscordUser(user)
-          setGameSharingEnabled(true)
-          try { await bridge.setGameSharing(true) } catch { /* ignore */ }
-          setDiscordModalOpen(false)
-          setStartupDiscordModal(false)
-          setDiscordSuccessOpen(true)
-        }}
-        onLogout={() => {
-          setDiscordConnected(false)
-          setDiscordUser(null)
-          setGameSharingEnabled(false)
-        }}
-        gameSharingEnabled={gameSharingEnabled}
-        onGameSharingChange={setGameSharingEnabled}
-        onLater={() => { setDiscordModalOpen(false); setStartupDiscordModal(false) }}
-        onDontShowAgain={async () => {
-          setDiscordModalOpen(false)
-          setStartupDiscordModal(false)
-          try { await bridge.setDiscordStartupPref({ showOnStartup: false }) } catch { /* ignore */ }
-        }}
-      />
-      </Suspense>
-
-      <Suspense fallback={null}>{/* Discord Success Modal */}
-      <DiscordSuccessModal
-        isOpen={discordSuccessOpen}
-        onClose={() => setDiscordSuccessOpen(false)}
-        user={discordUser}
       />
       </Suspense>
 
@@ -328,15 +275,15 @@ const ModalRenderer = memo(function ModalRenderer({ modalProps }: { modalProps: 
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[100] flex items-center justify-center"
-            style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}
+            style={{ background: 'rgba(4,4,10,0.6)', backdropFilter: 'blur(10px)' }}
             onClick={() => setFixGamesScriptModalOpen(false)}
           >
             <motion.div
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
-              className="w-full max-w-lg mx-4 rounded-2xl overflow-hidden"
-              style={{ background: COLORS.bgCard, border: `1px solid ${COLORS.border}` }}
+              className="w-full max-w-lg mx-4 rounded-[22px] overflow-hidden"
+              style={{ background: '#0f0f1b', border: '1px solid rgba(255,255,255,0.09)', boxShadow: '0 60px 120px -30px rgba(0,0,0,1)' }}
               onClick={(e) => e.stopPropagation()}
             >
               <div className="p-5">
@@ -345,8 +292,8 @@ const ModalRenderer = memo(function ModalRenderer({ modalProps }: { modalProps: 
                     <RefreshCw size={24} style={{ color: COLORS.amber }} />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-xl font-bold" style={{ color: COLORS.text }}>Fix No Games Showing</h3>
-                    <p className="text-sm" style={{ color: COLORS.textMuted }}>Run automated games fix script</p>
+                    <h3 className="text-xl font-bold" style={{ color: COLORS.text }}>{t('ui.fng.title')}</h3>
+                    <p className="text-sm" style={{ color: COLORS.textMuted }}>{t('ui.fng.sub')}</p>
                   </div>
                 </div>
 
@@ -354,15 +301,15 @@ const ModalRenderer = memo(function ModalRenderer({ modalProps }: { modalProps: 
                   <div className="space-y-3 mb-4">
                     <div className="p-3 rounded-xl" style={{ background: `${COLORS.amber}10`, border: `1px solid ${COLORS.amber}30` }}>
                       <p className="text-sm" style={{ color: COLORS.textSecondary }}>
-                        This will re-download manifest files and restart Steam to fix games not showing in your library.
+                        {t('ui.fng.desc')}
                       </p>
                     </div>
                     <button
                       onClick={() => setFixGamesScriptModalOpen(false)}
-                      className="w-full py-3 rounded-xl font-bold text-white"
-                      style={{ background: `linear-gradient(135deg, ${COLORS.amber}, ${COLORS.orange})` }}
+                      className="w-full py-3 rounded-xl font-bold "
+                      style={{ background: 'var(--acc,#a77dff)' }}
                     >
-                      Close
+                      {t('ui.common.close')}
                     </button>
                   </div>
                 )}
@@ -379,7 +326,7 @@ const ModalRenderer = memo(function ModalRenderer({ modalProps }: { modalProps: 
                     </div>
                     <div className="flex items-center justify-center gap-3">
                       <RefreshCw size={20} style={{ color: COLORS.amber }} className="animate-spin" />
-                      <p className="text-sm font-medium" style={{ color: COLORS.text }}>Running fix script...</p>
+                      <p className="text-sm font-medium" style={{ color: COLORS.text }}>{t('ui.fng.running')}</p>
                     </div>
                     {fixGamesScriptOutput && (
                       <pre className="text-xs whitespace-pre-wrap p-3 rounded-xl" style={{ background: `${COLORS.amber}08`, color: COLORS.textMuted, maxHeight: 140, overflow: 'auto' }}>{fixGamesScriptOutput}</pre>
@@ -397,7 +344,7 @@ const ModalRenderer = memo(function ModalRenderer({ modalProps }: { modalProps: 
                       style={{ background: `${COLORS.red}15`, color: COLORS.red, border: `1px solid ${COLORS.red}30` }}
                     >
                       <AlertTriangle size={16} />
-                      Cancel Fix
+                      {t('ui.fng.cancel')}
                     </motion.button>
                   </div>
                 )}
@@ -407,11 +354,11 @@ const ModalRenderer = memo(function ModalRenderer({ modalProps }: { modalProps: 
                     <div className="p-3 rounded-xl" style={{ background: `${COLORS.green}15`, border: `1px solid ${COLORS.green}30` }}>
                       <div className="flex items-center gap-2 mb-2">
                         <CheckCircle2 size={18} style={{ color: COLORS.green }} />
-                        <p className="text-sm font-bold" style={{ color: COLORS.green }}>Fix succeeded</p>
+                        <p className="text-sm font-bold" style={{ color: COLORS.green }}>{t('ui.fng.ok')}</p>
                       </div>
                       <pre className="text-xs whitespace-pre-wrap" style={{ color: COLORS.textMuted, maxHeight: 200, overflow: 'auto' }}>{fixGamesScriptOutput}</pre>
                     </div>
-                    <button onClick={() => { setFixGamesScriptModalOpen(false); setFixGamesScriptStatus('idle'); }} className="w-full py-3 rounded-xl font-bold text-white" style={{ background: COLORS.green }}>Close</button>
+                    <button onClick={() => { setFixGamesScriptModalOpen(false); setFixGamesScriptStatus('idle'); }} className="w-full py-3 rounded-xl font-bold text-white" style={{ background: COLORS.green }}>{t('ui.common.close')}</button>
                   </div>
                 )}
 
@@ -420,7 +367,7 @@ const ModalRenderer = memo(function ModalRenderer({ modalProps }: { modalProps: 
                     <div className="p-3 rounded-xl" style={{ background: `${COLORS.red}15`, border: `1px solid ${COLORS.red}30` }}>
                       <div className="flex items-center gap-2 mb-2">
                         <AlertTriangle size={18} style={{ color: COLORS.red }} />
-                        <p className="text-sm font-bold" style={{ color: COLORS.red }}>Fix failed</p>
+                        <p className="text-sm font-bold" style={{ color: COLORS.red }}>{t('ui.fixg.failed')}</p>
                       </div>
                       <pre className="text-xs whitespace-pre-wrap" style={{ color: COLORS.textMuted }}>{fixGamesScriptOutput}</pre>
                     </div>
@@ -430,7 +377,7 @@ const ModalRenderer = memo(function ModalRenderer({ modalProps }: { modalProps: 
                       style={{ background: `${DARK_COLORS.blue}26`, color: DARK_COLORS.blue, border: `1px solid ${DARK_COLORS.blue}4d` }}
                     >
                       <MessageCircle size={16} />
-                      Contact Support
+                      {t('ui.act.contact')}
                     </button>
                     {fixGamesContactOpen && (
                       <motion.div
@@ -440,14 +387,13 @@ const ModalRenderer = memo(function ModalRenderer({ modalProps }: { modalProps: 
                         style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)' }}
                       >
                         <p className="text-sm" style={{ color: COLORS.textSecondary }}>
-                          Please open a ticket in the{' '}
-                          <strong style={{ color: DARK_COLORS.blue }}>AHG Script Discord server</strong> and share the error details above.
+                          {t('ui.fng.ticket').split('{srv}').map((part, i) => i === 0 ? part : <span key={i}><strong style={{ color: DARK_COLORS.blue }}>{t('ui.fng.srv')}</strong>{part}</span>)}
                         </p>
                       </motion.div>
                     )}
                     <div className="flex gap-3">
-                      <button onClick={() => setFixGamesScriptModalOpen(false)} className="flex-1 py-3 rounded-xl font-bold text-sm" style={{ background: COLORS.bgMid, color: COLORS.text }}>Close</button>
-                      <button onClick={() => { setFixGamesScriptStatus('idle'); setFixGamesScriptProgress(0); setFixGamesScriptOutput(''); setFixGamesContactOpen(false); }} className="flex-1 py-3 rounded-xl font-bold text-white text-sm" style={{ background: COLORS.amber }}>Retry</button>
+                      <button onClick={() => setFixGamesScriptModalOpen(false)} className="flex-1 py-3 rounded-xl font-bold text-sm" style={{ background: COLORS.bgMid, color: COLORS.text }}>{t('ui.common.close')}</button>
+                      <button onClick={() => { setFixGamesScriptStatus('idle'); setFixGamesScriptProgress(0); setFixGamesScriptOutput(''); setFixGamesContactOpen(false); }} className="flex-1 py-3 rounded-xl font-bold text-white text-sm" style={{ background: COLORS.amber }}>{t('ui.common.retry')}</button>
                     </div>
                   </div>
                 )}

@@ -3,12 +3,14 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { WifiOff, X } from 'lucide-react'
 import { DARK_COLORS } from '../constants/colors'
 import { useNetworkStatus } from '../hooks/useNetworkStatus'
+import { useT } from '../i18n'
 
 type OfflineIndicatorProps = {
   collapsed?: boolean
 }
 
 const OfflineIndicator = memo(function OfflineIndicator({ collapsed }: OfflineIndicatorProps) {
+  const t = useT()
   const { isOnline, wasOffline, acknowledge } = useNetworkStatus()
   const show = !isOnline || wasOffline
 
@@ -28,7 +30,7 @@ const OfflineIndicator = memo(function OfflineIndicator({ collapsed }: OfflineIn
               <div
                 className="w-2 h-2 rounded-full"
                 style={{ background: DARK_COLORS.amber, boxShadow: `0 0 8px ${DARK_COLORS.amber}` }}
-                title="Offline"
+                title={t('app.net.offline')}
               />
             </div>
           ) : (
@@ -51,7 +53,7 @@ const OfflineIndicator = memo(function OfflineIndicator({ collapsed }: OfflineIn
                 className="text-xs font-semibold flex-1 relative z-1"
                 style={{ color: DARK_COLORS.amber }}
               >
-                {isOnline ? 'Back Online' : 'Offline'}
+                {isOnline ? t('app.net.backOnline') : t('app.net.offline')}
               </span>
               <button
                 onClick={acknowledge}
@@ -61,7 +63,7 @@ const OfflineIndicator = memo(function OfflineIndicator({ collapsed }: OfflineIn
                   color: DARK_COLORS.textMuted,
                   transition: 'all 80ms cubic-bezier(0.4, 0, 0.2, 1)',
                 }}
-                title="Dismiss"
+                title={t('app.net.dismiss')}
               >
                 <X size={11} />
               </button>

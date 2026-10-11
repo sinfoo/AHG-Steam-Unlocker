@@ -1,3 +1,4 @@
+import { useT } from '../i18n'
 import { memo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Loader2, CheckCircle2, AlertCircle, ChevronUp, ChevronDown, X } from 'lucide-react'
@@ -12,6 +13,7 @@ interface ScanGamesModalProps {
 }
 
 export const ScanGamesModal = memo(function ScanGamesModal({ colors: COLORS, startScanGames, reloadGamesList }: ScanGamesModalProps) {
+  const t = useT()
   const scanGamesModalOpen = useModalStore(s => s.scanGamesModalOpen)
   const setScanGamesModalOpen = useModalStore(s => s.setScanGamesModalOpen)
   const scanGamesProgress = useScanStore(s => s.scanGamesProgress)
@@ -28,12 +30,12 @@ export const ScanGamesModal = memo(function ScanGamesModal({ colors: COLORS, sta
           animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
           exit={{ opacity: 0, scale: 0.9, x: 50, y: 50 }}
           transition={{ duration: 0.2 }}
-          className="fixed bottom-6 right-6 z-[100] rounded-2xl overflow-hidden"
+          className="fixed bottom-6 end-6 z-[100] rounded-2xl overflow-hidden"
           style={{ 
-            width: scanGamesMinimized ? 'auto' : '340px',
-            background: COLORS.bgCard, 
-            border: `1px solid ${COLORS.border}`, 
-            boxShadow: `0 16px 48px rgba(0,0,0,0.5)` 
+            width: scanGamesMinimized ? 'auto' : '340px', maxWidth: 'calc(100vw - 48px)',
+            background: '#0f0f1b', 
+            border: '1px solid rgba(255,255,255,0.09)', 
+            boxShadow: '0 30px 80px -20px rgba(0,0,0,0.9)' 
           }}
         >
           {/* Header bar */}
@@ -52,7 +54,7 @@ export const ScanGamesModal = memo(function ScanGamesModal({ colors: COLORS, sta
               ) : (
                 <AlertCircle size={16} style={{ color: COLORS.red }} />
               )}
-              <span className="text-sm font-bold" style={{ color: COLORS.text }}>Scan Progress</span>
+              <span className="text-sm font-bold" style={{ color: COLORS.text }}>{t('ui.scan.title')}</span>
             </div>
             <div className="flex items-center gap-1">
               {scanGamesStatus === 'scanning' && (
@@ -66,6 +68,7 @@ export const ScanGamesModal = memo(function ScanGamesModal({ colors: COLORS, sta
               )}
               <button
                 onClick={() => setScanGamesModalOpen(false)}
+                aria-label={t('ui.common.close')}
                 className="w-6 h-6 rounded flex items-center justify-center"
                 style={{ background: `${COLORS.textMuted}20`, color: COLORS.textMuted }}
               >
@@ -88,8 +91,8 @@ export const ScanGamesModal = memo(function ScanGamesModal({ colors: COLORS, sta
                     />
                   </div>
                   <div className="flex justify-between items-center">
-                    <p className="text-xs" style={{ color: COLORS.textMuted }}>{scanGamesProgress}% complete</p>
-                    <p className="text-xs font-medium" style={{ color: COLORS.text }}>Scanning...</p>
+                    <p className="text-xs" style={{ color: COLORS.textMuted }}>{t('ui.scan.pct', { n: scanGamesProgress })}</p>
+                    <p className="text-xs font-medium" style={{ color: COLORS.text }}>{t('ui.scan.scanning')}</p>
                   </div>
                 </div>
               )}
@@ -99,7 +102,7 @@ export const ScanGamesModal = memo(function ScanGamesModal({ colors: COLORS, sta
                   {scanGamesResult.found > 0 ? (
                     <>
                       <div className="p-3 rounded-xl" style={{ background: `${COLORS.green}15`, border: `1px solid ${COLORS.green}30` }}>
-                        <p className="text-sm font-bold" style={{ color: COLORS.green }}>{scanGamesResult.found} new games found!</p>
+                        <p className="text-sm font-bold" style={{ color: COLORS.green }}>{t('ui.scan.found', { n: scanGamesResult.found })}</p>
                       </div>
                       <div className="max-h-40 overflow-y-auto rounded-lg space-y-1" style={{ border: `1px solid ${COLORS.border}` }}>
                         {scanGamesResult.added.map((game: any, i: number) => (
@@ -111,7 +114,7 @@ export const ScanGamesModal = memo(function ScanGamesModal({ colors: COLORS, sta
                               <GameCover appid={game.appid} name={game.name} localHeader={game.header_image} className="w-full h-full" />
                             </div>
                             <span className="text-xs font-medium truncate flex-1" style={{ color: COLORS.text }}>{game.name}</span>
-                            <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: `${COLORS.green}20`, color: COLORS.green }}>NEW</span>
+                            <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: `${COLORS.green}20`, color: COLORS.green }}>{t('ui.scan.new')}</span>
                           </div>
                         ))}
                       </div>
@@ -120,20 +123,20 @@ export const ScanGamesModal = memo(function ScanGamesModal({ colors: COLORS, sta
                         className="w-full py-2 rounded-lg font-bold text-white text-sm"
                         style={{ background: COLORS.green, boxShadow: `0 4px 12px ${COLORS.green}40` }}
                       >
-                        Refresh Catalogue
+                        {t('ui.scan.refresh')}
                       </button>
                     </>
                   ) : (
                     <div className="text-center py-6">
                       <CheckCircle2 size={28} style={{ color: COLORS.green }} className="mx-auto mb-2" />
-                      <p className="text-sm font-bold" style={{ color: COLORS.text }}>No new games found</p>
-                      <p className="text-xs mt-1" style={{ color: COLORS.textMuted }}>Catalogue is up to date</p>
+                      <p className="text-sm font-bold" style={{ color: COLORS.text }}>{t('ui.scan.none')}</p>
+                      <p className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{t('ui.scan.upToDate')}</p>
                       <button
                         onClick={() => setScanGamesModalOpen(false)}
                         className="mt-3 w-full py-2 rounded-lg font-bold text-sm"
                         style={{ background: COLORS.bgMid, color: COLORS.text, border: `1px solid ${COLORS.border}` }}
                       >
-                        Close
+                        {t('ui.common.close')}
                       </button>
                     </div>
                   )}
@@ -142,13 +145,13 @@ export const ScanGamesModal = memo(function ScanGamesModal({ colors: COLORS, sta
 
               {scanGamesStatus === 'error' && (
                 <div className="space-y-3">
-                  <p className="text-sm font-medium" style={{ color: COLORS.red }}>Scan failed</p>
+                  <p className="text-sm font-medium" style={{ color: COLORS.red }}>{t('ui.scan.failed')}</p>
                   <button
                     onClick={startScanGames}
                     className="w-full py-2 rounded-lg font-bold text-white text-sm"
                     style={{ background: COLORS.amber }}
                   >
-                    Retry
+                    {t('ui.common.retry')}
                   </button>
                 </div>
               )}
@@ -159,7 +162,7 @@ export const ScanGamesModal = memo(function ScanGamesModal({ colors: COLORS, sta
           {scanGamesMinimized && (
             <div className="px-4 py-2 flex items-center gap-2" style={{ background: `${COLORS.blue}10` }}>
               <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: COLORS.blue }} />
-              <span className="text-xs font-medium" style={{ color: COLORS.blue }}>{scanGamesProgress}% scanning...</span>
+              <span className="text-xs font-medium" style={{ color: COLORS.blue }}>{t('ui.scan.pctScanning', { n: scanGamesProgress })}</span>
             </div>
           )}
         </motion.div>

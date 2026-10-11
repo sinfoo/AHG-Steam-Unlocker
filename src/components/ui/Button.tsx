@@ -16,16 +16,16 @@ const variantStyles: Record<
   { bg: string; color: string; border: string; shadow: string }
 > = {
   primary: {
-    bg: COLORS.violet,
-    color: COLORS.white,
+    bg: 'var(--acc,#a77dff)',
+    color: '#0b0614',
     border: 'none',
-    shadow: `0 4px 20px ${COLORS.violetGlow}`,
+    shadow: '0 16px 40px -14px var(--acc,#a77dff)',
   },
   secondary: {
-    bg: COLORS.bgCard,
-    color: COLORS.text,
-    border: `1px solid ${COLORS.border}`,
-    shadow: '0 1px 2px rgba(0,0,0,0.3)',
+    bg: 'rgba(255,255,255,0.06)',
+    color: '#fff',
+    border: '1px solid rgba(255,255,255,0.14)',
+    shadow: 'none',
   },
   ghost: {
     bg: 'transparent',
@@ -34,10 +34,10 @@ const variantStyles: Record<
     shadow: 'none',
   },
   danger: {
-    bg: COLORS.redDim,
-    color: COLORS.red,
-    border: `1px solid ${COLORS.red}30`,
-    shadow: '0 1px 2px rgba(0,0,0,0.3)',
+    bg: 'rgba(239,68,68,0.08)',
+    color: '#fca5a5',
+    border: '1px solid rgba(239,68,68,0.35)',
+    shadow: 'none',
   },
 }
 
@@ -74,8 +74,8 @@ export const Button = memo(forwardRef<HTMLButtonElement, ButtonProps>(
       <motion.button
         ref={ref as any}
         disabled={disabled || isLoading}
-        whileHover={disabled || isLoading ? undefined : { scale: 1.02, ...(hoverBg ? { backgroundColor: hoverBg } : {}) }}
-        whileTap={disabled || isLoading ? undefined : { scale: 0.97, filter: 'brightness(0.88)' }}
+        whileHover={disabled || isLoading ? undefined : { scale: 1.02, ...(hoverBg ? { backgroundColor: hoverBg } : {}), filter: variant === 'primary' ? 'brightness(1.1)' : undefined }}
+        whileTap={disabled || isLoading ? undefined : { scale: 0.97 }}
         style={{
           display: 'inline-flex',
           alignItems: 'center',
@@ -84,17 +84,17 @@ export const Button = memo(forwardRef<HTMLButtonElement, ButtonProps>(
           height: s.height,
           padding: s.padding,
           fontSize: s.fontSize,
-          fontWeight: 600,
-          fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+          fontWeight: 650,
+          fontFamily: 'Geist, Inter, -apple-system, BlinkMacSystemFont, sans-serif',
           gap: s.gap,
           background: v.bg,
           color: v.color,
           border: v.border,
-          borderRadius: '0.75rem',
+          borderRadius: size === 'sm' ? '10px' : '13px',
           boxShadow: v.shadow,
           cursor: disabled || isLoading ? 'not-allowed' : 'pointer',
           opacity: disabled ? 0.5 : 1,
-          transition: 'all 80ms cubic-bezier(0.4, 0, 0.2, 1)',
+          transition: 'all 150ms cubic-bezier(.16,1,.3,1)',
           whiteSpace: 'nowrap',
           ...style,
         }}

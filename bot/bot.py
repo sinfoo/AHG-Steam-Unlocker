@@ -43,11 +43,6 @@ LICENSE_API_PORT = int(os.environ.get("LICENSE_API_PORT", "8765"))
 # (changing) https URL to this public gist; the app reads the URL from there.
 ENDPOINT_GIST_ID = os.environ.get("ENDPOINT_GIST_ID", "")
 CLOUDFLARED = os.environ.get("CLOUDFLARED", r"C:\Program Files (x86)\cloudflared\cloudflared.exe")
-# OAuth secret + share channel live here, not in the desktop app.
-DISCORD_CLIENT_ID = os.environ.get("DISCORD_CLIENT_ID", "1491071254206353580")
-DISCORD_CLIENT_SECRET = os.environ.get("DISCORD_CLIENT_SECRET", "")
-SHARE_CHANNEL_ID = int(os.environ.get("SHARE_CHANNEL_ID", "1502571428757635092"))
-OAUTH_REDIRECT_URI = os.environ.get("OAUTH_REDIRECT_URI", "http://localhost:18765/callback")
 if not GIST_ID:
     print("ERROR: LICENSE_GIST_ID env var must be set")
     exit(1)
@@ -1465,72 +1460,10 @@ async def _json_body(request):
     return body
 
 
-def _discord_post(path, data):
-    return requests.post(f"https://discord.com/api/v10{path}", data=data, timeout=15)
-
-
-async def api_discord_token(request):
-    """OAuth code/refresh exchange — the client secret never leaves the bot."""
-    body = await _json_body(request)
-    grant = body.get("grant_type")
-    data = {"client_id": DISCORD_CLIENT_ID, "client_secret": DISCORD_CLIENT_SECRET, "grant_type": grant}
-    if grant == "authorization_code" and isinstance(body.get("code"), str) and len(body["code"]) < 200:
-        data.update(code=body["code"], redirect_uri=OAUTH_REDIRECT_URI)
-    elif grant == "refresh_token" and isinstance(body.get("refresh_token"), str) and len(body["refresh_token"]) < 200:
-        data.update(refresh_token=body["refresh_token"])
-    else:
-        raise web.HTTPBadRequest()
-    resp = await asyncio.to_thread(_discord_post, "/oauth2/token", data)
-    return web.json_response(resp.json() if resp.ok else {"error": resp.status_code}, status=resp.status_code)
-
-
-async def api_discord_revoke(request):
-    body = await _json_body(request)
-    token = body.get("token")
-    if isinstance(token, str) and len(token) < 200:
-        await asyncio.to_thread(_discord_post, "/oauth2/token/revoke",
-                                {"client_id": DISCORD_CLIENT_ID, "client_secret": DISCORD_CLIENT_SECRET, "token": token})
-    return web.json_response({"ok": True})
-
-
-async def api_discord_share(request):
-    """Post a 'game added' embed. Caller proves who they are with their OAuth token."""
-    body = await _json_body(request)
-    token, appid, name = body.get("accessToken"), str(body.get("appid", "")), str(body.get("gameName", ""))[:200]
-    cover = str(body.get("coverUrl") or "")
-    if not isinstance(token, str) or not appid.isdigit() or not name:
-        raise web.HTTPBadRequest()
-    me = await asyncio.to_thread(lambda: requests.get(
-        "https://discord.com/api/v10/users/@me", headers={"Authorization": f"Bearer {token}"}, timeout=15))
-    if not me.ok:
-        raise web.HTTPUnauthorized()
-    user = me.json()
-    who = user.get("global_name") or user.get("username") or "A user"
-    try:
-        dlc_count = max(0, int(body.get("dlcCount") or 0))
-    except (TypeError, ValueError):
-        dlc_count = 0
-    embed = discord.Embed(title=f"U0001F389 {name}", url=f"https://steamdb.info/app/{appid}/", color=0x8B5CF6,
-                          description=f"✅ **{who}** added this game to **AHG Steam Unlocker**")
-    embed.add_field(name="U0001F4CB App ID", value=appid, inline=True)
-    embed.add_field(name="U0001F464 Added by", value=who, inline=True)
-    if dlc_count:
-        embed.add_field(name="U0001F3AE DLCs", value=f"{dlc_count} unlocked", inline=True)
-    # Only Steam CDN images — no arbitrary URLs in the bot's posts.
-    if cover.startswith("https://") and any(h in cover.split("/")[2] for h in ("steamstatic.com", "steampowered.com")):
-        embed.set_image(url=cover)
-    channel = bot.get_channel(SHARE_CHANNEL_ID) or await bot.fetch_channel(SHARE_CHANNEL_ID)
-    await channel.send(embed=embed)
-    return web.json_response({"ok": True})
-
-
 async def start_license_api():
     api = web.Application(client_max_size=4096)
     api.router.add_post("/license/check", api_license_check)
     api.router.add_post("/license/activate", api_license_activate)
-    api.router.add_post("/discord/token", api_discord_token)
-    api.router.add_post("/discord/revoke", api_discord_revoke)
-    api.router.add_post("/discord/share", api_discord_share)
     runner = web.AppRunner(api)
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", LICENSE_API_PORT).start()

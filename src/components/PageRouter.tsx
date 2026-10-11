@@ -17,7 +17,7 @@ const SettingsPage = lazy(() => import('../pages/SettingsPage'))
 function PageFallback(_props: { colors: typeof DARK_COLORS }) {
   const skeletons = Array.from({ length: 6 })
   return (
-    <div className="flex-1 py-8 px-5 lg:pl-8">
+    <div className="flex-1 py-8 px-5 lg:ps-8">
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
         {skeletons.map((_, i) => (
           <div key={i} className="flex flex-col gap-2">
@@ -46,9 +46,9 @@ const pageTransition = {
 function pageMotion(key: string, exitY: number = -8) {
   return {
     key,
-    initial: { opacity: 0, y: 16, scale: 0.98, filter: "blur(4px)" },
-    animate: { opacity: 1, y: 0, scale: 1, filter: "blur(0px)" },
-    exit: { opacity: 0, y: exitY, scale: 0.98, filter: "blur(4px)", pointerEvents: "none" as const },
+    initial: { opacity: 0, y: 10 },
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: exitY, pointerEvents: "none" as const },
     transition: pageTransition,
   }
 }

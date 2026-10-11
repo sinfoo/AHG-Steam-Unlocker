@@ -2,7 +2,18 @@ import { create } from 'zustand'
 
 type SetStateAction<T> = T | ((prev: T) => T)
 
+// Notifications + auto-update are the only prefs persisted here (others live in-session).
+const PREF_KEY = 'ahg.prefs'
+const loadPrefs = (): { notifications: boolean; autoUpdates: boolean } => {
+  try { const p = JSON.parse(localStorage.getItem(PREF_KEY) || '{}'); return { notifications: p.notifications !== false, autoUpdates: p.autoUpdates !== false } } catch { return { notifications: true, autoUpdates: true } }
+}
+const savePrefs = (p: { notifications: boolean; autoUpdates: boolean }) => { try { localStorage.setItem(PREF_KEY, JSON.stringify(p)) } catch { /* storage unavailable */ } }
+
 export interface SettingsState {
+  notifications: boolean
+  autoUpdates: boolean
+  setNotifications: (v: boolean) => void
+  setAutoUpdates: (v: boolean) => void
   // Appearance
   accentColor: 'violet' | 'blue' | 'green' | 'amber' | 'pink'
   pureBlack: boolean
@@ -16,7 +27,6 @@ export interface SettingsState {
   includeDLC: boolean
   quickInstall: boolean
   batchMode: boolean
-  gameSharingEnabled: boolean
   
   // Quick tools
   quickToolsOpen: boolean
@@ -34,13 +44,15 @@ export interface SettingsState {
   setIncludeDLC: (value: SetStateAction<boolean>) => void
   setQuickInstall: (value: SetStateAction<boolean>) => void
   setBatchMode: (value: SetStateAction<boolean>) => void
-  setGameSharingEnabled: (value: SetStateAction<boolean>) => void
   setQuickToolsOpen: (value: SetStateAction<boolean>) => void
   setHideSearchBars: (value: SetStateAction<boolean>) => void
   setShowOnlyOwned: (value: SetStateAction<boolean>) => void
 }
 
-export const useSettingsStore = create<SettingsState>((set) => ({
+export const useSettingsStore = create<SettingsState>((set, get) => ({
+  ...loadPrefs(),
+  setNotifications: (notifications) => { set({ notifications }); savePrefs({ notifications, autoUpdates: get().autoUpdates }) },
+  setAutoUpdates: (autoUpdates) => { set({ autoUpdates }); savePrefs({ notifications: get().notifications, autoUpdates }) },
   // Appearance
   accentColor: 'violet',
   pureBlack: false,
@@ -54,7 +66,6 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   includeDLC: true,
   quickInstall: false,
   batchMode: false,
-  gameSharingEnabled: false,
   
   // Quick tools
   quickToolsOpen: false,
@@ -88,9 +99,6 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   setBatchMode: (batchMode) => set((state) => ({
     batchMode: typeof batchMode === 'function' ? batchMode(state.batchMode) : batchMode
   })),
-  setGameSharingEnabled: (gameSharingEnabled) => set((state) => ({
-    gameSharingEnabled: typeof gameSharingEnabled === 'function' ? gameSharingEnabled(state.gameSharingEnabled) : gameSharingEnabled
-  })),
   setQuickToolsOpen: (quickToolsOpen) => set((state) => ({
     quickToolsOpen: typeof quickToolsOpen === 'function' ? quickToolsOpen(state.quickToolsOpen) : quickToolsOpen
   })),
@@ -113,5 +121,4 @@ export const useSoundEnabled = () => useSettingsStore((s) => s.soundEnabled)
 export const useIncludeDLC = () => useSettingsStore((s) => s.includeDLC)
 export const useQuickInstall = () => useSettingsStore((s) => s.quickInstall)
 export const useBatchMode = () => useSettingsStore((s) => s.batchMode)
-export const useGameSharingEnabled = () => useSettingsStore((s) => s.gameSharingEnabled)
 export const useQuickToolsOpen = () => useSettingsStore((s) => s.quickToolsOpen)

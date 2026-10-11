@@ -1,16 +1,19 @@
-import { useMemo, memo, useRef, useState, useEffect, useCallback } from 'react'
-import { motion } from 'framer-motion'
-import { Clock, Layout } from 'lucide-react'
+import { useMemo, memo, useState, type CSSProperties } from 'react'
+import { History, Eye, Heart, Layers, CirclePlus, CircleCheck, Wrench, Play, Search, type LucideIcon } from 'lucide-react'
 import { Game } from '../types'
-import { useGameStore, useUserStore, useInstalledGames } from '../store'
+import { useGameStore, useUserStore, useReducedMotion } from '../store'
 import { useShallow } from 'zustand/react/shallow'
 import { useSetCurrentPage } from '../store/uiStore'
-import { COLORS } from '../constants/colors'
-import { GameCardCell, PortraitCard, EmptyState, type ColorScheme } from '../components/shared'
-import { PageHeroBackdrop } from '../components/PageHeroBackdrop'
-import { useImagePrefetch } from '../hooks/useImagePrefetch'
-import { useVirtualizer } from '@tanstack/react-virtual'
-import { LibrarySkeleton } from '../components/Skeletons'
+import type { ActivityEntry, ActivityKind } from '../store/userStore'
+import { type ColorScheme } from '../components/shared'
+import GameCover from '../components/GameCover'
+import { IMAGE_TYPES } from '../services/imageCache'
+import { getGenreHue, getGenreTag } from '../utils/gameHelpers'
+import { PageBanner, PageEmpty, MONO, ACC, panelStyle, rise } from '../components/PageParts'
+import { useT, useLangStore, type TKey } from '../i18n'
+import { useGenreLabel } from '../utils/genreLabel'
+
+const BLUE = '#60a5fa'
 
 export interface RecentPageProps {
   handlers: {
@@ -24,340 +27,236 @@ export interface RecentPageProps {
   colors: ColorScheme
 }
 
-const RecentPage = memo(function RecentPage({ handlers, colors }: RecentPageProps) {
-  // ── Store Selectors ──
-  const { games, viewMode } = useGameStore(
-    useShallow(s => ({ games: s.games, viewMode: s.viewMode }))
-  ) as { games: Game[]; viewMode: string }
-  const setViewMode = useGameStore(s => s.setViewMode)
-  const { recentGames, favorites } = useUserStore(
-    useShallow(s => ({ recentGames: s.recentGames, favorites: s.favorites }))
-  )
-  const installedGames = useInstalledGames()
-  const installedAppids = useMemo(() => new Set(installedGames.map(g => g.appid)), [installedGames])
+type Kind = 'view' | 'add' | 'fix' | 'play' | 'fav'
+// filter chips / breakdown rows (design: RT)
+const KINDS: [Kind, TKey, LucideIcon, string][] = [
+  ['view', 'app.recent.viewed', Eye, '#60a5fa'],
+  ['add', 'app.recent.f.added', CirclePlus, ACC],
+  ['fix', 'app.recent.f.fixes', Wrench, '#fbbf24'],
+  ['play', 'app.recent.f.launched', Play, '#4ade80'],
+  ['fav', 'app.nav.favourites', Heart, '#f87171'],
+]
+// per-action row icon + colour + label (design: recents[])
+const ACT: Record<ActivityKind, { kind: Kind; I: LucideIcon; c: string; label: TKey }> = {
+  viewed: { kind: 'view', I: Eye, c: '#3b82f6', label: 'app.recent.act.viewed' },
+  added: { kind: 'add', I: CirclePlus, c: ACC, label: 'app.recent.act.added' },
+  fix: { kind: 'fix', I: Wrench, c: '#f59e0b', label: 'app.recent.act.fix' },
+  launched: { kind: 'play', I: Play, c: '#22c55e', label: 'app.recent.act.launched' },
+  favourited: { kind: 'fav', I: Heart, c: '#ef4444', label: 'app.recent.act.favourited' },
+  installed: { kind: 'add', I: CircleCheck, c: '#22c55e', label: 'app.recent.act.installed' },
+}
+const GROUPS: [string, TKey][] = [['today', 'app.recent.grp.today'], ['yesterday', 'app.recent.grp.yesterday'], ['earlier', 'app.recent.grp.earlier']]
+const PER_GROUP = 25
+const DAY = 86_400_000
 
-  const [isLoading, setIsLoading] = useState(true)
-  useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 500)
-    return () => clearTimeout(timer)
-  }, [])
+const chipStyle = (on: boolean): CSSProperties => ({
+  height: 30, padding: '0 12px', borderRadius: 9, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 600, transition: 'all .18s', fontFamily: 'inherit',
+  border: `1px solid ${on ? 'color-mix(in oklch, var(--acc,#a77dff) 45%, transparent)' : 'rgba(255,255,255,.07)'}`,
+  background: on ? 'color-mix(in oklch, var(--acc,#a77dff) 16%, transparent)' : 'transparent', color: on ? '#fff' : '#a6a5bb',
+})
 
-  // ── Computed Values ──
-  const filteredGames = useMemo(
-    () => games.filter(g => recentGames.includes(g.appid) && g.header_image && g.header_image.length > 0),
-    [games, recentGames]
-  )
-
+const RecentPage = memo(function RecentPage({ handlers }: RecentPageProps) {
+  const t = useT()
+  const gl = useGenreLabel()
+  const lang = useLangStore(s => s.lang)
+  const rtl = lang === 'ar'
+  const { games, searchQuery } = useGameStore(
+    useShallow(s => ({ games: s.games, searchQuery: s.searchQuery }))
+  ) as { games: Game[]; searchQuery: string }
+  const { recentGames, activity } = useUserStore(useShallow(s => ({ recentGames: s.recentGames, activity: s.activity })))
+  const reduced = useReducedMotion()
   const setCurrentPage = useSetCurrentPage()
-  const { handleGameClick, toggleFavorite, handleContextMenu, handleInstallGame, handleInstallFromZip, handleDeleteGame } = handlers
-  const handleRemoveFromLibrary = useCallback((game: Game) => handleDeleteGame(game.appid), [handleDeleteGame])
+  const { handleGameClick, handleContextMenu } = handlers
+  const [filter, setFilter] = useState<'all' | Kind>('all')
 
-  // ── Virtual scrolling ──
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const [containerWidth, setContainerWidth] = useState(0)
+  const byId = useMemo(() => {
+    const m = new Map<string, Game>()
+    for (const g of games) if (g.header_image) m.set(g.appid, g)
+    return m
+  }, [games])
 
-  useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    const ro = new ResizeObserver(entries => {
-      for (const entry of entries) {
-        setContainerWidth(entry.contentRect.width)
-      }
+  // Real activity log, plus legacy recents that predate it (shown as undated "Viewed").
+  const entries = useMemo<ActivityEntry[]>(() => {
+    const seen = new Set(activity.map(a => a.appid))
+    const legacy = recentGames.filter(id => !seen.has(id)).map(appid => ({ appid, act: 'viewed' as const, ts: 0 }))
+    return [...activity, ...legacy].filter(e => byId.has(e.appid))
+  }, [activity, recentGames, byId])
+
+  const model = useMemo(() => {
+    const now = new Date()
+    const t0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+    const todayN = entries.filter(e => e.ts >= t0).length
+    // last 7 days ending today
+    const wk = Array.from({ length: 7 }, (_, i) => {
+      const start = t0 - (6 - i) * DAY
+      return { start, v: entries.filter(e => e.ts >= start && e.ts < start + DAY).length }
     })
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
+    const weekStart = t0 - 6 * DAY
+    const perGame = new Map<string, number>()
+    for (const e of entries) if (e.ts >= weekStart) perGame.set(e.appid, (perGame.get(e.appid) || 0) + 1)
+    let maId = '', maN = 0
+    for (const [id, n] of perGame) if (n > maN) { maId = id; maN = n }
+    const counts = Object.fromEntries(KINDS.map(([k]) => [k, 0])) as Record<Kind, number>
+    for (const e of entries) counts[ACT[e.act].kind]++
+    return { t0, todayN, wk, weekTotal: wk.reduce((a, b) => a + b.v, 0), maId, maN, counts }
+  }, [entries])
 
-  const CELL_WIDTH = 200
-  const GRID_GAP = 24
-  const ROW_GAP = 24
-  const effectiveColumns = viewMode === 'grid'
-    ? Math.max(1, Math.floor((containerWidth + GRID_GAP) / (CELL_WIDTH + GRID_GAP)))
-    : 1
-  const actualCellWidth = effectiveColumns > 1
-    ? (containerWidth - (effectiveColumns - 1) * GRID_GAP) / effectiveColumns
-    : CELL_WIDTH
-  const computedCardHeight = Math.ceil(actualCellWidth * 3 / 2)
-  const rowHeight = viewMode === 'grid' ? computedCardHeight + ROW_GAP : 88 + 8
-  const rowCount = Math.ceil(filteredGames.length / effectiveColumns)
+  const groups = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    const rows = entries.filter(e => {
+      const g = byId.get(e.appid)!
+      return (filter === 'all' || ACT[e.act].kind === filter) && (!q || g.name?.toLowerCase().includes(q) || g.appid.includes(q))
+    })
+    const grp = (ts: number) => ts >= model.t0 ? 'today' : ts >= model.t0 - DAY ? 'yesterday' : 'earlier'
+    return GROUPS.map(([id, label]) => ({ id, label, items: rows.filter(e => grp(e.ts) === id).slice(0, PER_GROUP) })).filter(g => g.items.length)
+  }, [entries, byId, filter, searchQuery, model.t0])
 
-  const rowVirtualizer = useVirtualizer({
-    count: rowCount,
-    getScrollElement: useCallback(() => scrollRef.current, []),
-    estimateSize: () => rowHeight,
-    overscan: 5,
-  })
+  const timeLabel = (e: ActivityEntry) => {
+    if (!e.ts) return ''
+    const d = new Date(e.ts)
+    return e.ts >= model.t0 - DAY ? d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString(lang, { month: 'short', day: 'numeric' })
+  }
+  const dayLetter = (ts: number) => new Date(ts).toLocaleDateString(lang, { weekday: 'narrow' })
 
-  useImagePrefetch(rowVirtualizer, useCallback((rowIndex: number) => {
-    const startIdx = rowIndex * effectiveColumns
-    return filteredGames.slice(startIdx, startIdx + effectiveColumns)
-  }, [filteredGames, effectiveColumns]))
+  const bannerGames = useMemo(() => {
+    const ids = Array.from(new Set(entries.map(e => e.appid))).slice(0, 4)
+    return ids.map(id => byId.get(id)!)
+  }, [entries, byId])
 
-  // ── Hero visibility guard ──
-  const heroRef = useRef<HTMLDivElement>(null)
-  const [isHeroVisible, setIsHeroVisible] = useState(true)
-  useEffect(() => {
-    const el = heroRef.current
-    if (!el) return
-    const observer = new IntersectionObserver(
-      ([entry]) => setIsHeroVisible(entry!.isIntersecting),
-      { rootMargin: '100px 0px' }
-    )
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [])
-
-  // Hero hover state for mesh gradient overlay
-  const [isHeroHovered, setIsHeroHovered] = useState(false)
+  const wkMax = Math.max(...model.wk.map(w => w.v), 1)
+  const bdMax = Math.max(...Object.values(model.counts), 1)
+  const mostActive = byId.get(model.maId) ?? (entries[0] && byId.get(entries[0].appid))
+  const mostActiveN = model.maId ? model.maN : 0
 
   return (
-    <div
-      key="recent"
-      ref={scrollRef}
-      className="lg:pl-8 px-5 pt-2 pb-6 flex flex-col h-full overflow-auto"
-      style={{ scrollbarWidth: 'thin', scrollbarColor: `${COLORS.bgActive} ${COLORS.bgMid}` }}
-    >
-      {/* ── Hero — Compact Premium ── */}
-      <motion.div
-        ref={heroRef}
-        className="relative min-h-[160px] lg:min-h-[180px] overflow-hidden rounded-2xl mb-8 shrink-0"
-        style={{
-          background: `linear-gradient(135deg, ${colors.bgDark} 0%, ${colors.bgCard} 50%, ${colors.bgDark} 100%)`,
-          border: `1px solid ${colors.amber}20`,
-          boxShadow: `0 8px 32px ${colors.amber}10`,
-        }}
-        whileHover={{ scale: 1.003 }}
-        transition={{ duration: 0.3 }}
-        onHoverStart={() => setIsHeroHovered(true)}
-        onHoverEnd={() => setIsHeroHovered(false)}
-      >
-        {/* Content-driven cover backdrop (your most recent game) */}
-        <PageHeroBackdrop game={filteredGames[0]} accent={colors.amber} />
-
-        {/* Grid dot pattern overlay */}
-        <div
-          className="absolute inset-0 opacity-[0.04] pointer-events-none"
-          style={{
-            backgroundImage: 'radial-gradient(rgba(255,255,255,0.3) 1px, transparent 1px)',
-            backgroundSize: '24px 24px',
-          }}
+    <div key="recent" className="h-full overflow-auto" style={{ scrollbarWidth: 'thin' }}>
+      <div style={{ padding: 24, maxWidth: 1680, margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <PageBanner
+          icon={History} color={BLUE} eyebrow={t('app.recent.eyebrow')} title={t('app.nav.recent')}
+          sub={t('app.recent.sub2')}
+          games={bannerGames} reduced={reduced}
+          stats={[
+            { v: String(model.todayN), label: t('app.recent.today') },
+            { v: String(entries.length), label: t('app.recent.allTime') },
+          ]}
         />
 
-        {/* Ambient glow orbs */}
-        <motion.div
-          className="absolute -right-12 -top-12 w-[180px] h-[180px] rounded-full blur-[70px] pointer-events-none"
-          style={{ background: `radial-gradient(circle, ${colors.amber}25 0%, transparent 70%)` }}
-          animate={isHeroVisible ? { x: [0, 15, 0], y: [0, -12, 0], scale: [1, 1.06, 1] } : {}}
-          transition={isHeroVisible ? { duration: 8, repeat: Infinity, ease: 'easeInOut' } : {}}
-        />
-        <motion.div
-          className="absolute -left-8 bottom-0 w-[140px] h-[140px] rounded-full blur-[50px] pointer-events-none"
-          style={{ background: `radial-gradient(circle, ${colors.orange}20 0%, transparent 70%)` }}
-          animate={isHeroVisible ? { x: [0, -12, 0], y: [0, 16, 0], scale: [1, 1.08, 1] } : {}}
-          transition={isHeroVisible ? { duration: 10, repeat: Infinity, ease: 'easeInOut', delay: 1 } : {}}
-        />
+        {entries.length === 0 ? (
+          <PageEmpty reduced={reduced} icon={History} tint={BLUE} title={t('app.recent.emptyTitle')}
+            subtitle={t('app.recent.emptySub')}
+            action={{ label: t('app.common.browseGames'), onClick: () => setCurrentPage('browse') }} />
+        ) : (
+          <div style={{ display: 'flex', gap: 18, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <div style={{ ...panelStyle, flex: '1 1 520px', minWidth: 0, padding: '10px 14px 14px', animation: rise(reduced, '.35s', '.04s') }}>
+              <div style={{ display: 'flex', gap: 4, padding: '6px 4px 10px', flexWrap: 'wrap' }}>
+                {([['all', 'app.common.all', Layers], ...KINDS.map(([k, l, I]) => [k, l, I])] as [string, TKey, LucideIcon][]).map(([id, label, Icon]) => (
+                  <button key={id} onClick={() => setFilter(id as 'all' | Kind)} aria-pressed={filter === id} style={chipStyle(filter === id)}>
+                    <Icon size={13} />{t(label)}
+                  </button>
+                ))}
+              </div>
 
-        {/* Floating particles */}
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <motion.div
-              key={`recent-particle-${i}`}
-              className="absolute w-1 h-1 rounded-full"
-              style={{
-                background: colors.amber,
-                left: `${15 + i * 24}%`,
-                top: `${25 + (i % 2) * 45}%`,
-                opacity: 0.1 + i * 0.04,
-              }}
-              animate={isHeroVisible ? {
-                y: [0, -(12 + i * 6), 0],
-                x: [0, (i % 2 === 0 ? 6 : -6), 0],
-                scale: [1, 1.3, 1],
-                opacity: [0.08 + i * 0.02, 0.2 + i * 0.04, 0.08 + i * 0.02],
-              } : {}}
-              transition={isHeroVisible ? {
-                duration: 4 + i * 1.2,
-                repeat: Infinity,
-                ease: 'easeInOut',
-                delay: i * 0.7,
-              } : {}}
-            />
-          ))}
-        </div>
-
-        {/* Animated mesh gradient hover overlay */}
-        <motion.div
-          className="absolute inset-0 pointer-events-none"
-          animate={{ opacity: isHeroHovered ? 1 : 0 }}
-          transition={{ duration: 0.08, ease: [0.4, 0, 0.2, 1] }}
-          style={{
-            background: `radial-gradient(circle at 50% 50%, ${COLORS.whiteGlass} 0%, transparent 70%)`,
-          }}
-        />
-
-        {/* ── Content ── */}
-        <div className="relative z-10 flex flex-col items-center justify-center h-full min-h-[160px] lg:min-h-[180px] px-6 text-center">
-          {/* Top Row: Badge + Stats | View Toggle */}
-          <div className="flex items-center justify-between gap-4 w-full">
-            <motion.div
-              initial={{ opacity: 0, x: -16 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.4, delay: 0.04, ease: [0.34, 1.56, 0.64, 1] }}
-              className="flex items-center gap-2.5"
-            >
-              <span
-                className="text-[10px] font-semibold tracking-[0.18em] uppercase px-3 py-1 rounded-full flex items-center gap-1.5"
-                style={{
-                  background: `${colors.amber}20`,
-                  color: colors.amber,
-                  border: `1px solid ${colors.amber}40`,
-                }}
-              >
-                <Clock size={10} />
-                Recent
-              </span>
-              <motion.span
-                animate={{
-                  opacity: [0.4, 1, 0.4],
-                  scale: [1, 1.35, 1],
-                  boxShadow: [
-                    `0 0 6px ${colors.amber}40`,
-                    `0 0 18px ${colors.amber}80`,
-                    `0 0 6px ${colors.amber}40`,
-                  ],
-                }}
-                transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-                className="w-1.5 h-1.5 rounded-full shrink-0"
-                style={{ background: colors.amber }}
-              />
-              <span className="text-[11px] font-medium" style={{ color: colors.textMuted }}>
-                {recentGames.length.toLocaleString()} titles
-              </span>
-            </motion.div>
-
-            {/* View Toggle */}
-            <motion.div
-              initial={{ opacity: 0, x: 16, scale: 0.95 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              transition={{ duration: 0.4, delay: 0.2, ease: [0.34, 1.56, 0.64, 1] }}
-            >
-              <motion.button
-                onClick={() => setViewMode(v => v === 'grid' ? 'list' : 'grid')}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="h-9 px-4 rounded-xl flex items-center gap-2 text-xs font-semibold"
-                style={{ background: `${colors.bgCard}cc`, border: `1px solid ${colors.border}`, backdropFilter: 'blur(8px)' }}
-              >
-                {viewMode === 'grid' ? <Layout size={14} style={{ color: colors.amber }} /> : <Layout size={14} style={{ color: colors.textSecondary }} />}
-                <span style={{ color: viewMode === 'grid' ? colors.amber : colors.textSecondary }}>
-                  {viewMode === 'grid' ? 'Grid' : 'List'}
-                </span>
-              </motion.button>
-            </motion.div>
-          </div>
-
-          {/* Title Block — Clean */}
-          <div className="flex flex-col justify-center flex-1">
-            <motion.h1
-              initial={{ opacity: 0, y: 16, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ type: 'spring', stiffness: 100, damping: 18, mass: 0.6, delay: 0.14 }}
-              className="text-3xl lg:text-4xl xl:text-5xl font-bold tracking-tight leading-tight"
-              style={{
-                background: `linear-gradient(135deg, ${colors.text} 15%, var(--accent) 85%, ${colors.orange} 100%)`,
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-              }}
-            >
-              Recently Viewed
-            </motion.h1>
-            <motion.p
-              initial={{ opacity: 0, y: 8, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ type: 'spring', stiffness: 180, damping: 18, mass: 0.9, delay: 0.28 }}
-              className="text-xs mt-1 leading-relaxed"
-              style={{ color: colors.textDim }}
-            >
-              Games you've checked out recently
-            </motion.p>
-          </div>
-        </div>
-      </motion.div>
-
-      {isLoading ? (
-        <div className="flex-1 min-h-0">
-          <LibrarySkeleton colors={colors} columns={effectiveColumns > 1 ? effectiveColumns : 1} />
-        </div>
-      ) : filteredGames.length === 0 ? (
-        <EmptyState
-          icon={Clock}
-          title="No recent games"
-          subtitle="Games you browse will appear here for quick access"
-          color={colors.amber}
-          action={{ label: 'Browse Games', onClick: () => setCurrentPage('browse') }}
-        />
-      ) : (
-        <div className="flex-1 min-h-0">
-          <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative', width: '100%' }}>
-            {rowVirtualizer.getVirtualItems().map(virtualRow => {
-              const startIdx = virtualRow.index * effectiveColumns
-              const rowItems = filteredGames.slice(startIdx, startIdx + effectiveColumns)
-              return (
-                <div
-                  key={virtualRow.key}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: `${virtualRow.size}px`,
-                    transform: `translateY(${virtualRow.start}px)`,
-                    contain: 'layout style',
-                    display: effectiveColumns > 1 ? 'grid' : 'flex',
-                    gridTemplateColumns: effectiveColumns > 1 ? `repeat(${effectiveColumns}, 1fr)` : undefined,
-                    flexDirection: effectiveColumns > 1 ? undefined : 'column',
-                    gap: effectiveColumns > 1 ? GRID_GAP + 'px' : '0.5rem',
-                    alignItems: effectiveColumns > 1 ? 'start' : undefined,
-                  }}
-                >
-                  {rowItems.map((game, i) => {
-                    const gameIdx = startIdx + i
-                    return viewMode === 'grid' ? (
-                      <PortraitCard
-                        key={game.appid}
-                        game={game}
-                        index={gameIdx}
-                        isFavorite={favorites.has(game.appid)}
+              {groups.map((g, k) => (
+                <section key={g.id} style={{ display: 'flex', flexDirection: 'column', animation: rise(reduced, '.3s', `${k * 0.03}s`) }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 8px 8px' }}>
+                    <span style={{ fontFamily: MONO, fontSize: 10.5, fontWeight: 600, letterSpacing: '.16em', color: '#a6a5bb' }}>{t(g.label)}</span>
+                    <span style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.06)' }} />
+                    <span style={{ fontFamily: MONO, fontSize: 10.5, color: '#6f6e86' }}>{g.items.length}</span>
+                  </div>
+                  {g.items.map((e, i) => {
+                    const game = byId.get(e.appid)!
+                    const a = ACT[e.act]
+                    const rawTag = getGenreTag(game)
+                    const tag = rawTag ? gl(rawTag) : rawTag
+                    return (
+                      <div key={`${e.appid}-${e.act}-${e.ts}-${i}`} className="v2-row" role="button" tabIndex={0}
+                        aria-label={t('app.home.openNamed', { name: game.name ?? '' })}
                         onClick={() => handleGameClick(game)}
-                        onFavorite={() => toggleFavorite(game.appid)}
-                        onContextMenu={(e) => handleContextMenu(e, game)}
-                        onDelete={() => handleDeleteGame(game.appid)}
-                        colors={colors}
-                      />
-                    ) : (
-                      <GameCardCell
-                        key={game.appid}
-                        game={game}
-                        index={gameIdx}
-                        viewMode={viewMode}
-                        isFavorite={favorites.has(game.appid)}
-                        colors={colors}
-                        onGameClick={handleGameClick}
-                        onFavoriteToggle={toggleFavorite}
-                        onContextMenu={handleContextMenu}
-                        onInstallGame={handleInstallGame}
-                        onInstallFromZip={handleInstallFromZip}
-                        isInLibrary={installedAppids.has(game.appid)}
-                        onRemoveFromLibrary={handleRemoveFromLibrary}
-                      />
+                        onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); handleGameClick(game) } }}
+                        onContextMenu={(ev) => handleContextMenu(ev, game)}
+                        style={{ display: 'grid', gridTemplateColumns: '52px 22px 40px minmax(0,1fr) auto', alignItems: 'center', gap: 14, padding: '9px 10px', borderRadius: 13, cursor: 'pointer' }}>
+                        <span style={{ fontFamily: MONO, fontSize: 12, color: '#8b8aa3', textAlign: 'end' }}>{timeLabel(e)}</span>
+                        <span style={{ position: 'relative', width: 22, height: 22, borderRadius: 7, background: `color-mix(in oklch, ${a.c} 18%, transparent)`, color: a.c, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <a.I size={12} />
+                        </span>
+                        <div style={{ width: 40, height: 56, borderRadius: 8, overflow: 'hidden', background: '#10101c' }}>
+                          <GameCover appid={game.appid} name={game.name} localHeader={game.header_image || undefined}
+                            preferredImageTypes={IMAGE_TYPES.PORTRAIT} genreHue={getGenreHue(game)} webglDisabled className="w-full h-full" />
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 14.5, fontWeight: 600, color: '#f3f2fa', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{game.name}</div>
+                          <div style={{ fontSize: 12.5, color: '#a6a5bb', marginTop: 3 }}>{t(a.label)}</div>
+                        </div>
+                        {tag ? <span style={{ fontSize: 11.5, color: '#8b8aa3', padding: '3px 8px', borderRadius: 7, background: 'rgba(255,255,255,.04)' }}>{tag}</span> : <span />}
+                      </div>
+                    )
+                  })}
+                </section>
+              ))}
+              {groups.length === 0 && (
+                <div style={{ padding: 40, textAlign: 'center', color: '#8b8aa3', fontSize: 13.5, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                  <Search size={20} />{t('app.recent.noType')}
+                </div>
+              )}
+            </div>
+
+            <aside style={{ flex: '1 1 300px', maxWidth: '100%', display: 'flex', flexDirection: 'column', gap: 16, position: 'sticky', top: 0 }}>
+              <div style={{ ...panelStyle, padding: 18, animation: rise(reduced, '.35s', '.06s') }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                  <span style={{ fontSize: 15, fontWeight: 650, color: '#f3f2fa' }}>{t('app.recent.week')}</span>
+                  <span style={{ flex: 1 }} />
+                  <span style={{ fontFamily: MONO, fontSize: 20, fontWeight: 600, color: '#f3f2fa' }}>{model.weekTotal}</span>
+                  <span style={{ fontSize: 12, color: '#8b8aa3' }}>{t('app.recent.actions')}</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,minmax(0,1fr))', gap: 8, alignItems: 'end', height: 120, marginTop: 16 }}>
+                  {model.wk.map((w, i) => {
+                    const today = i === 6
+                    return (
+                      <div key={w.start} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, height: '100%', justifyContent: 'flex-end' }}>
+                        <div title={String(w.v)} style={{ width: '100%', maxWidth: 28, height: `${(w.v / wkMax) * 100}%`, minHeight: 4, borderRadius: 7, background: today ? ACC : 'rgba(255,255,255,.14)', boxShadow: today ? '0 0 16px color-mix(in oklch, var(--acc,#a77dff) 60%, transparent)' : 'none', transformOrigin: 'bottom', animation: reduced ? undefined : `v2-barIn .5s cubic-bezier(.34,1.4,.5,1) ${i * 0.04}s both` }} />
+                        <span style={{ fontFamily: MONO, fontSize: 10.5, color: today ? '#fff' : '#77768e' }}>{dayLetter(w.start)}</span>
+                      </div>
                     )
                   })}
                 </div>
-              )
-            })}
+              </div>
+
+              <div style={{ ...panelStyle, padding: 18, display: 'flex', flexDirection: 'column', gap: 12, animation: rise(reduced, '.35s', '.08s') }}>
+                <span style={{ fontSize: 15, fontWeight: 650, color: '#f3f2fa' }}>{t('app.recent.breakdown')}</span>
+                {KINDS.map(([k, label, Icon, c]) => (
+                  <div key={k} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 13, color: '#f3f2fa' }}>
+                      <Icon size={14} style={{ color: c }} /><span style={{ flex: 1 }}>{t(label)}</span>
+                      <span style={{ fontFamily: MONO, fontSize: 12, color: '#c9c8da' }}>{model.counts[k]}</span>
+                    </div>
+                    <div style={{ height: 5, borderRadius: 3, background: 'rgba(255,255,255,.06)', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${(model.counts[k] / bdMax) * 100}%`, borderRadius: 3, background: c, transformOrigin: rtl ? 'right' : 'left', animation: reduced ? undefined : 'v2-barFill .6s cubic-bezier(.16,1,.3,1) both' }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {mostActive && (
+                <div role="button" tabIndex={0} className="v2-fixwrap" onClick={() => handleGameClick(mostActive)}
+                  aria-label={t('app.home.openNamed', { name: mostActive.name ?? '' })}
+                  onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); handleGameClick(mostActive) } }}
+                  style={{ position: 'relative', height: 200, borderRadius: 20, overflow: 'hidden', border: '1px solid rgba(255,255,255,.08)', cursor: 'pointer', background: '#10101c', animation: rise(reduced, '.35s', '.1s') }}>
+                  <div style={{ position: 'absolute', inset: 0, animation: reduced ? undefined : 'v2-hkenBurns 18s ease-in-out infinite alternate' }}>
+                    <GameCover appid={mostActive.appid} name={mostActive.name} localHeader={mostActive.header_image || undefined}
+                      preferredImageTypes={IMAGE_TYPES.HEADER} genreHue={getGenreHue(mostActive)} webglDisabled className="w-full h-full" />
+                  </div>
+                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(0deg, rgba(6,6,12,.95) 10%, rgba(6,6,12,.2) 70%)' }} />
+                  <div style={{ position: 'absolute', insetInline: 16, bottom: 14 }}>
+                    <div style={{ fontFamily: MONO, fontSize: 10.5, letterSpacing: '.16em', color: ACC }}>{t('app.recent.mostActive')}</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, marginTop: 6, color: '#f3f2fa' }}>{mostActive.name}</div>
+                    <div style={{ fontSize: 12.5, color: '#c9c8da', marginTop: 3 }}>{t('app.recent.mostN', { n: mostActiveN })}</div>
+                  </div>
+                </div>
+              )}
+            </aside>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 })

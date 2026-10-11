@@ -3,6 +3,7 @@ import { Clock } from 'lucide-react'
 import { GameCard } from './cards/GameCard'
 import type { Game } from '../types'
 import type { ColorScheme } from '../types/colors'
+import { useT } from '../i18n'
 
 export interface GameCardCellProps {
   game: Game
@@ -38,6 +39,7 @@ const GameCardCell = memo(function GameCardCell({
   onInstallGame, onInstallFromZip, isInLibrary, onRemoveFromLibrary,
   compactMode,
 }: GameCardCellProps) {
+  const t = useT()
   const handleClick = useCallback(() => onGameClick(game), [onGameClick, game])
   const handleFavorite = useCallback(() => onFavoriteToggle(game.appid), [onFavoriteToggle, game.appid])
   const handleContextMenuCallback = useCallback(
@@ -56,23 +58,16 @@ const GameCardCell = memo(function GameCardCell({
   return (
     <div className="relative" style={{ contentVisibility: 'auto', contain: 'layout style paint', containIntrinsicSize: viewMode === 'list' ? 'auto 88px' : 'auto 340px' }}>
       {comingSoon && (
-        <div className="absolute top-3 left-3 z-20 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 overflow-hidden coming-soon-badge"
+        <div className="absolute top-2 start-2 z-30 px-2 py-[3px] rounded-[7px] mono text-[10.5px] font-semibold flex items-center gap-1.5 pointer-events-none"
           style={{
-            background: 'linear-gradient(135deg, rgba(6,182,212,0.92), rgba(139,92,246,0.75))',
-            color: 'white',
-            backdropFilter: 'blur(12px)',
-            border: '1px solid rgba(6,182,212,0.5)',
-            boxShadow: '0 4px 20px rgba(6,182,212,0.35), inset 0 1px 0 rgba(255,255,255,0.25)',
+            background: 'rgba(8,8,16,.75)',
+            color: '#fff',
+            border: '1px solid color-mix(in oklch, var(--acc) 50%, transparent)',
+            letterSpacing: '.1em',
           }}
         >
-          <div className="absolute inset-0 coming-soon-shine" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)', transform: 'skewX(-20deg)' }} />
-          <div className="relative z-10 coming-soon-icon">
-            <Clock size={11} />
-          </div>
-          <span className="relative z-10 tracking-[0.12em] uppercase font-bold coming-soon-text" style={{ textShadow: '0 1px 6px rgba(0,0,0,0.35)' }}>
-            Soon
-          </span>
-          <div className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full coming-soon-dot" style={{ background: 'rgba(6,182,212,0.4)' }} />
+          <Clock size={11} />
+          <span className="uppercase">{t('app.card.soon')}</span>
         </div>
       )}
       <GameCard

@@ -3,73 +3,74 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { CheckCircle2, AlertCircle, Heart, Info, Trophy, X } from 'lucide-react'
 import type { ColorScheme } from './shared'
 import { useUIStore } from '../store'
+import { useT } from '../i18n'
 
 interface ToastContainerProps {
   colors: ColorScheme
 }
 
 export const ToastContainer = memo(function ToastContainer({ colors: COLORS }: ToastContainerProps) {
+  const t = useT()
   const toasts = useUIStore(s => s.toasts)
   const setToasts = useUIStore(s => s.setToasts)
 
+  const meta = (type: string) => {
+    switch (type) {
+      case 'achievement': return { c: COLORS.amber, title: t('ui.toast.achievement'), Icon: Trophy }
+      case 'success': return { c: COLORS.green, title: t('ui.toast.success'), Icon: CheckCircle2 }
+      case 'error': return { c: COLORS.red, title: t('ui.toast.error'), Icon: AlertCircle }
+      case 'favorites': return { c: COLORS.red, title: t('ui.toast.favorites'), Icon: Heart }
+      default: return { c: 'var(--acc, #a77dff)', title: t('ui.toast.info'), Icon: Info }
+    }
+  }
+
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex-col gap-3 max-w-md hidden md:flex" aria-live="polite" aria-atomic="false">
+    <div
+      className="fixed bottom-6 end-6 z-[120] flex-col-reverse gap-2.5 hidden md:flex pointer-events-none"
+      aria-live="polite"
+      aria-atomic="false"
+    >
       <AnimatePresence>
-        {toasts.map((toast) => (
-          <motion.div
-            key={toast.id}
-            role={toast.type === 'error' ? 'alert' : 'status'}
-            initial={{ x: 80, opacity: 0, scale: 0.85, y: 10 }} 
-            animate={{ x: 0, opacity: 1, scale: 1, y: 0 }} 
-            exit={{ x: 80, opacity: 0, scale: 0.85, y: -10 }} 
-            transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-            className="px-6 py-4 rounded-2xl flex items-center gap-3 cursor-pointer relative overflow-hidden"
-            style={{ 
-              background: toast.type === 'achievement' ? COLORS.amber + '25' : toast.type === 'success' ? COLORS.greenDim : toast.type === 'error' ? COLORS.redDim : toast.type === 'favorites' ? COLORS.redDim : COLORS.violetDim, 
-              border: `1px solid ${toast.type === 'achievement' ? COLORS.amber : toast.type === 'success' ? COLORS.green : toast.type === 'error' ? COLORS.red : toast.type === 'favorites' ? COLORS.red : COLORS.violet}`,
-              boxShadow: toast.type === 'achievement' ? `0 10px 40px ${COLORS.amber}40, 0 0 60px ${COLORS.amber}20` : `0 10px 40px ${toast.type === 'success' ? COLORS.greenDim : toast.type === 'error' ? COLORS.redDim : COLORS.violetDim}`
-            }}
-            onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
-          >
-            {/* Animated background */}
-            <motion.div 
-              className="absolute inset-0 opacity-20"
-              style={{ 
-                background: `linear-gradient(90deg, transparent, ${toast.type === 'achievement' ? COLORS.amber : toast.type === 'success' ? COLORS.green : toast.type === 'error' ? COLORS.red : COLORS.violet}, transparent)`
-              }}
-              animate={{ x: ['-100%', '100%'] }}
-              transition={{ duration: 2, repeat: Infinity }}
-            />
-            {/* Achievement sparkle overlay */}
-            {toast.type === 'achievement' && (
-              <motion.div 
-                className="absolute inset-0 pointer-events-none"
-                style={{
-                  background: `radial-gradient(circle at 50% 50%, ${COLORS.amber}20 0%, transparent 70%)`,
-                }}
-                animate={{ scale: [1, 1.05, 1], opacity: [0.3, 0.6, 0.3] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-              />
-            )}
-            {/* Auto-dismiss progress bar */}
+        {toasts.map((toast) => {
+          const { c, title, Icon } = meta(toast.type)
+          return (
             <motion.div
-              className="absolute bottom-0 left-0 h-0.5 rounded-full"
+              key={toast.id}
+              role={toast.type === 'error' ? 'alert' : 'status'}
+              initial={false}
+              exit={{ x: 60, opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+              className="pointer-events-auto relative flex items-start gap-3 overflow-hidden cursor-pointer"
               style={{
-                background: toast.type === 'achievement' ? COLORS.amber : toast.type === 'success' ? COLORS.green : toast.type === 'error' ? COLORS.red : COLORS.violet,
+                width: 340, maxWidth: 'calc(100vw - 48px)',
+                padding: '14px 14px 16px',
+                borderRadius: 16,
+                background: 'rgba(22,22,37,.96)',
+                backdropFilter: 'blur(20px)',
+                border: '1px solid rgba(255,255,255,.09)',
+                boxShadow: '0 24px 50px -16px rgba(0,0,0,.9)',
+                animation: 'v2-slideInR .6s cubic-bezier(.16,1,.3,1) both',
               }}
-              initial={{ width: '100%', opacity: 0.6 }}
-              animate={{ width: '0%', opacity: 0 }}
-              transition={{ duration: 4, ease: 'linear' }}
-            />
-            {toast.type === 'achievement' && <Trophy size={22} style={{ color: COLORS.amber }} />}
-            {toast.type === 'success' && <CheckCircle2 size={22} style={{ color: COLORS.green }} />}
-            {toast.type === 'error' && <AlertCircle size={22} style={{ color: COLORS.red }} />}
-            {toast.type === 'favorites' && <Heart size={22} style={{ color: COLORS.red }} fill="currentColor" />}
-            {toast.type === 'info' && <Info size={22} style={{ color: COLORS.violet }} />}
-            <p className="font-semibold text-white flex-1">{toast.message}</p>
-            <X size={16} style={{ color: 'rgba(255,255,255,0.5)' }} />
-          </motion.div>
-        ))}
+              onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
+            >
+              <span
+                className="flex items-center justify-center shrink-0"
+                style={{ width: 32, height: 32, borderRadius: 10, background: `color-mix(in oklch, ${c} 16%, transparent)`, color: c }}
+              >
+                <Icon size={16} fill={toast.type === 'favorites' ? 'currentColor' : 'none'} />
+              </span>
+              <div className="flex-1 min-w-0">
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: '#f3f2fa' }}>{title}</div>
+                <div style={{ fontSize: 12.5, color: '#a6a5bb', marginTop: 2, lineHeight: 1.4 }}>{toast.message}</div>
+              </div>
+              <X size={14} style={{ color: '#77768e', marginTop: 2 }} aria-hidden />
+              <span
+                className="absolute start-0 end-0 bottom-0"
+                style={{ height: 2, background: c, transformOrigin: 'left', animation: 'v2-shrink 4s linear both' }}
+              />
+            </motion.div>
+          )
+        })}
       </AnimatePresence>
     </div>
   )

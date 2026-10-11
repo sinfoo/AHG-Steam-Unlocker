@@ -15,6 +15,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
+    "@fontsource/tajawal": "^5.3.0",
     "@tanstack/react-virtual": "^3.13.6",
     "adm-zip": "^0.5.16",
     "framer-motion": "^11.18.2",

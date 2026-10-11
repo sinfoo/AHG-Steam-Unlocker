@@ -20,7 +20,6 @@ const path = require('path');
 const MODULE_PATH = path.resolve(__dirname, '../license.cjs');
 const ELEC_MOCK_ID = path.resolve(__dirname, '.license-elec-mock.cjs');
 const SECRETS_MOCK_ID = path.resolve(__dirname, '.license-secrets-mock.cjs');
-const DISCORD_MOCK_ID = path.resolve(__dirname, '.license-discord-mock.cjs');
 
 const THIS_MACHINE = 'C48FB794-6144-F046-9B36-DA552A4270A6';
 const OTHER_MACHINE = 'AAAAAAAA-1111-2222-3333-BBBBBBBBBBBB';
@@ -47,9 +46,8 @@ function setupMocks() {
     BrowserWindow: { getAllWindows: () => [] },
   });
   stub(SECRETS_MOCK_ID, { secrets: { licenseApiUrl: 'https://license.test' } });
-  stub(DISCORD_MOCK_ID, { DISCORD_INVITE_URL: 'https://discord.gg/TEST' });
 
-  // Fake license API (the Discord bot): answers from `gistResponse`'s registry with the
+  // Fake license API (the bot): answers from `gistResponse`'s registry with the
   // same status semantics as bot.py, and fails activation writes when writeStatus != 200.
   origFetch = global.fetch;
   global.fetch = async (url, opts) => {
@@ -72,7 +70,6 @@ function setupMocks() {
   Module._resolveFilename = function (request, parent, isMain) {
     if (request === 'electron') return ELEC_MOCK_ID;
     if (request === '../utils/secrets.cjs' || request === './secrets.cjs') return SECRETS_MOCK_ID;
-    if (request === './discord.cjs') return DISCORD_MOCK_ID;
     return origResolve.call(this, request, parent, isMain);
   };
 
@@ -96,7 +93,7 @@ function setupMocks() {
   return function restore() {
     Object.assign(fs, orig);
     global.fetch = origFetch;
-    [ELEC_MOCK_ID, SECRETS_MOCK_ID, DISCORD_MOCK_ID, MODULE_PATH, require.resolve('../../utils/botApi.cjs')]
+    [ELEC_MOCK_ID, SECRETS_MOCK_ID, MODULE_PATH, require.resolve('../../utils/botApi.cjs')]
       .forEach(id => delete require.cache[id]);
     Module._resolveFilename = origResolve;
   };

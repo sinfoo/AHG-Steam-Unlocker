@@ -22,22 +22,6 @@ const { registerSystemHandlers } = require('./system.cjs');
 const { registerUpdateHandlers } = require('./updates.cjs');
 const { createLazyModule } = require('../utils/lazyLoader.cjs');
 
-// Discord handlers (~568 lines) — loaded on first use
-createLazyModule([
-  'discord-login',
-  'get-secrets-diag',
-  'check-discord-auth',
-  'discord-logout',
-  'set-game-sharing',
-  'get-game-sharing',
-  'get-discord-startup-pref',
-  'set-discord-startup-pref',
-  'share-game-to-discord',
-], () => {
-  const { registerDiscordHandlers } = require('./discord.cjs');
-  registerDiscordHandlers();
-});
-
 // Fixes handlers (~519 lines) — loaded on first use
 createLazyModule([
   'download-fix',

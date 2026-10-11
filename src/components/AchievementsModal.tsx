@@ -1,3 +1,5 @@
+import { useT } from '../i18n'
+import { achName, achDesc, achCategory } from '../hooks/useAchievements'
 import { memo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Trophy, Zap, Check } from 'lucide-react'
@@ -11,6 +13,7 @@ interface AchievementsModalProps {
 }
 
 export const AchievementsModal = memo(function AchievementsModal({ colors: COLORS, achievements }: AchievementsModalProps) {
+  const t = useT()
   const showAchievements = useUserStore(s => s.showAchievements)
   const setShowAchievements = useUserStore(s => s.setShowAchievements)
   const userXP = useUserStore(s => s.userXP)
@@ -50,7 +53,7 @@ export const AchievementsModal = memo(function AchievementsModal({ colors: COLOR
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[200] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }}
+          style={{ background: 'rgba(4,4,10,0.6)', backdropFilter: 'blur(10px)' }}
           onClick={() => setShowAchievements(false)}
         >
           <motion.div
@@ -58,14 +61,14 @@ export const AchievementsModal = memo(function AchievementsModal({ colors: COLOR
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0.9, y: 30 }}
             transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-            className="w-full max-w-4xl max-h-[85vh] rounded-3xl overflow-hidden flex flex-col"
-            style={{ background: COLORS.bgCard, border: `1px solid ${COLORS.border}`, boxShadow: `0 32px 100px rgba(0,0,0,0.6), 0 0 80px ${COLORS.amber}15` }}
+            className="w-full max-w-4xl max-h-[85vh] rounded-[24px] overflow-hidden flex flex-col"
+            style={{ background: '#0f0f1b', border: '1px solid rgba(255,255,255,0.09)', boxShadow: '0 60px 120px -30px rgba(0,0,0,1)' }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div className="p-6 pb-4 relative" style={{ borderBottom: `1px solid ${COLORS.border}` }}>
               {/* Animated rainbow bar */}
-              <div className="absolute top-0 left-0 right-0 h-[2px]" style={{
+              <div className="absolute top-0 start-0 end-0 h-[2px]" style={{
                 background: `linear-gradient(90deg, ${COLORS.amber}, ${COLORS.pink}, ${COLORS.violet}, ${COLORS.cyan}, ${COLORS.green}, ${COLORS.amber})`,
                 backgroundSize: '200% 100%',
                 animation: 'shimmer 3s linear infinite'
@@ -76,12 +79,13 @@ export const AchievementsModal = memo(function AchievementsModal({ colors: COLOR
                     <Trophy size={28} style={{ color: COLORS.amber }} />
                   </div>
                   <div>
-                    <h2 className="text-2xl font-bold text-white">Achievements</h2>
-                    <p className="text-sm" style={{ color: COLORS.textMuted }}>Track your progress and unlock challenges</p>
+                    <h2 className="text-2xl font-bold text-white">{t('ui.ach.title')}</h2>
+                    <p className="text-sm" style={{ color: COLORS.textMuted }}>{t('ui.ach.subtitle')}</p>
                   </div>
                 </div>
                 <button
                   className="w-10 h-10 rounded-xl flex items-center justify-center cursor-pointer hover:bg-white/10 transition-colors"
+                  aria-label={t('ui.common.close')}
                   onClick={() => setShowAchievements(false)}
                 >
                   <X size={20} style={{ color: COLORS.textMuted }} />
@@ -100,13 +104,13 @@ export const AchievementsModal = memo(function AchievementsModal({ colors: COLOR
                     }}>
                       <span className="text-2xl font-bold text-white">{userLevel}</span>
                     </div>
-                    <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center" style={{ background: COLORS.bgCard, border: `2px solid ${COLORS.amber}` }}>
+                    <div className="absolute -bottom-1 -end-1 w-6 h-6 rounded-full flex items-center justify-center" style={{ background: COLORS.bgCard, border: `2px solid ${COLORS.amber}` }}>
                       <Zap size={12} style={{ color: COLORS.amber }} />
                     </div>
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-bold text-white">Level {userLevel}</span>
+                      <span className="text-sm font-bold text-white">{t('ui.ach.level', { n: userLevel })}</span>
                       <span className="text-xs font-bold" style={{ color: COLORS.amber }}>
                         {xpForCurrentLevel}/100 XP
                       </span>
@@ -121,7 +125,7 @@ export const AchievementsModal = memo(function AchievementsModal({ colors: COLOR
                         transition={{ duration: 0.5 }}
                       />
                     </div>
-                    <p className="text-xs mt-1" style={{ color: COLORS.textMuted }}>Total XP: {userXP}</p>
+                    <p className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{t('ui.ach.totalXp', { n: userXP })}</p>
                   </div>
                 </div>
 
@@ -129,7 +133,7 @@ export const AchievementsModal = memo(function AchievementsModal({ colors: COLOR
                 <div className="flex items-center gap-4">
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-bold text-white">Achievements</span>
+                      <span className="text-sm font-bold text-white">{t('ui.ach.title')}</span>
                       <span className="text-sm font-bold" style={{ color: COLORS.amber }}>
                         {achievements.filter(a => a.unlocked).length} / {achievements.length}
                       </span>
@@ -148,7 +152,7 @@ export const AchievementsModal = memo(function AchievementsModal({ colors: COLOR
                     <div className="text-lg font-bold" style={{ color: COLORS.amber }}>
                       {Math.round((achievements.filter(a => a.unlocked).length / achievements.length) * 100)}%
                     </div>
-                    <div className="text-xs font-bold uppercase tracking-wider" style={{ color: COLORS.amber + '90' }}>Complete</div>
+                    <div className="text-xs font-bold uppercase tracking-wider" style={{ color: COLORS.amber + '90' }}>{t('ui.ach.complete')}</div>
                   </div>
                 </div>
               </div>
@@ -160,7 +164,7 @@ export const AchievementsModal = memo(function AchievementsModal({ colors: COLOR
               <div className="flex items-center gap-2">
                 {(['all', 'unlocked', 'locked'] as const).map((filter) => {
                   const isActive = activeFilter === filter
-                  const label = filter === 'all' ? 'All' : filter === 'unlocked' ? 'Unlocked' : 'Locked'
+                  const label = filter === 'all' ? t('ui.ach.all') : filter === 'unlocked' ? t('ui.ach.unlocked') : t('ui.ach.locked')
                   return (
                     <button
                       key={filter}
@@ -177,13 +181,13 @@ export const AchievementsModal = memo(function AchievementsModal({ colors: COLOR
                     >
                       {label}
                       {filter === 'all' && (
-                        <span className="ml-1.5 text-xs opacity-60">({achievements.length})</span>
+                        <span className="ms-1.5 text-xs opacity-60">({achievements.length})</span>
                       )}
                       {filter === 'unlocked' && (
-                        <span className="ml-1.5 text-xs opacity-60">({achievements.filter(a => a.unlocked).length})</span>
+                        <span className="ms-1.5 text-xs opacity-60">({achievements.filter(a => a.unlocked).length})</span>
                       )}
                       {filter === 'locked' && (
-                        <span className="ml-1.5 text-xs opacity-60">({achievements.filter(a => !a.unlocked).length})</span>
+                        <span className="ms-1.5 text-xs opacity-60">({achievements.filter(a => !a.unlocked).length})</span>
                       )}
                     </button>
                   )
@@ -211,7 +215,7 @@ export const AchievementsModal = memo(function AchievementsModal({ colors: COLOR
                   />
                 </div>
                 <span className="text-xs font-bold uppercase tracking-wider" style={{ color: showMyGames ? COLORS.amber : COLORS.textMuted }}>
-                  Show My Games
+                  {t('ui.ach.showMine')}
                 </span>
               </label>
             </div>
@@ -228,7 +232,7 @@ export const AchievementsModal = memo(function AchievementsModal({ colors: COLOR
                 }, {} as Record<string, typeof achievements>)
               ).map(([category, items]) => (
                 <div key={category} className="mb-6">
-                  <h3 className="text-sm font-bold uppercase tracking-wider mb-3" style={{ color: COLORS.textMuted }}>{category}</h3>
+                  <h3 className="text-sm font-bold uppercase tracking-wider mb-3" style={{ color: COLORS.textMuted }}>{achCategory(category)}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {items.map((achievement) => {
                       const progress = Math.min(achievement.progress, achievement.maxProgress)
@@ -248,7 +252,7 @@ export const AchievementsModal = memo(function AchievementsModal({ colors: COLOR
                           }}
                         >
                           {achievement.unlocked && (
-                            <div className="absolute top-0 right-0 w-10 h-10 flex items-center justify-center">
+                            <div className="absolute top-0 end-0 w-10 h-10 flex items-center justify-center">
                               <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: COLORS.green, boxShadow: `0 0 16px ${COLORS.green}60` }}>
                                 <Check size={16} className="text-white" strokeWidth={3} />
                               </div>
@@ -260,9 +264,9 @@ export const AchievementsModal = memo(function AchievementsModal({ colors: COLOR
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
-                                <h4 className="font-bold text-white text-sm truncate">{achievement.name}</h4>
+                                <h4 className="font-bold text-white text-sm truncate">{achName(achievement)}</h4>
                               </div>
-                              <p className="text-xs mb-3" style={{ color: achievement.unlocked ? COLORS.textSecondary : COLORS.textDim }}>{achievement.desc}</p>
+                              <p className="text-xs mb-3" style={{ color: achievement.unlocked ? COLORS.textSecondary : COLORS.textDim }}>{achDesc(achievement)}</p>
                               {/* Progress Bar */}
                               <div className="h-2 rounded-full overflow-hidden" style={{ background: COLORS.bgCard }}>
                                 <div
@@ -277,7 +281,7 @@ export const AchievementsModal = memo(function AchievementsModal({ colors: COLOR
                               </div>
                               <div className="flex items-center justify-between mt-1.5">
                                 <span className="text-xs font-bold" style={{ color: COLORS.textDim }}>
-                                  {achievement.maxProgress === 1 ? (achievement.unlocked ? 'Unlocked' : 'Locked') : `${progress} / ${achievement.maxProgress}`}
+                                  {achievement.maxProgress === 1 ? (achievement.unlocked ? t('ui.ach.unlockedOne') : t('ui.ach.lockedOne')) : `${progress} / ${achievement.maxProgress}`}
                                 </span>
                                 {achievement.unlocked && (
                                   <span className="text-xs font-bold" style={{ color: COLORS.amber }}>+10 XP</span>

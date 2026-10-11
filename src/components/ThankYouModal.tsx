@@ -1,3 +1,4 @@
+import { useT, type TKey } from '../i18n'
 import { memo, useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Check, PartyPopper } from 'lucide-react'
@@ -30,10 +31,10 @@ function Shield(props: any) {
   )
 }
 
-const STATS = [
-  { icon: Gamepad2, label: '176K+', sub: 'Games', color: COLORS.violet },
-  { icon: Zap, label: '4K+', sub: 'Fixes', color: COLORS.green },
-  { icon: Shield, label: 'Secure', sub: 'Private', color: COLORS.blue },
+const STATS: { icon: any; label: TKey | string; sub: TKey; color: string }[] = [
+  { icon: Gamepad2, label: '176K+', sub: 'ui.ty.games', color: COLORS.violet },
+  { icon: Zap, label: '4K+', sub: 'ui.ty.fixes', color: COLORS.green },
+  { icon: Shield, label: 'ui.ty.secure', sub: 'ui.ty.private', color: COLORS.blue },
 ]
 
 const PARTICLES = Array.from({ length: 14 }, (_, i) => ({
@@ -46,6 +47,7 @@ const PARTICLES = Array.from({ length: 14 }, (_, i) => ({
 }))
 
 export const ThankYouModal = memo(function ThankYouModal({ isOpen, onClose }: ThankYouModalProps) {
+  const t = useT()
   const [show, setShow] = useState(false)
 
   useEffect(() => { if (isOpen) setShow(true) }, [isOpen])
@@ -65,7 +67,7 @@ export const ThankYouModal = memo(function ThankYouModal({ isOpen, onClose }: Th
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[120] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.86)', backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)' }}
+          style={{ background: 'rgba(4,4,10,0.6)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}
           onClick={handleClose}
         >
           <motion.div
@@ -73,11 +75,11 @@ export const ThankYouModal = memo(function ThankYouModal({ isOpen, onClose }: Th
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.86, opacity: 0, y: 36 }}
             transition={{ type: 'spring', damping: 22, stiffness: 320 }}
-            className="w-full max-w-[400px] max-h-[92vh] overflow-y-auto relative rounded-3xl"
+            className="w-full max-w-[400px] max-h-[92vh] overflow-y-auto relative rounded-[24px]"
             style={{
-              background: `linear-gradient(160deg, ${COLORS.bgCard} 0%, ${COLORS.bgDeep} 100%)`,
-              border: `1px solid ${COLORS.violet}33`,
-              boxShadow: `0 30px 90px rgba(0,0,0,0.6), 0 0 70px ${COLORS.violet}18`,
+              background: '#0f0f1b',
+              border: '1px solid rgba(255,255,255,0.09)',
+              boxShadow: '0 60px 120px -30px rgba(0,0,0,1)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -95,7 +97,7 @@ export const ThankYouModal = memo(function ThankYouModal({ isOpen, onClose }: Th
             <div className="absolute inset-0 overflow-hidden rounded-3xl pointer-events-none">
               {PARTICLES.map((p, i) => (
                 <motion.span key={i} className="absolute rounded-full"
-                  style={{ left: `${p.left}%`, top: `${p.top}%`, width: p.size, height: p.size,
+                  style={{ insetInlineStart: `${p.left}%`, top: `${p.top}%`, width: p.size, height: p.size,
                     background: p.violet ? COLORS.violet : COLORS.green, boxShadow: `0 0 ${p.size * 3}px ${p.violet ? COLORS.violet : COLORS.green}` }}
                   animate={{ y: [0, -14, 0], opacity: [0.2, 0.7, 0.2] }}
                   transition={{ duration: p.dur, delay: p.delay, repeat: Infinity, ease: 'easeInOut' }} />
@@ -131,11 +133,11 @@ export const ThankYouModal = memo(function ThankYouModal({ isOpen, onClose }: Th
               {/* Title */}
               <h2 className="text-[26px] leading-none font-extrabold tracking-tight"
                 style={{ background: `linear-gradient(135deg, ${COLORS.violetLight || COLORS.violet}, ${COLORS.pink || COLORS.violet})`, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>
-                Purchase Complete
+                {t('ui.ty.title')}
               </h2>
-              <p className="mt-1.5 text-sm font-semibold" style={{ color: COLORS.green }}>Welcome to AHG Steam Unlocker</p>
+              <p className="mt-1.5 text-sm font-semibold" style={{ color: COLORS.green }}>{t('ui.ty.welcome')}</p>
               <p className="mt-2 text-[13px] leading-relaxed max-w-[300px]" style={{ color: COLORS.textMuted }}>
-                Thanks for the support — it's what keeps AHG growing. 💜
+                {t('ui.ty.thanks')}
               </p>
 
               {/* Compact stat chips */}
@@ -144,14 +146,14 @@ export const ThankYouModal = memo(function ThankYouModal({ isOpen, onClose }: Th
                   <div key={s.sub} className="rounded-2xl py-3 px-2 flex flex-col items-center gap-1.5"
                     style={{ background: `${s.color}14`, border: `1px solid ${s.color}2a` }}>
                     <s.icon style={{ color: s.color, width: 22, height: 22 }} />
-                    <div className="text-sm font-extrabold leading-none" style={{ color: s.color }}>{s.label}</div>
-                    <div className="text-[10px] font-medium" style={{ color: COLORS.textDim }}>{s.sub}</div>
+                    <div className="text-sm font-extrabold leading-none" style={{ color: s.color }}>{s.label.startsWith('ui.') ? t(s.label as TKey) : s.label}</div>
+                    <div className="text-[10px] font-medium" style={{ color: COLORS.textDim }}>{t(s.sub)}</div>
                   </div>
                 ))}
               </div>
 
               <p className="mt-4 text-[10px] tracking-[0.18em] uppercase font-semibold" style={{ color: COLORS.textDim }}>
-                Made with <span style={{ color: COLORS.red }}>♥</span> by Safwen
+                {t('ui.ty.made').split('{heart}').map((part, i) => i === 0 ? part : <span key={i}><span style={{ color: COLORS.red }}>♥</span>{part}</span>)}
               </p>
 
               {/* CTA */}
@@ -159,11 +161,11 @@ export const ThankYouModal = memo(function ThankYouModal({ isOpen, onClose }: Th
                 onClick={handleClose}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.97 }}
-                className="w-full mt-5 h-12 rounded-2xl font-bold text-[15px] text-white flex items-center justify-center gap-2 relative overflow-hidden"
-                style={{ background: `linear-gradient(135deg, ${COLORS.violet}, ${COLORS.blue})`, boxShadow: `0 10px 30px ${COLORS.violet}50` }}
+                className="w-full mt-5 h-12 rounded-2xl font-bold text-[15px]  flex items-center justify-center gap-2 relative overflow-hidden"
+                style={{ background: 'var(--acc,#a77dff)', boxShadow: '0 16px 40px -14px var(--acc,#a77dff)' }}
               >
                 <PartyPopper size={18} />
-                <span>Let's Go!</span>
+                <span>{t('ui.ty.letsGo')}</span>
               </motion.button>
             </div>
           </motion.div>
