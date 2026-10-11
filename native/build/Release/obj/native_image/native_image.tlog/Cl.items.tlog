@@ -1,7 +1,0 @@
-C:\Users\sinfo\Downloads\filesOPENCODE\native\src\main.cc;C:\Users\sinfo\Downloads\filesOPENCODE\native\build\Release\obj\native_image\src\main.obj
-C:\Users\sinfo\Downloads\filesOPENCODE\native\src\decoder.cc;C:\Users\sinfo\Downloads\filesOPENCODE\native\build\Release\obj\native_image\src\decoder.obj
-C:\Users\sinfo\Downloads\filesOPENCODE\native\src\encoder.cc;C:\Users\sinfo\Downloads\filesOPENCODE\native\build\Release\obj\native_image\src\encoder.obj
-C:\Users\sinfo\Downloads\filesOPENCODE\native\src\lqip.cc;C:\Users\sinfo\Downloads\filesOPENCODE\native\build\Release\obj\native_image\src\lqip.obj
-C:\Users\sinfo\Downloads\filesOPENCODE\native\src\batch.cc;C:\Users\sinfo\Downloads\filesOPENCODE\native\build\Release\obj\native_image\src\batch.obj
-C:\Users\sinfo\Downloads\filesOPENCODE\native\src\gpu.cc;C:\Users\sinfo\Downloads\filesOPENCODE\native\build\Release\obj\native_image\src\gpu.obj
-C:\Users\sinfo\Downloads\filesOPENCODE\node_modules\node-gyp\src\win_delay_load_hook.cc;C:\Users\sinfo\Downloads\filesOPENCODE\native\build\Release\obj\native_image\win_delay_load_hook.obj

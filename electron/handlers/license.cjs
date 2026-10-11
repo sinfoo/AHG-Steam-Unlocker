@@ -1,10 +1,9 @@
 // ── License system (GitHub Gist-based activation) ──
 const path = require('path');
 const fs = require('fs');
-const https = require('https');
 const crypto = require('crypto');
 const { ipcMain, app, BrowserWindow } = require('electron');
-const { secrets } = require('../utils/secrets.cjs');
+const { botApi } = require('../utils/botApi.cjs');
 const { DISCORD_INVITE_URL } = require('./discord.cjs');
 
 const LICENSE_FILE = path.join(app.getPath('userData'), 'ahg_license.json');
@@ -94,112 +93,16 @@ function persistMachineId(machineId, source) {
   }
 }
 
-// Resolves the license registry, or `null` when it could not be read.
-// The null/{} distinction is load-bearing: an empty object means "the registry
-// is genuinely empty" (every key revoked), while null means "we don't know".
-// Returning {} on failure previously made every offline start look like a
-// revocation and deleted the local license.
-function fetchLicenses() {
-  return new Promise((resolve) => {
-    const url = `https://api.github.com/gists/${secrets.licenseGistId}`;
-    // Deliberately unauthenticated. A secret gist is readable by anyone with the
-    // id, so verification needs no token — and sending one only adds failure
-    // modes: rotating or revoking it 401s every shipped build at once, and the
-    // 5k/hr quota is shared by every customer. Unauthenticated reads get 60/hr
-    // per IP instead, which is per-machine. The token stays on the PATCH below,
-    // which genuinely needs write access.
-    const options = {
-      headers: {
-        'User-Agent': 'AHG-Steam-Unlocker',
-        'Accept': 'application/vnd.github.v3+json'
-      },
-      timeout: 15000,
-    };
-    const req = https.get(url, options, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        if (res.statusCode !== 200) {
-          console.warn('[LICENSE] Gist fetch failed — HTTP', res.statusCode);
-          return resolve(null);
-        }
-        try {
-          const json = JSON.parse(data);
-          const file = json.files?.['license_keys.json'];
-          if (!file) {
-            console.warn('[LICENSE] Gist has no license_keys.json file');
-            return resolve(null);
-          }
-          if (file.truncated && file.raw_url) {
-            return fetchRaw(file.raw_url).then(resolve);
-          }
-          resolve(JSON.parse(file.content || '{}'));
-        } catch (e) {
-          console.warn('[LICENSE] Gist parse error:', e.message);
-          resolve(null);
-        }
-      });
-    });
-    req.on('timeout', () => { req.destroy(); });
-    req.on('error', (e) => {
-      console.warn('[LICENSE] Gist fetch network error:', e.message);
-      resolve(null);
-    });
-  });
-}
-
-// Gist responses inline only the first 1 MB of a file; past that the content is
-// truncated and must be pulled from raw_url. At ~50 bytes/key that is ~20k keys
-// away, but a truncated read would otherwise look like a mass revocation.
-function fetchRaw(rawUrl) {
-  return new Promise((resolve) => {
-    https.get(rawUrl, { headers: { 'User-Agent': 'AHG-Steam-Unlocker' } }, (res) => {
-      let body = '';
-      res.on('data', c => body += c);
-      res.on('end', () => {
-        try { resolve(JSON.parse(body)); } catch (e) { resolve(null); }
-      });
-    }).on('error', () => resolve(null));
-  });
-}
-
-function updateGist(licenses) {
-  return new Promise((resolve) => {
-    const postData = JSON.stringify({
-      description: 'AHG License Keys',
-      files: { 'license_keys.json': { content: JSON.stringify(licenses, null, 2) } }
-    });
-    const options = {
-      hostname: 'api.github.com',
-      path: `/gists/${secrets.licenseGistId}`,
-      method: 'PATCH',
-      headers: {
-        'Authorization': `token ${secrets.githubToken}`,
-        'User-Agent': 'AHG-Steam-Unlocker',
-        'Accept': 'application/vnd.github.v3+json',
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(postData)
-      }
-    };
-    const req = https.request(options, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        if (res.statusCode !== 200) {
-          // 404 here almost always means the token cannot write this gist
-          // (wrong account, or missing the `gist` scope) rather than a missing gist.
-          console.error('[LICENSE] Gist update failed — HTTP', res.statusCode, '|', data.slice(0, 200));
-        }
-        resolve(res.statusCode === 200);
-      });
-    });
-    req.on('error', (e) => {
-      console.error('[LICENSE] Gist update network error:', e.message);
-      resolve(false);
-    });
-    req.write(postData);
-    req.end();
-  });
+// Asks the license API (served by the Discord bot) about ONE key. The app never
+// holds a GitHub token or the gist ID: the bot owns the registry and does all writes.
+// Returns 'missing' | 'pending' | 'used' | 'bound' | 'other', or null when the
+// server could not be reached. null means "unknown" — callers must never treat it
+// as a revocation (offline starts used to delete valid licenses that way).
+async function licenseApi(action, key, machineId) {
+  const res = await botApi(`license/${action}`, { key, machineId });
+  if (!res || !res.ok) return null;
+  const status = res.data && res.data.status;
+  return typeof status === 'string' ? status : null;
 }
 
 function loadLocalLicense() {
@@ -262,27 +165,21 @@ function registerLicenseHandlers() {
       // Only an authoritative read may revoke — a failed read (offline, rate limited,
       // GitHub down) must fall through to local validation, never delete the license.
       let gistValidated = false;
-      const gistLicenses = await fetchLicenses();
-      if (gistLicenses === null) {
+      const status = local.licenseKey ? await licenseApi('check', local.licenseKey, currentMachineId) : 'missing';
+      if (status === null) {
         console.warn('[LICENSE] Registry unreachable — falling back to local validation');
-      } else {
-        const key = local.licenseKey;
-        const gistMachineId = key ? gistLicenses[key] : undefined;
-        if (gistMachineId === undefined) {
-          console.log('[LICENSE] License key removed from Gist — revoking');
-          try { if (fs.existsSync(LICENSE_FILE)) fs.unlinkSync(LICENSE_FILE); } catch (e) {
-            console.error('[LICENSE] Failed to delete revoked license file:', e.message);
-          }
-          return { activated: false };
+      } else if (status === 'missing') {
+        console.log('[LICENSE] License key removed from registry — revoking');
+        try { if (fs.existsSync(LICENSE_FILE)) fs.unlinkSync(LICENSE_FILE); } catch (e) {
+          console.error('[LICENSE] Failed to delete revoked license file:', e.message);
         }
-        if (gistMachineId === 'pending' || gistMachineId === currentMachineId) {
-          gistValidated = true;
-        }
-        // else: an AUTHORITATIVE read says the key is bound to another machine, or the
-        // seller marked it 'used'. gistValidated stays false; we must NOT fall through
-        // to the local-file match below (which would keep the original machine active
-        // forever after the key was re-bound elsewhere or disabled).
+        return { activated: false };
+      } else if (status === 'pending' || status === 'bound') {
+        gistValidated = true;
       }
+      // 'other' / 'used': an authoritative answer that this machine may not use the key.
+      // gistValidated stays false and we must NOT fall through to the local-file match.
+      const gistLicenses = status === null ? null : true;
       // Trust the local file only when we could NOT reach the registry (offline).
       // When the read succeeded, the registry is the source of truth.
       if (gistValidated || (gistLicenses === null && local.machineId === currentMachineId)) {
@@ -309,33 +206,25 @@ function registerLicenseHandlers() {
         return { success: false, error: 'invalid', message: 'Please enter a license key' };
       }
       const machineId = getMachineId();
-      const licenses = await fetchLicenses();
-      if (licenses === null) {
-        // Must not be reported as "invalid" — the key may well be fine and we
-        // simply could not read the registry.
+      const key = licenseKey.trim().toUpperCase();
+      // The bot binds a 'pending' key to this machine atomically and returns the result.
+      const status = await licenseApi('activate', key, machineId);
+      if (status === null) {
+        // Must not be reported as "invalid" — the key may well be fine.
         return { success: false, error: 'network', message: 'Could not reach the license server. Check your connection and try again.' };
       }
-      const key = licenseKey.trim().toUpperCase();
-      const registeredMachine = licenses[key];
-      if (registeredMachine === undefined) {
+      if (status === 'missing') {
         return { success: false, error: 'invalid', message: 'Invalid License Key' };
       }
-      // 'used' is written by the seller-side tooling, never by the app — surface it
-      // distinctly instead of the misleading "another device" message.
-      if (registeredMachine === 'used') {
+      if (status === 'used') {
         return { success: false, error: 'used', message: 'This key is marked as used in the registry. Contact support to have it reset.' };
       }
-      if (registeredMachine && registeredMachine !== 'pending' && registeredMachine !== machineId) {
+      if (status !== 'bound') {
         return { success: false, error: 'already_activated', message: 'License Already Activated on Another Device' };
-      }
-      licenses[key] = machineId;
-      const updated = await updateGist(licenses);
-      if (!updated) {
-        return { success: false, error: 'network', message: 'Failed to update license' };
       }
       const saved = saveLocalLicense(key, machineId);
       if (!saved) {
-        // The key is bound in the Gist but nothing persisted locally — without this
+        // The key is bound in the registry but nothing persisted locally — without this
         // warning the user is silently asked for the key again on every restart.
         console.error('[LICENSE] Activation succeeded but local license save failed');
         return { success: true, message: 'Activated, but saving locally failed — you may be asked for the key again on next start.' };

@@ -41,7 +41,10 @@ function registerDbHandlers() {
       try { if (globalThis._dbReadyPromise) await globalThis._dbReadyPromise; } catch { /* fall through */ }
       const t0 = Date.now()
       console.log('[MAIN-TRACE] Calling db.getAllGames()...')
+      // Boot payload: ship a DLC count, not the full dlc map (~29% of the catalogue bytes).
+      // Full rows stay available via db:get-game.
       const games = db.getAllGames();
+      for (const g of games) { g.dlc_count = g.dlc ? Object.keys(g.dlc).length : 0; delete g.dlc; }
       console.log('[MAIN-TRACE] db.getAllGames() returned', games.length, 'games in', Date.now() - t0, 'ms');
       return games;
     } catch (error) {

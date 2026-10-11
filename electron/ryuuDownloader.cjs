@@ -10,7 +10,9 @@ const AdmZip = require('adm-zip');
 const { httpGet } = require('./utils/httpUtils.cjs');
 
 const RYUU_API_BASE = 'https://generator.ryuu.lol';
-const DEFAULT_AUTH_CODE = 'RYUUMANIFESTv78r6h';
+// Reseller key lives in config/secrets.json (gitignored, packaged) — never in source.
+const DEFAULT_AUTH_CODE = require('./utils/secrets.cjs').secrets.ryuuAuthCode || '';
+if (!DEFAULT_AUTH_CODE) console.warn('[RYUU] ryuuAuthCode missing from config/secrets.json — Ryuu API calls will 401');
 
 // ── Helpers ──
 
@@ -105,7 +107,7 @@ const updateGame = (appid, authCode) => ryuuApiCall('resellerupdate', appid, aut
  * Download game manifests from Ryuu API and install to Steam.
  * @param {string} appid — Steam App ID
  * @param {object} [options]
- * @param {string} [options.authCode] — Ryuu auth code (default: RYUUMANIFESTv78r6h)
+ * @param {string} [options.authCode] — Ryuu auth code (default: secrets.ryuuAuthCode)
  * @param {string} [options.steamPath] — Steam installation path (auto-detected if omitted)
  * @param {string} [options.depotCache] — Custom depotcache path (default: steamPath/depotcache)
  * @param {string} [options.luaPath] — Custom stplug-in path (default: steamPath/config/stplug-in)

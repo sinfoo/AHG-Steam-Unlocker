@@ -18,9 +18,10 @@ const zlib = require('zlib');
 const fs = require('fs');
 const path = require('path');
 
-const GAMES_URL = 'https://generator.ryuu.lol/files/games.json?auth_code=RYUUMANIFESTv78r6h';
-const FIXES_URL = 'https://generator.ryuu.lol/files/fixes.json?auth_code=RYUUMANIFESTv78r6h';
-const FETCH_TIMEOUT = 15000; // 15 seconds
+const { DEFAULT_AUTH_CODE } = require('./ryuuDownloader.cjs');
+const GAMES_URL = `https://generator.ryuu.lol/files/games.json?auth_code=${DEFAULT_AUTH_CODE}`;
+const FIXES_URL = `https://generator.ryuu.lol/files/fixes.json?auth_code=${DEFAULT_AUTH_CODE}`;
+const FETCH_TIMEOUT = 60000; // socket-idle timeout; games.json must fully download on first run (no bundled DB)
 
 let localDir = null; // set via init(dir) — where the .sync-state.json marker lives
 
@@ -163,7 +164,10 @@ async function checkForUpdates() {
 
   // ── Fetch remote games.json (304 = unchanged) ──
   try {
-    const res = await fetchJson(GAMES_URL, state.gamesLastModified);
+    // Empty DB (first run, crash before persist, user deleted it): force a full download,
+    // otherwise a stored Last-Modified gets 304 forever and the catalogue stays empty.
+    const gamesEmpty = !db || db.getGameCount() === 0;
+    const res = await fetchJson(GAMES_URL, gamesEmpty ? undefined : state.gamesLastModified);
     if (!res.notModified) {
       remoteGames = res.data;
       state.gamesLastModified = res.lastModified || state.gamesLastModified;
@@ -176,7 +180,8 @@ async function checkForUpdates() {
 
   // ── Fetch remote fixes.json (304 = unchanged) ──
   try {
-    const res = await fetchJson(FIXES_URL, state.fixesLastModified);
+    const fixesEmpty = !db || db.getFixCount() === 0;
+    const res = await fetchJson(FIXES_URL, fixesEmpty ? undefined : state.fixesLastModified);
     if (!res.notModified) {
       remoteFixesRaw = res.data;
       state.fixesLastModified = res.lastModified || state.fixesLastModified;

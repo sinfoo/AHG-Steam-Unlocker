@@ -618,7 +618,7 @@ class NativeScrollMixin:
 #  LICENSE SYSTEM
 # ─────────────────────────────────────────────────────────────────────────────
 
-GIST_ID = "02dd98bd9581f70b6e88d333e59332dc"
+GIST_ID = os.environ.get("LICENSE_GIST_ID", "")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 if not GITHUB_TOKEN:
     print("ERROR: GITHUB_TOKEN env var not set")

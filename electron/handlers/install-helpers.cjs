@@ -269,9 +269,9 @@ async function downloadWithDepotDownloader(appid, depotCache, luaPath, sendLog) 
     // Check for downloaded files
     let manifestCount = 0;
 
-    function searchAndCopy(dir) {
+    async function searchAndCopy(dir) {
       if (!fs.existsSync(dir)) return;
-      const files = fs.readdirSync(dir, { recursive: true, withFileTypes: true });
+      const files = await fs.promises.readdir(dir, { recursive: true, withFileTypes: true });
       for (const file of files) {
         if (file.isFile()) {
           const filePath = path.join(file.path || dir, file.name);
@@ -279,17 +279,17 @@ async function downloadWithDepotDownloader(appid, depotCache, luaPath, sendLog) 
 
           if (ext === '.manifest') {
             const destPath = path.join(depotCache, file.name);
-            fs.copyFileSync(filePath, destPath);
+            await fs.promises.copyFile(filePath, destPath);
             manifestCount++;
           } else if (ext === '.lua' || file.name.endsWith('.lua')) {
             const luaDest = path.join(luaPath, appid + '.lua');
-            fs.copyFileSync(filePath, luaDest);
+            await fs.promises.copyFile(filePath, luaDest);
           }
         }
       }
     }
 
-    searchAndCopy(tempDir);
+    await searchAndCopy(tempDir);
 
     // Clean up temp directory
     try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (e) {

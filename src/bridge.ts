@@ -528,11 +528,6 @@ export const bridge = {
     return { loaded: false, keysFound: 'none' }
   },
 
-  async setDiscordConfig(config: { clientSecret?: string }): Promise<{ success: boolean; message?: string }> {
-    const api = getAPI()
-    if (api && api.setDiscordConfig) return api.setDiscordConfig(config)
-    return { success: false, message: 'Not available' }
-  },
 
   async setGameSharing(enabled: boolean): Promise<{ success: boolean }> {
     const api = getAPI()

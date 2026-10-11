@@ -1228,9 +1228,10 @@ async function downloadWithDepotDownloader(appid, depotCache, luaPath, sendLog) 
     sendLog('Checking downloaded files in: ' + tempDir);
     let manifestCount = 0;
     
-    function searchAndCopy(dir) {
+    // Async: a large DepotDownloader temp tree froze the main process when walked sync.
+    async function searchAndCopy(dir) {
       if (!fs.existsSync(dir)) return;
-      const files = fs.readdirSync(dir, { recursive: true, withFileTypes: true });
+      const files = await fs.promises.readdir(dir, { recursive: true, withFileTypes: true });
       for (const file of files) {
         if (file.isFile()) {
           const filePath = path.join(file.path || dir, file.name);
@@ -1238,19 +1239,19 @@ async function downloadWithDepotDownloader(appid, depotCache, luaPath, sendLog) 
           
           if (ext === '.manifest') {
             const destPath = path.join(depotCache, file.name);
-            fs.copyFileSync(filePath, destPath);
+            await fs.promises.copyFile(filePath, destPath);
             manifestCount++;
             sendLog('Copied manifest: ' + file.name);
           } else if (ext === '.lua' || file.name.endsWith('.lua')) {
             const luaDest = path.join(luaPath, appid + '.lua');
-            fs.copyFileSync(filePath, luaDest);
+            await fs.promises.copyFile(filePath, luaDest);
             sendLog('Copied LUA: ' + file.name);
           }
         }
       }
     }
     
-    searchAndCopy(tempDir);
+    await searchAndCopy(tempDir);
     
     // Clean up temp directory
     try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (e) {}
@@ -1280,7 +1281,7 @@ async function downloadWithDepotDownloader(appid, depotCache, luaPath, sendLog) 
 // ── Generator.ryuu.lol PRIMARY — tried before ANY mirror ──
 // Uses the reseller panel API key to fetch manifests + LUA directly.
 // Endpoints: secure_download (manifests ZIP) and resellerlua (LUA file)
-const RYUU_API_KEY = 'RYUUMANIFESTv78r6h';
+const RYUU_API_KEY = require('./ryuuDownloader.cjs').DEFAULT_AUTH_CODE;
 const RYUU_BASE = 'https://generator.ryuu.lol';
 
 async function tryRyuuLolPrimary(appid, depotCache, luaPath, sendLog, signal) {
@@ -2291,7 +2292,7 @@ ipcMain.handle('install-game-from-zip', async (event, appid) => {
     sendLog(`Installing App ${appid} from local ZIP...`);
     sendLog(`File: ${path.basename(zipFilePath)}`);
     
-    const zipBuffer = fs.readFileSync(zipFilePath);
+    const zipBuffer = await fs.promises.readFile(zipFilePath);
     
     // Check for valid ZIP (starts with PK)
     if (zipBuffer.length < 4 || zipBuffer[0] !== 0x50 || zipBuffer[1] !== 0x4B) {
@@ -2651,9 +2652,9 @@ ipcMain.handle('register-dlcs', async (event, appid, dlcIds, dlcDetails, sourceR
     try {
       const regPath = path.join(app.getPath('userData'), 'dlc_registry.json');
       let registry = {};
-      try { registry = JSON.parse(fs.readFileSync(regPath, 'utf-8')); } catch (e) {}
+      try { registry = JSON.parse(await fs.promises.readFile(regPath, 'utf-8')); } catch (e) {}
       registry[appid] = dlcIds;
-      fs.writeFileSync(regPath, JSON.stringify(registry));
+      await fs.promises.writeFile(regPath, JSON.stringify(registry));
     } catch (e) {
       console.log('[MAIN] dlc registry error:', e.message);
     }
@@ -2863,7 +2864,7 @@ console.log('[MAIN] get-installed-games handler called');
 // handled by handlers/installed.cjs: ipcMain.handle('remove-installed-game', ...)
 
 // GitHub Update Checker
-const GITHUB_REPO = 'ahg-team/AHG-Steam-Unlocker';
+const GITHUB_REPO = 'sinfoo/AHG-Steam-Unlocker';
 
 // handled by handlers/updates.cjs: ipcMain.handle('check-for-updates', ...)
 
@@ -3057,6 +3058,7 @@ app.whenReady().then(async () => {
   // via 304 and games.json transfers gzipped (~4.5 MB).
   const runRemoteSync = async () => {
     try {
+      const wasEmpty = db.getGameCount() === 0;
       const result = await remoteSyncManager.checkForUpdates();
       // Persist new + updated GAMES into games.db so they survive a restart and appear in
       // the catalogue on next load (the renderer reads games.db).
@@ -3081,6 +3083,11 @@ app.whenReady().then(async () => {
       } catch (e) { console.warn('[MAIN] Remote sync fixes upsert failed:', e.message); }
       console.log('[MAIN] Remote sync result:', result.newGames?.length || 0, 'new games,', result.newFixes?.length || 0, 'new fixes');
       const wc = mainWindow?.webContents;
+      if (wasEmpty && db.getGameCount() > 0 && wc && !wc.isDestroyed()) {
+        console.log('[MAIN] First-run catalogue built — reloading window to load it');
+        wc.reload();
+        return;
+      }
       if (wc && !wc.isDestroyed()) {
         wc.send('remote-sync-updated', {
           newGames: result.newGames || [],
@@ -3094,8 +3101,15 @@ app.whenReady().then(async () => {
       console.warn('[MAIN] Remote sync failed:', e.message);
     }
   };
-  setTimeout(runRemoteSync, 3000); // 3s delay to let the app finish loading
-  setInterval(runRemoteSync, 30 * 60 * 1000); // re-check while the app stays open
+  // In-flight guard: the first-run catalogue bootstrap can outlast the interval.
+  let remoteSyncRunning = false;
+  const guardedRemoteSync = async () => {
+    if (remoteSyncRunning) return;
+    remoteSyncRunning = true;
+    try { await runRemoteSync(); } finally { remoteSyncRunning = false; }
+  };
+  setTimeout(guardedRemoteSync, 3000); // 3s delay to let the app finish loading
+  setInterval(guardedRemoteSync, 30 * 60 * 1000); // re-check while the app stays open
 
   // ── Custom Fixes: check GitHub releases after startup ──
   setTimeout(async () => {
@@ -3121,25 +3135,27 @@ app.whenReady().then(async () => {
       lastOwnedGames = JSON.parse(fs.readFileSync(ownedPath, 'utf-8'));
     }
   } catch (_) {}
+  // Async I/O: a sync scan of every library folder blocked the main loop every 2 min.
+  const exists = (p) => fs.promises.access(p).then(() => true, () => false);
   setInterval(async () => {
     try {
       const steamPath = findSteamPath(state.customSteamConfig);
-      if (!steamPath || !fs.existsSync(steamPath)) return;
+      if (!steamPath || !(await exists(steamPath))) return;
 
       const libraryFolders = [];
       const mainSteamApps = path.join(steamPath, 'steamapps');
-      if (fs.existsSync(mainSteamApps)) libraryFolders.push(mainSteamApps);
+      if (await exists(mainSteamApps)) libraryFolders.push(mainSteamApps);
 
       const libraryVdf = path.join(steamPath, 'steamapps', 'libraryfolders.vdf');
-      if (fs.existsSync(libraryVdf)) {
-        const vdfContent = fs.readFileSync(libraryVdf, 'utf-8');
+      if (await exists(libraryVdf)) {
+        const vdfContent = await fs.promises.readFile(libraryVdf, 'utf-8');
         const pathMatches = vdfContent.match(/"path"\s+"([^"]+)"/g);
         if (pathMatches) {
           for (const match of pathMatches) {
             const libPath = match.match(/"path"\s+"([^"]+)"/)?.[1];
             if (libPath) {
               const appsDir = path.join(libPath, 'steamapps');
-              if (fs.existsSync(appsDir)) libraryFolders.push(appsDir);
+              if (await exists(appsDir)) libraryFolders.push(appsDir);
             }
           }
         }
@@ -3148,7 +3164,7 @@ app.whenReady().then(async () => {
       const detectedAppids = new Set();
       for (const folder of libraryFolders) {
         try {
-          const files = fs.readdirSync(folder);
+          const files = await fs.promises.readdir(folder);
           for (const file of files) {
             const m = file.match(/^appmanifest_(\d+)\.acf$/i);
             if (m) detectedAppids.add(String(m[1]));

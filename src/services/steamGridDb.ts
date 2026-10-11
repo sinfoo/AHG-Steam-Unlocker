@@ -47,7 +47,7 @@ function getApiKey(): string {
     if (stored) return stored
   } catch { /* localStorage unavailable (e.g. SSR) */ }
   // Compile-time default from env or hardcoded
-  const key = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SGDB_API_KEY) || '1e7c6c08249aa540c0840b5d95677c12'
+  const key = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SGDB_API_KEY) || ''
   return key as string
 }
 

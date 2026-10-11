@@ -1,4 +1,3 @@
-config/secrets.json
 secrets.json
 # The packaged copy holds the same live bot token + GitHub PAT and was NOT ignored.
 resources/config/secrets.json
@@ -46,3 +45,20 @@ depotdownloader/DepotDownloader.exe
 games.db
 fixes.db
 config/discord-release.json
+
+# archive of removed files (delete when satisfied)
+_ARCHIVE/
+# build intermediates / caches
+native/build/**/*.obj
+native/build/**/*.tlog
+native/build/**/*.pdb
+__pycache__/
+*.pyc
+
+# bot secrets/state
+bot/.env
+bot/media_stats.json
+bot/bot.log
+
+# Private repo: app keys are shared with the team (they ship inside the app anyway)
+!config/secrets.json

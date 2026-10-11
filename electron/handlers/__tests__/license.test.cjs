@@ -21,7 +21,6 @@ const MODULE_PATH = path.resolve(__dirname, '../license.cjs');
 const ELEC_MOCK_ID = path.resolve(__dirname, '.license-elec-mock.cjs');
 const SECRETS_MOCK_ID = path.resolve(__dirname, '.license-secrets-mock.cjs');
 const DISCORD_MOCK_ID = path.resolve(__dirname, '.license-discord-mock.cjs');
-const HTTPS_MOCK_ID = path.resolve(__dirname, '.license-https-mock.cjs');
 
 const THIS_MACHINE = 'C48FB794-6144-F046-9B36-DA552A4270A6';
 const OTHER_MACHINE = 'AAAAAAAA-1111-2222-3333-BBBBBBBBBBBB';
@@ -30,7 +29,8 @@ const KEY = '556909806582235177';
 let handlers;
 let fakeFiles;      // virtual userData filesystem
 let gistResponse;   // { status, body } returned by the mocked https.get
-let writeStatus;    // HTTP status returned by the mocked https.request (gist PATCH)
+let writeStatus;    // 200 = bot persisted the binding; anything else = bot's gist write failed
+let origFetch;
 
 function stub(id, exports) {
   require.cache[id] = { id, filename: id, loaded: true, exports, paths: [], children: [] };
@@ -46,43 +46,32 @@ function setupMocks() {
     app: { getPath: () => '/userData', isPackaged: true },
     BrowserWindow: { getAllWindows: () => [] },
   });
-  stub(SECRETS_MOCK_ID, { secrets: { licenseGistId: 'gist123', githubToken: 'tok' } });
+  stub(SECRETS_MOCK_ID, { secrets: { licenseApiUrl: 'https://license.test' } });
   stub(DISCORD_MOCK_ID, { DISCORD_INVITE_URL: 'https://discord.gg/TEST' });
 
-  // Minimal https that replays `gistResponse` for reads and `writeStatus` for writes.
-  stub(HTTPS_MOCK_ID, {
-    get(_url, _opts, cb) {
-      const res = {
-        statusCode: gistResponse.status,
-        on(evt, fn) {
-          if (evt === 'data' && gistResponse.body != null) fn(gistResponse.body);
-          if (evt === 'end') setImmediate(fn);
-          return res;
-        },
-      };
-      const req = { on(evt, fn) { if (evt === 'error' && gistResponse.networkError) setImmediate(() => fn(new Error('ENOTFOUND'))); return req; }, destroy() {} };
-      if (!gistResponse.networkError) setImmediate(() => cb(res));
-      return req;
-    },
-    request(_opts, cb) {
-      const res = {
-        statusCode: writeStatus,
-        on(evt, fn) {
-          if (evt === 'data') fn('{}');
-          if (evt === 'end') setImmediate(fn);
-          return res;
-        },
-      };
-      setImmediate(() => cb(res));
-      return { on() { return this; }, write() {}, end() {} };
-    },
-  });
+  // Fake license API (the Discord bot): answers from `gistResponse`'s registry with the
+  // same status semantics as bot.py, and fails activation writes when writeStatus != 200.
+  origFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    if (gistResponse.networkError) throw new Error('ENOTFOUND');
+    if (gistResponse.status !== 200) return { ok: false, status: gistResponse.status };
+    let reg;
+    try { reg = JSON.parse(JSON.parse(gistResponse.body).files['license_keys.json'].content); }
+    catch { return { ok: true, status: 200, json: async () => { throw new Error('bad json'); } }; }
+    const { key, machineId } = JSON.parse(opts.body);
+    const v = reg[key];
+    let status = v === undefined ? 'missing' : (v === 'used' || v === 'pending') ? v : v === machineId ? 'bound' : 'other';
+    if (url.endsWith('/license/activate') && status === 'pending') {
+      if (writeStatus !== 200) return { ok: false, status: 503 };
+      status = 'bound';
+    }
+    return { ok: true, status: 200, json: async () => ({ status }) };
+  };
 
   const origResolve = Module._resolveFilename;
   Module._resolveFilename = function (request, parent, isMain) {
     if (request === 'electron') return ELEC_MOCK_ID;
-    if (request === 'https') return HTTPS_MOCK_ID;
-    if (request === '../utils/secrets.cjs') return SECRETS_MOCK_ID;
+    if (request === '../utils/secrets.cjs' || request === './secrets.cjs') return SECRETS_MOCK_ID;
     if (request === './discord.cjs') return DISCORD_MOCK_ID;
     return origResolve.call(this, request, parent, isMain);
   };
@@ -106,7 +95,8 @@ function setupMocks() {
 
   return function restore() {
     Object.assign(fs, orig);
-    [ELEC_MOCK_ID, SECRETS_MOCK_ID, DISCORD_MOCK_ID, HTTPS_MOCK_ID, MODULE_PATH]
+    global.fetch = origFetch;
+    [ELEC_MOCK_ID, SECRETS_MOCK_ID, DISCORD_MOCK_ID, MODULE_PATH, require.resolve('../../utils/botApi.cjs')]
       .forEach(id => delete require.cache[id]);
     Module._resolveFilename = origResolve;
   };

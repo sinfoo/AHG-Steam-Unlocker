@@ -61,9 +61,15 @@ function findDbDir() {
     }
   }
 
-  console.warn('[DB] games.db not found in any expected location');
-  console.warn('[DB] Searched:', possibleDirs);
-  return possibleDirs[0]; // default
+  // No bundled DB: create it in userData (always writable; resources/ may be read-only).
+  // The startup remote sync then fills it from the Ryuu games.json / fixes.json feed.
+  try {
+    _dbDir = require('electron').app.getPath('userData');
+  } catch (_) {
+    _dbDir = path.resolve(__dirname, '..'); // plain-node (scripts/tests)
+  }
+  console.warn('[DB] games.db not found, will create in:', _dbDir);
+  return _dbDir;
 }
 
 /**
@@ -76,8 +82,7 @@ function findFixesDbPath() {
     console.log('[DB] Found fixes.db at:', p);
     return p;
   }
-  // fallback
-  return path.join(process.resourcesPath || path.resolve(__dirname, '..'), FIXES_DB_FILENAME);
+  return p; // created on first persistFixes() next to games.db
 }
 
 /**
@@ -96,15 +101,32 @@ async function initialize() {
     const gamesDbPath = path.join(findDbDir(), DB_FILENAME);
     console.log('[DB] Opening games.db:', gamesDbPath);
 
-    if (!fs.existsSync(gamesDbPath)) {
-      console.error('[DB] CRITICAL: games.db not found at', gamesDbPath);
-      console.error('[DB] Run node scripts/convert-to-sqlite.js first');
-      throw new Error('games.db not found - run conversion script');
+    if (fs.existsSync(gamesDbPath)) {
+      const gamesBuffer = fs.readFileSync(gamesDbPath);
+      _db = new SQL.Database(gamesBuffer);
+      console.log('[DB] games.db opened, size:', (gamesBuffer.length / 1024 / 1024).toFixed(1), 'MB');
+    } else {
+      // First run: empty schema. Remote sync sees every Ryuu game as "new" and
+      // upserts + persists the full catalogue (one-time, ~176k rows).
+      console.warn('[DB] games.db missing, creating empty catalogue at', gamesDbPath);
+      _db = new SQL.Database();
+      _db.run(`
+        CREATE TABLE IF NOT EXISTS games (
+          appid TEXT PRIMARY KEY, name TEXT DEFAULT '', added_date TEXT DEFAULT '',
+          updated_date TEXT DEFAULT '', type TEXT DEFAULT '', tags TEXT DEFAULT '[]',
+          nsfw INTEGER DEFAULT 0, drm INTEGER DEFAULT 0, dlc TEXT DEFAULT '{}',
+          header_image TEXT DEFAULT '', genres TEXT DEFAULT '[]', platforms TEXT DEFAULT '[]'
+        )
+      `);
+      _db.run('CREATE INDEX IF NOT EXISTS idx_games_name  ON games(name COLLATE NOCASE)');
+      _db.run('CREATE INDEX IF NOT EXISTS idx_games_added ON games(added_date)');
+      _db.run('CREATE INDEX IF NOT EXISTS idx_games_type  ON games(type)');
+      _db.run('CREATE INDEX IF NOT EXISTS idx_games_nsfw  ON games(nsfw)');
+      _db.run('CREATE INDEX IF NOT EXISTS idx_games_drm   ON games(drm)');
+      _db.run("CREATE VIRTUAL TABLE IF NOT EXISTS games_fts USING fts4(name, content='games')");
+      _db.run('CREATE TABLE IF NOT EXISTS _schema_version (version INTEGER, applied_at TEXT)');
+      _db.run("INSERT INTO _schema_version VALUES (1, datetime('now'))");
     }
-
-    const gamesBuffer = fs.readFileSync(gamesDbPath);
-    _db = new SQL.Database(gamesBuffer);
-    console.log('[DB] games.db opened, size:', (gamesBuffer.length / 1024 / 1024).toFixed(1), 'MB');
 
     // Drop FTS triggers — they cause errors with sql.js FTS4 implementation.
     // FTS index is managed explicitly in upsertGame/deleteGame instead.
@@ -497,8 +519,43 @@ function upsertGames(games) {
   let count = 0;
   try {
     _db.run('BEGIN TRANSACTION');
-    for (const g of games) {
-      if (upsertGame(g)) count++;
+    const empty = _db.exec('SELECT 1 FROM games LIMIT 1').length === 0;
+    if (empty && games.length > 1000) {
+      // First-run bootstrap: nothing to merge, so skip upsertGame's per-row lookup +
+      // FTS sync (~18s for 73k rows) and rebuild the FTS index once at the end.
+      const now = new Date().toISOString();
+      const stmt = _db.prepare(`
+        INSERT OR REPLACE INTO games
+          (appid, name, added_date, updated_date, type, tags, nsfw, drm, dlc, header_image, genres, platforms)
+        VALUES
+          ($appid, $name, $added_date, $updated_date, $type, $tags, $nsfw, $drm, $dlc, $header_image, $genres, $platforms)
+      `);
+      try {
+        for (const g of games) {
+          stmt.run({
+            $appid:        String(g.appid ?? ''),
+            $name:         String(g.name ?? ''),
+            $added_date:   String(g.added_date ?? now),
+            $updated_date: String(g.updated_date ?? now),
+            $type:         String(g.type ?? 'game'),
+            $tags:         JSON.stringify(g.tags ?? []),
+            $nsfw:         g.nsfw ? 1 : 0,
+            $drm:          g.drm ? 1 : 0,
+            $dlc:          JSON.stringify(g.dlc ?? {}),
+            $header_image: String(g.header_image ?? ''),
+            $genres:       JSON.stringify(g.genres ?? []),
+            $platforms:    JSON.stringify(g.platforms ?? []),
+          });
+          count++;
+        }
+      } finally {
+        stmt.free();
+      }
+      _db.run("INSERT INTO games_fts(games_fts) VALUES('rebuild')");
+    } else {
+      for (const g of games) {
+        if (upsertGame(g)) count++;
+      }
     }
     _db.run('COMMIT');
   } catch (err) {

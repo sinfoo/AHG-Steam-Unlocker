@@ -211,7 +211,6 @@ interface ElectronAPI {
   getDiscordStartupPref?: () => Promise<{ showOnStartup: boolean }>
   setDiscordStartupPref?: (pref: { showOnStartup: boolean }) => Promise<{ success: boolean; message?: string }>
   getSecretsDiag?: () => Promise<any>
-  setDiscordConfig?: (config: { clientSecret?: string }) => Promise<{ success: boolean; message?: string }>
 
   // ── v0.8 Restart App (after update) ──
   restartApp?: () => Promise<void>

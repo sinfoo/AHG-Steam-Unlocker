@@ -61,12 +61,8 @@
       "!instructions/**",
       "!.claude/**",
       "!.omo/**",
-      "!.opencode/**",
-      "!.sisyphus/**",
       "!.suggestions/**",
-      "!.anchorsummary.md",
       "!e2e/**",
-      "!tests/**",
       "!*.md",
       "!*.bat",
       "!resources/app.asar",
@@ -89,7 +85,15 @@
       "!**/__tests__/**",
       "!**/*.test.cjs",
       "!**/*.map",
-      "!*.log"
+      "!*.log",
+      "!assets/**",
+      "!scripts/**",
+      "!*.txt",
+      "!native/build/**/*.obj",
+      "!native/build/**/*.tlog",
+      "!native/build/**/*.pdb",
+      "!dist/**/*.map",
+      "!bot/**"
     ],
     "asarUnpack": [
       "dist/assets/**",
@@ -98,14 +102,6 @@
       "node_modules/sql.js/dist/*.wasm"
     ],
     "extraResources": [
-      {
-        "from": "games.db",
-        "to": "games.db"
-      },
-      {
-        "from": "fixes.db",
-        "to": "fixes.db"
-      },
       {
         "from": "resources/cover-seed",
         "to": "cover-seed"
@@ -117,5 +113,9 @@
       ],
       "icon": "AHG Unlocker Icon.ico"
     }
+  },
+  "allowScripts": {
+    "electron@33.4.11": true,
+    "esbuild@0.28.2": true
   }
 }

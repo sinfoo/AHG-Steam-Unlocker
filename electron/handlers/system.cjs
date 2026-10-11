@@ -21,6 +21,9 @@ const getSteamStatusCached = withCache(async () => {
   return { running, version: '2.0' };
 }, 60_000);
 
+const freeCache = new Map(); // appid -> { free, at }
+const FREE_TTL = 24 * 60 * 60 * 1000;
+
 function registerSystemHandlers() {
   const downloadControllers = state.downloadControllers;
   // ── Show context menu from renderer-provided items ──
@@ -164,45 +167,50 @@ function registerSystemHandlers() {
   });
 
   // ── Check which appids are free on Steam ──
+  // Free status rarely changes: cache per appid for 24h so boot + rescans don't re-hit
+  // Steam, and query 4 batches at a time instead of 200 strictly serial requests.
+  // ponytail: in-memory cache only (lost on restart); persist to userData if boot cost matters.
   ipcMain.handle('check-free-games', wrapHandler('check-free-games', async (event, appids) => {
     if (!appids || !Array.isArray(appids) || appids.length === 0) return [];
     try {
-      const freeAppids = [];
-      let consecutiveErrors = 0;
-      for (let i = 0; i < appids.length; i += 10) {
-        const batch = appids.slice(i, i + 10);
-        const ids = batch.join(',');
-        const url = `https://store.steampowered.com/api/appdetails?appids=${ids}&cc=us&l=en&filters=price_overview`;
-        try {
-          const data = await new Promise((resolve, reject) => {
-            const u = new URL(url);
-            const req = https.get({
-              hostname: u.hostname, path: u.pathname + u.search,
-              headers: { 'User-Agent': 'AHG-Unlocker/1.0' }, timeout: 10000
-            }, (rsp) => {
-              if (rsp.statusCode !== 200) { reject(new Error('HTTP ' + rsp.statusCode)); return; }
-              const buf = [];
-              rsp.on('data', c => buf.push(c));
-              rsp.on('end', () => resolve(JSON.parse(Buffer.concat(buf).toString())));
+      const now = Date.now();
+      const todo = appids.map(String).filter(id => !((freeCache.get(id) || {}).at > now - FREE_TTL));
+      const batches = [];
+      for (let i = 0; i < todo.length; i += 10) batches.push(todo.slice(i, i + 10));
+      let errors = 0;
+      const worker = async () => {
+        while (batches.length && errors < 3) {
+          const batch = batches.shift();
+          const url = `https://store.steampowered.com/api/appdetails?appids=${batch.join(',')}&cc=us&l=en&filters=price_overview`;
+          try {
+            const data = await new Promise((resolve, reject) => {
+              const u = new URL(url);
+              const req = https.get({
+                hostname: u.hostname, path: u.pathname + u.search,
+                headers: { 'User-Agent': 'AHG-Unlocker/1.0' }, timeout: 10000
+              }, (rsp) => {
+                if (rsp.statusCode !== 200) { rsp.resume(); reject(new Error('HTTP ' + rsp.statusCode)); return; }
+                const buf = [];
+                rsp.on('data', c => buf.push(c));
+                rsp.on('end', () => { try { resolve(JSON.parse(Buffer.concat(buf).toString())); } catch (e) { reject(e); } });
+              });
+              req.on('error', reject);
+              req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
             });
-            req.on('error', reject);
-            req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
-            req.end();
-          });
-          consecutiveErrors = 0;
-          for (const [id, info] of Object.entries(data)) {
-            if (info && info.success) {
+            errors = 0;
+            for (const [id, info] of Object.entries(data || {})) {
+              if (!info || !info.success) continue;
               const price = info.data && info.data.price_overview;
-              if (!price || price.initial === 0) { freeAppids.push(id); }
+              freeCache.set(id, { free: !price || price.initial === 0, at: Date.now() });
             }
+          } catch (e) {
+            errors++; // 3 consecutive failures (e.g. Steam 429) stop all workers
+            await new Promise(r => setTimeout(r, 500));
           }
-        } catch (e) {
-          consecutiveErrors++;
-          if (consecutiveErrors >= 3) { break; }
-          await new Promise(r => setTimeout(r, 500));
         }
-      }
-      return freeAppids;
+      };
+      await Promise.all([worker(), worker(), worker(), worker()]);
+      return appids.map(String).filter(id => (freeCache.get(id) || {}).free);
     } catch (e) {
       console.error('[MAIN] check-free-games error:', e.message);
       return [];

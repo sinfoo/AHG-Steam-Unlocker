@@ -2,11 +2,19 @@
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
+const crypto = require('crypto');
 const AdmZip = require('adm-zip');
 const { ipcMain, app } = require('electron');
 const state = require('../utils/state.cjs');
 
-const GITHUB_REPO = 'ahg-team/AHG-Steam-Unlocker';
+// Public, binaries-only repo: the source repo is private, so unauthenticated
+// release checks against it 404.
+const GITHUB_REPO = 'sinfoo/AHG-Steam-Unlocker-Releases';
+
+// The asset found by the last check-for-updates. download-update only accepts this
+// URL and verifies its sha256, so a compromised renderer can't make us stage
+// arbitrary code, and a corrupted/tampered download is rejected.
+let checkedAsset = null;
 
 function countFiles(dir) {
   let count = 0;
@@ -208,19 +216,18 @@ function registerUpdateHandlers() {
   ipcMain.handle('check-for-updates', async () => {
     console.log('[MAIN] Checking for updates from GitHub...');
     try {
-      const url = `https://api.github.com/repos/${GITHUB_REPO}/releases`;
+      // /releases/latest skips drafts and prereleases (releases[0] could be a draft).
+      const url = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
       const res = await httpsGet(url, {
         'User-Agent': 'AHG-Steam-Unlocker',
         'Accept': 'application/vnd.github.v3+json',
       });
       const chunks = [];
       for await (const chunk of res) chunks.push(chunk);
-      const releases = JSON.parse(Buffer.concat(chunks).toString());
-      if (!releases || releases.length === 0) {
+      const latest = JSON.parse(Buffer.concat(chunks).toString());
+      if (!latest || !latest.tag_name) {
         return { success: false, message: 'No releases found' };
       }
-
-      const latest = releases[0];
       const currentVersion = (app.getVersion() || '').replace(/^v/, '');
       const normalizeVer = (v) => (v || '').replace(/^v/, '').replace(/(\.0)+$/, '');
       const latestTag = normalizeVer(latest.tag_name || '');
@@ -237,6 +244,7 @@ function registerUpdateHandlers() {
       }
 
       const asset = pickReleaseAsset(latest.assets);
+      checkedAsset = asset ? { url: asset.browser_download_url, digest: asset.digest || null } : null;
       return {
         success: true,
         latestTag,
@@ -260,12 +268,13 @@ function registerUpdateHandlers() {
   ipcMain.handle('download-update', async (event, downloadUrl, savePath) => {
     console.log('[MAIN] Downloading update from:', downloadUrl);
     try {
-      if (!downloadUrl || !/^https:\/\//.test(downloadUrl)) {
-        return { success: false, message: 'Invalid download URL' };
+      if (!checkedAsset || downloadUrl !== checkedAsset.url) {
+        return { success: false, message: 'Invalid download URL — check for updates first' };
       }
       const tempDir = app.getPath('temp');
       const zipFileName = 'ahg-update.zip';
-      const finalSavePath = savePath || path.join(tempDir, zipFileName);
+      // Always the temp dir: never write to a renderer-chosen path.
+      const finalSavePath = path.join(tempDir, zipFileName);
 
       const res = await httpsGet(downloadUrl, {
         'User-Agent': 'AHG-Steam-Unlocker',
@@ -281,6 +290,14 @@ function registerUpdateHandlers() {
         }
       });
       console.log('[MAIN] Update ZIP saved to:', finalSavePath);
+      if (checkedAsset.digest) {
+        const [algo, expected] = checkedAsset.digest.split(':');
+        const actual = crypto.createHash(algo).update(fs.readFileSync(finalSavePath)).digest('hex');
+        if (actual !== expected) {
+          try { fs.unlinkSync(finalSavePath); } catch { /* best effort */ }
+          return { success: false, message: 'Update download failed integrity check — please retry' };
+        }
+      }
 
       // Stage the update — actual file replacement happens on restart, when the
       // exe/asar are no longer locked. Layout is validated here so a bad package

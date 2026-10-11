@@ -12,6 +12,8 @@ export interface Game {
   nsfw?: boolean
   drm?: boolean
   dlc?: Record<string, unknown>
+  /** DLC count shipped in the boot catalogue instead of the full dlc map */
+  dlc_count?: number
   header_image?: string
   short_description?: string
   isDlc?: boolean

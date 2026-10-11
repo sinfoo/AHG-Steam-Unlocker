@@ -56,7 +56,8 @@ function getApiConfig() {
   } catch (e) {
     console.error('[STEAM] Error loading API config:', e.message);
   }
-  return { ryuu: { auth_code: 'RYUUMANIFESTv78r6h', enabled: true }, steamgriddb: { api_key: '1e7c6c08249aa540c0840b5d95677c12', enabled: true } };
+  const { secrets } = require('./secrets.cjs');
+  return { ryuu: { auth_code: secrets.ryuuAuthCode || '', enabled: true }, steamgriddb: { api_key: secrets.steamGridDbApiKey || '', enabled: true } };
 }
 
 function saveApiConfig(config) {

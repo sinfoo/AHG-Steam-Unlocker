@@ -29,9 +29,10 @@ export function useContentSync() {
       if (newGames.length > 0) {
         const prev = useGameStore.getState().games
         const have = new Set(prev.map((g: any) => String(g.appid)))
+        // Same shape as the boot catalogue: no DLC entries, dlc map -> dlc_count.
         const fresh = newGames
-          .filter((g: any) => g?.appid && !have.has(String(g.appid)))
-          .map((g: any) => ({ ...g, appid: String(g.appid) }))
+          .filter((g: any) => g?.appid && !have.has(String(g.appid)) && g.type !== 'dlc')
+          .map(({ dlc, ...g }: any) => ({ ...g, appid: String(g.appid), isDlc: false, dlc_count: dlc ? Object.keys(dlc).length : 0 }))
         if (fresh.length > 0) useGameStore.getState().setGames([...prev, ...fresh])
       }
 
@@ -42,6 +43,16 @@ export function useContentSync() {
         if (stale.length > 0) {
           useGameStore.getState().setGamesWithUpdates(prev => new Set([...prev, ...stale]))
         }
+      }
+
+      // Fixes were already persisted to fixes.db by main — reload them into the store.
+      if (newFixes.length || updatedFixes.length) {
+        bridge.getInitData().then((d: any) => {
+          if (!Array.isArray(d?.fixes)) return
+          const have = new Set(d.fixes.map((f: any) => f.appid))
+          const custom = Array.isArray(d.customFixes) ? d.customFixes.filter((f: any) => !have.has(f.appid)) : []
+          useGameStore.getState().setFixes([...d.fixes, ...custom])
+        }).catch(() => {})
       }
 
       const bits: string[] = []

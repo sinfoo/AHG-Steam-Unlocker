@@ -7,14 +7,14 @@
 > ⚠️ **MANDATORY READ ORDER — Execute in this exact order every session:**
 >
 > 1. `AGENTS.md` (this file) — Project-specific rules, autonomy charter, overrides
-> 2. `SESSION.md` — Last session context, active tasks, error registry
-> 3. `TODO.md` — All work items with priority, skill routing, MCP routing
+> 2. `docs/planning/SESSION.md` — Last session context, active tasks, error registry
+> 3. `docs/planning/TODO.md` — All work items with priority, skill routing, MCP routing
 > 4. `docs/GLOBAL-SUPERPOWERS.md` (trimmed) — Global workflow + project overrides
 > 5. `docs/SISYPHUS-MANUAL.md` — Operating procedures, delegation patterns
 >
 > **CONDITIONAL — read only when relevant:**
 > - `docs/DECISIONS.md` — Before any architecture change
-> - `SKILLS-INSTALLED.md` — Before installing a skill
+> - `docs/planning/SKILLS-INSTALLED.md` — Before installing a skill
 > - `docs/DEVELOPMENT_MEMORY_BEAST.md` — Before complex tasks or project-level changes
 >
 > **PROJECT RULE ALWAYS WINS**: If this file conflicts with global files → this file wins.
@@ -58,11 +58,11 @@ Sisyphus operates with maximum autonomy on this project. This means:
 | File | Location | Purpose | Read when |
 |------|----------|---------|-----------|
 | `AGENTS.md` | root | Project rules, autonomy charter, overrides | Boot Step 3 |
-| `SESSION.md` | root | Active session, error registry, work log, compaction | Boot Step 4 |
-| `TODO.md` | root | All tasks, priorities, skill+MCP routing | Boot Step 5 |
+| `docs/planning/SESSION.md` | root | Active session, error registry, work log, compaction | Boot Step 4 |
+| `docs/planning/TODO.md` | root | All tasks, priorities, skill+MCP routing | Boot Step 5 |
 | `docs/DECISIONS.md` | docs/ | Permanent architectural decisions | Before architecture changes |
 | `docs/SESSION-ARCHIVE.md` | docs/ | Compressed past sessions | When researching history |
-| `SKILLS-INSTALLED.md` | root | Skill audit log | Before installing any skill |
+| `docs/planning/SKILLS-INSTALLED.md` | root | Skill audit log | Before installing any skill |
 | `docs/DEVELOPMENT_MEMORY_BEAST.md` | docs/ | Full MCP stack, intelligence matrix, project rules | Boot Step 8 reference |
 | `docs/DESIGN.md` | docs/ | Design tokens — source of truth | Before any UI work |
 | `docs/PRODUCT.md` | docs/ | Product context, brand tone, anti-references | Before any product decision |

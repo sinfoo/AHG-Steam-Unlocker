@@ -5,6 +5,7 @@ const http = require('http');
 const { ipcMain, app, shell } = require('electron');
 const state = require('../utils/state.cjs');
 const { wrapHandler } = require('../utils/rateLimiter.cjs');
+const { botApi, resolveBotUrl } = require('../utils/botApi.cjs');
 const { secrets, secretsDiag, DISCORD_CLIENT_ID } = require('../utils/secrets.cjs');
 
 const APP_VERSION = require('../../package.json').version;
@@ -79,12 +80,13 @@ function discordFetchWithToken(endpoint, token) {
   }).then(function(r) {
     if (!r.ok) {
       console.error('[DISCORD] API call to ' + endpoint + ' failed: HTTP', r.status);
-      return null;
+      // null = Discord rejected the token; undefined = could not tell (5xx).
+      return r.status === 401 || r.status === 403 ? null : undefined;
     }
     return r.json();
   }).catch(function(err) {
     console.error('[DISCORD] API call to ' + endpoint + ' network error:', err.message);
-    return null;
+    return undefined; // offline — not a rejection
   });
 }
 
@@ -199,40 +201,10 @@ function startOAuthCallbackServer() {
   });
 }
 
-// ── Helper: post a game message to Discord channel ──
-async function postGameToDiscord(gameName, appid, coverUrl, userName, dlcCount) {
-  try {
-    if (!secrets.discordBotToken) { console.log('[DISCORD] No bot token'); return false; }
-    var fields = [
-      { name: '\u{1F4CB} App ID', value: String(appid), inline: true },
-      { name: '\u{1F4E6} Source', value: 'AHG Unlocker v' + APP_VERSION, inline: true },
-      { name: '\u{1F464} Added by', value: userName || 'A user', inline: true }
-    ];
-    if (dlcCount > 0) {
-      fields.push({ name: '\u{1F3AE} DLCs', value: String(dlcCount) + ' unlocked', inline: true });
-    }
-    var embed = {
-      embeds: [{
-        title: '\u{1F389} ' + gameName,
-        description: '\u{2705} **' + (userName || 'A user') + '** added this game to **AHG Steam Unlocker**',
-        url: 'https://steamdb.info/app/' + appid + '/',
-        color: 0x8b5cf6,
-        fields: fields,
-        image: coverUrl ? { url: coverUrl } : undefined,
-        timestamp: new Date().toISOString(),
-        footer: { text: 'AHG Steam Unlocker', icon_url: 'https://cdn.discord.com/embed/avatars/0.png' }
-      }]
-    };
-    var res = await fetch('https://discord.com/api/v10/channels/' + DISCORD_CHANNEL_ID + '/messages', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bot ' + secrets.discordBotToken, 'Content-Type': 'application/json' },
-      body: JSON.stringify(embed)
-    });
-    return res.ok;
-  } catch (e) {
-    console.error('[DISCORD] Post error:', e.message);
-    return false;
-  }
+// ── Helper: ask the bot to post a game message (the bot token never ships in the app) ──
+async function postGameToDiscord(gameName, appid, coverUrl, accessToken, dlcCount) {
+  const res = await botApi('discord/share', { accessToken, appid, gameName, coverUrl, dlcCount });
+  return !!(res && res.ok);
 }
 
 
@@ -245,6 +217,9 @@ function registerDiscordHandlers() {
       console.log('[DISCORD] Starting OAuth login flow...');
 
       // ── Validate credentials before starting flow ──
+      if (!(await resolveBotUrl())) {
+        return { success: false, message: 'Discord login unavailable — AHG server is offline' };
+      }
       if (!DISCORD_CLIENT_ID || DISCORD_CLIENT_ID.length < 10) {
         console.error('[DISCORD] Client ID is invalid or not configured');
         return { success: false, message: 'Discord client ID is not configured' };
@@ -257,32 +232,6 @@ function registerDiscordHandlers() {
         var _kv = secrets[diagKeys[_dk]];
         console.log('[DISCORD]   ' + diagKeys[_dk] + ': exists=' + (typeof _kv !== 'undefined' && _kv !== null) + ' type=' + typeof _kv + ' len=' + (typeof _kv === 'string' ? _kv.length : (typeof _kv === 'object' ? JSON.stringify(_kv).length : 'n/a')));
       }
-
-      if (!secrets.discordClientSecret || secrets.discordClientSecret.length < 10) {
-        console.error('[DISCORD] Client secret is missing — secretsDiag:', JSON.stringify(secretsDiag));
-
-        // ── Last-chance lazy load: try copying from userData if the user pasted it ──
-        try {
-          var cfgFile = path.join(app.getPath('userData'), 'discord_config.json');
-          if (fs.existsSync(cfgFile)) {
-            var cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8'));
-            if (cfg.clientSecret && cfg.clientSecret.length >= 10) {
-              secrets.discordClientSecret = cfg.clientSecret;
-              console.log('[DISCORD] Loaded clientSecret from userData discord_config.json');
-            }
-          }
-        } catch (_lzErr) {
-          console.log('[DISCORD] Lazy-load fallback failed:', _lzErr.message);
-        }
-
-        // Re-check after lazy load attempt
-        if (!secrets.discordClientSecret || secrets.discordClientSecret.length < 10) {
-          return { success: false, message: 'Discord client secret is not configured', diagnostics: secretsDiag };
-        }
-      }
-      var hasSecret = secrets.discordClientSecret ? 'yes' : 'no';
-      var secretLen = secrets.discordClientSecret ? String(secrets.discordClientSecret.length) : '0';
-      console.log('[DISCORD] Credentials validated (secret exists: ' + hasSecret + ', length: ' + secretLen + ')');
 
       var serverPromise = startOAuthCallbackServer();
       var authUrl = 'https://discord.com/api/v10/oauth2/authorize?client_id=' + DISCORD_CLIENT_ID + '&redirect_uri=http://localhost:' + DISCORD_REDIRECT_PORT + '/callback&response_type=code&scope=identify+guilds';
@@ -309,27 +258,13 @@ function registerDiscordHandlers() {
       console.log('[DISCORD] Authorization code received, exchanging for token...');
 
       // ── Exchange code for token ──
-      var tokenResponse = await fetch('https://discord.com/api/v10/oauth2/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: DISCORD_CLIENT_ID,
-          client_secret: secrets.discordClientSecret,
-          grant_type: 'authorization_code',
-          code: code,
-          redirect_uri: 'http://localhost:' + DISCORD_REDIRECT_PORT + '/callback',
-        })
-      });
-      if (!tokenResponse.ok) {
-        var errorBody = '';
-        try { errorBody = await tokenResponse.text(); } catch(e) {
-          console.error('[DISCORD] Error reading token response body:', e.message);
-        }
-        console.error('[DISCORD] Token exchange FAILED — HTTP', tokenResponse.status, '| body:', errorBody);
-        const discordError = errorBody ? ' - ' + errorBody.slice(0, 200) : '';
-        return { success: false, message: 'Failed to exchange authorization code (HTTP ' + tokenResponse.status + ')' + discordError };
+      // Code exchange runs on the bot, which holds the client secret.
+      var tokenRes = await botApi('discord/token', { grant_type: 'authorization_code', code: code });
+      if (!tokenRes || !tokenRes.ok || !tokenRes.data || !tokenRes.data.access_token) {
+        console.error('[DISCORD] Token exchange FAILED — HTTP', tokenRes ? tokenRes.status : 'unreachable');
+        return { success: false, message: 'Failed to exchange authorization code (HTTP ' + (tokenRes ? tokenRes.status : 'unreachable') + ')' };
       }
-      var tokenData = await tokenResponse.json();
+      var tokenData = tokenRes.data;
       console.log('[DISCORD] Token exchange succeeded (expires_in: ' + (tokenData.expires_in || '?') + 's)');
       var accessToken = tokenData.access_token;
       var refreshToken = tokenData.refresh_token;
@@ -397,76 +332,20 @@ function registerDiscordHandlers() {
   });
 
   // ── Allow renderer to manually set discord config (saved to userData) ──
-  // SECURITY: clientSecret change invalidates all existing OAuth tokens.
-  // The handler enforces write-once-after-auth semantics: if auth tokens exist,
-  // changing the secret automatically clears them (preventing secret-swap privilege escalation).
-  ipcMain.handle('set-discord-config', async function(event, config) {
-    try {
-      if (!config || typeof config !== 'object') {
-        return { success: false, message: 'Invalid config object' };
-      }
-      // Validate if clientSecret provided — Discord secrets are 32+ alphanumeric
-      if (config.clientSecret) {
-        if (typeof config.clientSecret !== 'string') {
-          return { success: false, message: 'Client secret must be a string' };
-        }
-        if (!/^[a-zA-Z0-9_-]{32,}$/.test(config.clientSecret)) {
-          return { success: false, message: 'Client secret must be at least 32 characters (alphanumeric, underscores, hyphens)' };
-        }
-      }
-      var cfgPath = path.join(app.getPath('userData'), 'discord_config.json');
-      var existing = {};
-      var secretChanged = false;
-      try {
-        if (fs.existsSync(cfgPath)) {
-          existing = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
-          if (config.clientSecret && existing.clientSecret !== config.clientSecret) {
-            secretChanged = true;
-          }
-        }
-      } catch(e) {
-        console.error('[DISCORD] Error reading existing discord config:', e.message);
-      }
-      // Merge: only update provided fields
-      if (config.clientSecret) existing.clientSecret = config.clientSecret;
-      if (config.hasOwnProperty('clientId')) existing.clientId = config.clientId;
-      fs.writeFileSync(cfgPath, JSON.stringify(existing, null, 2));
-      // If clientSecret was set, update in-memory secret
-      if (existing.clientSecret && existing.clientSecret.length >= 10) {
-        secrets.discordClientSecret = existing.clientSecret;
-      }
-      // If secret changed and there was existing auth, clear auth data (prevents secret-swap interception)
-      if (secretChanged) {
-        var authPath = path.join(app.getPath('userData'), 'discord_auth.json');
-        try { if (fs.existsSync(authPath)) fs.unlinkSync(authPath); } catch(e) { console.debug('[DISCORD] Failed to delete auth file:', e.message); }
-        discordAuthData = null;
-        console.log('[DISCORD] Client secret changed — existing OAuth tokens cleared');
-      }
-      return { success: true, message: 'Discord config saved' };
-    } catch (e) {
-      return { success: false, message: e.message };
-    }
-  });
-
   // ── Check existing Discord auth ──
   ipcMain.handle('check-discord-auth', wrapHandler('check-discord-auth', async function() {
     var auth = loadDiscordAuth();
     if (!auth || !auth.accessToken) return { authenticated: false };
     var user = await discordFetchWithToken('/users/@me', auth.accessToken);
+    // Offline / Discord down: keep the session instead of logging the user out.
+    if (user === undefined) return { authenticated: true, user: auth.user, isInGuild: true, offline: true };
     if (!user && auth.refreshToken) {
       try {
-        var refreshRes = await fetch('https://discord.com/api/v10/oauth2/token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            client_id: DISCORD_CLIENT_ID,
-            client_secret: secrets.discordClientSecret,
-            grant_type: 'refresh_token',
-            refresh_token: auth.refreshToken,
-          })
-        });
-        if (refreshRes.ok) {
-          var td = await refreshRes.json();
+        var refreshRes = await botApi('discord/token', { grant_type: 'refresh_token', refresh_token: auth.refreshToken });
+        // Bot unreachable or erroring: can't tell if the session is dead — keep it.
+        if (!refreshRes || refreshRes.status >= 500) return { authenticated: true, user: auth.user, isInGuild: true, offline: true };
+        if (refreshRes && refreshRes.ok && refreshRes.data && refreshRes.data.access_token) {
+          var td = refreshRes.data;
           auth.accessToken = td.access_token;
           auth.refreshToken = td.refresh_token || auth.refreshToken;
           saveDiscordAuth(auth);
@@ -488,15 +367,7 @@ function registerDiscordHandlers() {
   ipcMain.handle('discord-logout', async function() {
     if (discordAuthData && discordAuthData.accessToken) {
       try {
-        await fetch('https://discord.com/api/v10/oauth2/token/revoke', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            client_id: DISCORD_CLIENT_ID,
-            client_secret: secrets.discordClientSecret,
-            token: discordAuthData.accessToken,
-          })
-        });
+        await botApi('discord/revoke', { token: discordAuthData.accessToken });
       } catch (e) {
         console.error('[DISCORD] Error revoking token on logout:', e.message);
       }
@@ -554,7 +425,7 @@ function registerDiscordHandlers() {
     try {
       var auth = loadDiscordAuth();
       if (!auth) return { success: false, message: 'Not authenticated' };
-      var ok = await postGameToDiscord(gameName, appid, coverUrl, auth.user?.globalName || auth.user?.username, dlcCount);
+      var ok = await postGameToDiscord(gameName, appid, coverUrl, auth.accessToken, dlcCount);
       return { success: ok, message: ok ? 'Shared to Discord!' : 'Failed to share' };
     } catch (e) { return { success: false, message: e.message }; }
   }, { windowMs: 10000, maxCalls: 2 }));

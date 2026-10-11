@@ -41,5 +41,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['ahg_icon.ico'],
+    icon=['../assets/ahg_icon.ico'],
 )

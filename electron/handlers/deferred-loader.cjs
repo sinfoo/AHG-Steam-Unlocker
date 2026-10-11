@@ -26,7 +26,6 @@ const { createLazyModule } = require('../utils/lazyLoader.cjs');
 createLazyModule([
   'discord-login',
   'get-secrets-diag',
-  'set-discord-config',
   'check-discord-auth',
   'discord-logout',
   'set-game-sharing',

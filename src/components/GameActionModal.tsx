@@ -45,7 +45,8 @@ export const GameActionModal = memo(function GameActionModal({ game, isOpen, onC
     return null
   }, [game])
 
-  const hasDLC = game?.dlc && Object.keys(game.dlc).length > 0
+  const dlcCount = game?.dlc_count ?? Object.keys(game?.dlc || {}).length
+  const hasDLC = dlcCount > 0
   const year = (game as any)?.release_date ? (game as any).release_date.split('-')[0] : null
   const initial = game?.name ? game.name[0]!.toUpperCase() : '?'
 
@@ -209,7 +210,7 @@ export const GameActionModal = memo(function GameActionModal({ game, isOpen, onC
                 {hasDLC && (
                   <span className="flex items-center gap-1.5 text-xs" style={{ color: colors.cyan }}>
                     <Layers size={12} />
-                    {Object.keys(game.dlc || {}).length} DLC
+                    {dlcCount} DLC
                   </span>
                 )}
               </div>
@@ -264,7 +265,7 @@ export const GameActionModal = memo(function GameActionModal({ game, isOpen, onC
                     }}
                   >
                     <Layers size={15} />
-                    Manage DLCs ({Object.keys(game.dlc || {}).length})
+                    Manage DLCs ({dlcCount})
                   </motion.button>
                 )}
               </div>

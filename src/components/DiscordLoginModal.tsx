@@ -57,9 +57,6 @@ export const DiscordLoginModal = memo(function DiscordLoginModal({
   const [loadingElapsed, setLoadingElapsed] = useState(0)
   const [showDiagnostics, setShowDiagnostics] = useState(false)
   const [diagnostics, setDiagnostics] = useState<SecretsDiag | null>(null)
-  const [manualConfigMode, setManualConfigMode] = useState(false)
-  const [secretInput, setSecretInput] = useState('')
-  const [configStatus, setConfigStatus] = useState('')
 
   useEffect(() => {
     if (isOpen) {
@@ -108,7 +105,6 @@ export const DiscordLoginModal = memo(function DiscordLoginModal({
     setErrorMessage('')
     setShowDiagnostics(false)
     setDiagnostics(null)
-    setManualConfigMode(false)
     try {
       const result = await bridge.discordLogin()
       if (result.success) {
@@ -130,26 +126,6 @@ export const DiscordLoginModal = memo(function DiscordLoginModal({
       setStatus('error')
       setErrorMessage(e.message || 'Connection failed')
       bridge.getSecretsDiag().then(d => setDiagnostics(d)).catch(() => {})
-    }
-  }
-
-  async function handleSaveManualSecret() {
-    if (!secretInput || secretInput.trim().length < 10) {
-      setConfigStatus('Secret must be at least 10 characters')
-      return
-    }
-    setConfigStatus('Saving...')
-    try {
-      const result = await bridge.setDiscordConfig({ clientSecret: secretInput.trim() })
-      if (result.success) {
-        setConfigStatus('Saved! Try connecting again.')
-        setManualConfigMode(false)
-        setSecretInput('')
-      } else {
-        setConfigStatus(result.message || 'Failed to save')
-      }
-    } catch (e: any) {
-      setConfigStatus(e.message || 'Error saving config')
     }
   }
 
@@ -411,7 +387,7 @@ export const DiscordLoginModal = memo(function DiscordLoginModal({
               </motion.div>
             )}
 
-            {status === 'error' && !manualConfigMode && (
+            {status === 'error' && (
               <motion.div key="error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center py-4">
                 <div className="mx-auto w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: COLORS.redDim }}>
                   <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={COLORS.red} strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
@@ -435,17 +411,12 @@ export const DiscordLoginModal = memo(function DiscordLoginModal({
                         className="text-left mb-4 p-4 rounded-xl text-xs font-mono overflow-auto max-h-48"
                         style={{ background: 'rgba(0,0,0,0.3)', border: `1px solid ${COLORS.whiteGlassBorder}`, color: COLORS.textDim }}>
                         <div className="mb-2"><span style={{ color: COLORS.textMuted }}>Secrets loaded:</span> {diagnostics.loaded ? '✅' : '❌'}</div>
-                        <div className="mb-2"><span style={{ color: COLORS.textMuted }}>Client secret configured:</span> {diagnostics.hasDiscordClientSecret ? '✅' : '❌'}</div>
                         {diagnostics.environment && (
                           <>
                             <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${COLORS.whiteGlassBorder}` }}>
                               <div className="mb-1" style={{ color: COLORS.textMuted }}>Environment:</div>
                               <div><span style={{ color: COLORS.textMuted }}>isPackaged:</span> {String(diagnostics.environment.isPackaged)}</div>
                               <div><span style={{ color: COLORS.textMuted }}>userData:</span> {diagnostics.environment.userData}</div>
-                            </div>
-                            <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${COLORS.whiteGlassBorder}` }}>
-                              <div className="mb-1" style={{ color: COLORS.textMuted }}>Troubleshooting:</div>
-                              <div style={{ color: COLORS.amber }}>Make sure <span className="font-bold">config/secrets.json</span> exists in your project root or use <span className="font-bold">Manual Config</span> below.</div>
                             </div>
                           </>
                         )}
@@ -462,68 +433,10 @@ export const DiscordLoginModal = memo(function DiscordLoginModal({
                     style={{ background: COLORS.violetDim, color: COLORS.violet, border: '1px solid rgba(139, 92, 246, 0.3)' }}>
                     Try Again
                   </button>
-                  <button
-                    onClick={() => { setManualConfigMode(true); setShowDiagnostics(false); }}
-                    className="px-6 py-3 rounded-xl font-medium text-sm hv-tap"
-                    style={{ background: COLORS.amberDim, color: COLORS.amber, border: '1px solid rgba(245, 158, 11, 0.3)' }}>
-                    Manual Config
-                  </button>
                 </div>
               </motion.div>
             )}
 
-            {status === 'error' && manualConfigMode && (
-              <motion.div key="manual-config" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center py-4">
-                <div className="mx-auto w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: COLORS.amberDim }}>
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={COLORS.amber} strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="8"/></svg>
-                </div>
-                <h3 className="text-lg font-bold mb-1" style={{ color: COLORS.amber }}>Manual Discord Config</h3>
-                <p className="text-xs mb-4" style={{ color: COLORS.textSecondary }}>
-                  Paste your Discord client secret below. This is stored in your app data directory and will be used as a fallback.
-                </p>
-
-                <div className="mb-4 text-left">
-                  <label className="text-xs font-medium mb-1.5 block" style={{ color: COLORS.textSecondary }}>Discord Client Secret</label>
-                  <input
-                    type="password"
-                    value={secretInput}
-                    onChange={(e) => setSecretInput(e.target.value)}
-                    placeholder="Paste your client secret here..."
-                    className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all"
-                    style={{
-                      background: 'rgba(255,255,255,0.04)',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      color: COLORS.text,
-                    }}
-                  />
-                  <p className="text-xs mt-1.5" style={{ color: COLORS.textMuted }}>
-                    You can find this in your Discord Developer Portal under OAuth2.
-                  </p>
-                </div>
-
-                {configStatus && (
-                  <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                    className="text-xs mb-3" style={{ color: configStatus.includes('Saved') ? COLORS.green : COLORS.red }}>
-                    {configStatus}
-                  </motion.p>
-                )}
-
-                <div className="flex gap-3 justify-center">
-                  <button
-                    onClick={() => { setManualConfigMode(false); setConfigStatus(''); setSecretInput(''); }}
-                    className="px-6 py-3 rounded-xl font-medium text-sm hv-tap"
-                    style={{ background: 'rgba(100, 116, 139, 0.15)', color: COLORS.textSecondary, border: '1px solid rgba(100, 116, 139, 0.2)' }}>
-                    Back
-                  </button>
-                  <button
-                    onClick={handleSaveManualSecret}
-                    className="px-6 py-3 rounded-xl font-medium text-sm hv-tap"
-                    style={{ background: COLORS.violetDim, color: COLORS.violet, border: '1px solid rgba(139, 92, 246, 0.3)' }}>
-                    Save & Try Again
-                  </button>
-                </div>
-              </motion.div>
-            )}
           </AnimatePresence>
         </div>
       </motion.div>

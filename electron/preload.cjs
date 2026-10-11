@@ -500,7 +500,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setDiscordStartupPref: (pref) => ipcRenderer.invoke('set-discord-startup-pref', pref),
   // Secrets diagnostics + manual config (for Discord login troubleshooting)
   getSecretsDiag: () => ipcRenderer.invoke('get-secrets-diag'),
-  setDiscordConfig: (config) => ipcRenderer.invoke('set-discord-config', config),
 
   // Restart app after update
   restartApp: () => ipcRenderer.invoke('restart-app'),
