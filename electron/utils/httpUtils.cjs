@@ -39,6 +39,7 @@ function httpGetOnce(url, onProgress, signal, timeoutMs) {
       if (rsp.statusCode != 200) { rej(new Error('HTTP ' + rsp.statusCode + ' ' + (http.STATUS_CODES[rsp.statusCode] || 'Unknown'))); return; }
       var totalSize = parseInt(rsp.headers['content-length'], 10) || 0;
       var downloaded = 0;
+      var lastSent = 0; // progress callbacks throttled to ~6/s; each one becomes an IPC message
       var startTime = Date.now();
       var buf = [];
       rsp.on('data', function(c) {
@@ -53,7 +54,9 @@ function httpGetOnce(url, onProgress, signal, timeoutMs) {
         downloaded += c.length;
         var elapsed = (Date.now() - startTime) / 1000;
         var speed = elapsed > 0 ? downloaded / elapsed : 0;
-        if (onProgress) {
+        var nowMs = Date.now();
+        if (onProgress && (nowMs - lastSent >= 150 || downloaded === totalSize)) {
+          lastSent = nowMs;
           onProgress({ totalSize: totalSize, downloaded: downloaded, speed: speed, percent: totalSize > 0 ? (downloaded / totalSize) * 100 : 0 });
         }
       });

@@ -214,6 +214,8 @@ async function downloadFromDepotBox(appid, depotCache, luaPath, sendLog) {
 
 // Helper: download using DepotDownloader.exe (Steam CDN)
 async function downloadWithDepotDownloader(appid, depotCache, luaPath, sendLog) {
+  // Defined outside try so a failed/cancelled download still deletes its (possibly GB-sized) partial files.
+  const tempDir = path.join(app.getPath('temp'), 'ahg_depot_' + appid);
   try {
     const ddPath = getDepotDownloaderPath();
     if (!fs.existsSync(ddPath)) {
@@ -221,7 +223,6 @@ async function downloadWithDepotDownloader(appid, depotCache, luaPath, sendLog) 
     }
 
     // Create temp directory for download
-    const tempDir = path.join(app.getPath('temp'), 'ahg_depot_' + appid);
     fs.mkdirSync(tempDir, { recursive: true });
 
     sendLog('Downloading game files...');
@@ -291,11 +292,6 @@ async function downloadWithDepotDownloader(appid, depotCache, luaPath, sendLog) 
 
     await searchAndCopy(tempDir);
 
-    // Clean up temp directory
-    try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (e) {
-      console.error('[INSTALL] Error cleaning up temp directory:', e.message);
-    }
-
     if (manifestCount > 0) {
       // Generate Lua if not present
       const luaPathFinal = path.join(luaPath, appid + '.lua');
@@ -313,6 +309,10 @@ async function downloadWithDepotDownloader(appid, depotCache, luaPath, sendLog) 
     }
   } catch (err) {
     sendLog('Download error: ' + err.message);
+  } finally {
+    fs.rm(tempDir, { recursive: true, force: true }, (e) => {
+      if (e) console.error('[INSTALL] Error cleaning up temp directory:', e.message);
+    });
   }
   return { success: false };
 }

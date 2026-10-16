@@ -136,7 +136,6 @@ export interface AppInstallRenderState {
 export interface AppUserRenderState {
   favorites: Set<string>
   recentGames: string[]
-  logs: any[]
   featuredGame: any
   quickAccessOffset: number
   portalModalOpen: boolean
@@ -347,7 +346,6 @@ export function useAppUserState(): AppUserRenderState {
       (s: any) => ({
         favorites: s.favorites,
         recentGames: s.recentGames,
-        logs: s.logs,
         featuredGame: s.featuredGame,
         quickAccessOffset: s.quickAccessOffset,
         portalModalOpen: s.portalModalOpen,

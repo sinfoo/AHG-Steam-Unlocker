@@ -11,13 +11,12 @@ const { wrapHandler } = require('../utils/rateLimiter.cjs');
 const getSteamStatusCached = withCache(async () => {
   const steamPath = findSteamPath();
   const steamExe = path.join(steamPath, 'steam.exe');
-  const running = fs.existsSync(steamExe) && (() => {
-    try {
-      const { execSync } = require('child_process');
-      const result = execSync('tasklist /FI "IMAGENAME eq steam.exe" /NH', { encoding: 'utf-8', timeout: 3000 });
-      return result.includes('steam.exe');
-    } catch (e) { return false; }
-  })();
+  // async: execSync here froze the main thread on every cache miss
+  const running = fs.existsSync(steamExe) && await new Promise((resolve) => {
+    require('child_process').execFile('tasklist', ['/FI', 'IMAGENAME eq steam.exe', '/NH'],
+      { encoding: 'utf-8', timeout: 3000, windowsHide: true },
+      (err, out) => resolve(!err && String(out).includes('steam.exe')));
+  });
   return { running, version: '2.0' };
 }, 60_000);
 

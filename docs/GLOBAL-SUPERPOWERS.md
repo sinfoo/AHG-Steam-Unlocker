@@ -22,7 +22,7 @@ Project: AHG Unlocker
 Language: TypeScript, Python, C#
 Framework: React 19 + Vite + Tailwind (frontend), Electron (desktop), Python FastAPI (backend bridge), .NET 9 (C# core)
 Package Manager: npm (frontend), pip (Python), dotnet (C#)
-Repository: https://github.com/ahg-team/AHG-Steam-Unlocker
+Repository: https://github.com/sinfoo/AHG-Steam-Unlocker
 ```
 
 ### 1.2 Additional Tools Required

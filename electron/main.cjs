@@ -65,6 +65,9 @@ try {
   console.warn('[MAIN] registerSchemesAsPrivileged failed:', e && e.message);
 }
 
+// Covers are already stored in our own LRU image-cache; Chromium's HTTP cache duplicated them
+// without a useful bound (178 MB seen). Cap it.
+app.commandLine.appendSwitch('disk-cache-size', String(64 * 1024 * 1024));
 app.commandLine.appendSwitch('enable-gpu-rasterization');
 app.commandLine.appendSwitch('enable-zero-copy');
 app.commandLine.appendSwitch('enable-accelerated-2d-canvas');
@@ -124,6 +127,11 @@ function bufferRendererLog(line) {
   if (!_rendererLogFlushTimer) _rendererLogFlushTimer = setTimeout(flushRendererLog, 500);
 }
 app.on('before-quit', flushRendererLog);
+// app.log only ever grew: keep one previous generation, cap the live one at ~2 MB per session start.
+try {
+  const logPath = path.join(app.getPath('userData'), 'app.log');
+  if (fs.statSync(logPath).size > 2 * 1024 * 1024) fs.renameSync(logPath, logPath.replace(/\.log$/, '.old.log'));
+} catch { /* no log yet */ }
 
 app.on('web-contents-created', (_, contents) => {
   contents.on('console-message', (_, level, message, line, sourceId) => {
@@ -2895,6 +2903,17 @@ function formatBytes(bytes) {
 // handled by handlers/misc.cjs: ipcMain.handle('scan-new-manifests', ...)
 
 app.whenReady().then(async () => {
+  // Image caching moved to the main-process disk cache; the old renderer IndexedDB
+  // copy (~30 MB) was never read again. Drop it once.
+  try {
+    const marker = path.join(app.getPath('userData'), '.idb-cleared');
+    if (!fs.existsSync(marker)) {
+      session.defaultSession.clearStorageData({ storages: ['indexdb'] })
+        .then(() => fs.writeFileSync(marker, ''))
+        .catch(() => {});
+    }
+  } catch { /* best effort */ }
+
   // Check for pending update (.new exe file from previous update)
   try {
     const appPath = app.getAppPath();
@@ -3087,7 +3106,9 @@ app.whenReady().then(async () => {
     try { await runRemoteSync(); } finally { remoteSyncRunning = false; }
   };
   setTimeout(guardedRemoteSync, 3000); // 3s delay to let the app finish loading
-  setInterval(guardedRemoteSync, 5 * 60 * 1000); // re-check while the app stays open
+  // games.json has no Last-Modified/ETag upstream, so each run is a full 43 MB fetch + parse on
+  // the main thread. 5 min froze the UI regularly; the catalogue doesn't change that often.
+  setInterval(guardedRemoteSync, 30 * 60 * 1000);
 
   // ── Custom Fixes: check GitHub releases after startup ──
   setTimeout(async () => {
@@ -3220,6 +3241,8 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  // games.db writes are debounced; write any pending change before exit
+  try { db.flushPersist(); } catch (e) { console.warn('[MAIN] flushPersist on quit failed:', e.message); }
   if (pythonProcess) { pythonProcess.kill(); }
   if (tray) { tray.destroy(); tray = null; }
   if (globalThis._imageDiskCache) {

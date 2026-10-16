@@ -278,12 +278,17 @@ function registerFixesHandlers() {
           // Try streaming with getReader (works with both session.fetch and global fetch)
           const reader = response.body.getReader();
           const chunks = [];
+          let lastSent = 0;
           
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
             chunks.push(value);
             downloaded += value.length;
+            // one IPC message per network chunk flooded the renderer: cap at ~6/s (+ the final one)
+            const now = Date.now();
+            if (now - lastSent < 150 && downloaded !== contentLength) continue;
+            lastSent = now;
             const elapsed = (Date.now() - startTime) / 1000;
             const speed = elapsed > 0 ? downloaded / elapsed : 0;
             state.mainWindow?.webContents?.send('download-progress', {

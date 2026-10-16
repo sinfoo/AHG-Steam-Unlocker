@@ -253,6 +253,7 @@ const uiEN = {
   'ui.upd.readyTitle': 'Update Ready!',
   'ui.upd.staged': 'v{v} staged — {n} files will be applied on restart',
   'ui.upd.stagedMsi': 'v{v} ready — restarting to install',
+  'ui.upd.cancel': 'Cancel',
   'ui.upd.restartNow': 'Restart App Now',
   'ui.upd.autoLaunch': 'The new version will launch automatically',
   'ui.upd.dlComplete': 'Download Complete!',

@@ -255,6 +255,7 @@ const uiPT: Record<string, string> = {
   'ui.upd.readyTitle': 'Atualização pronta!',
   'ui.upd.staged': 'v{v} preparada — {n} arquivos serão aplicados ao reiniciar',
   'ui.upd.stagedMsi': "v{v} pronta — reiniciando para instalar",
+  'ui.upd.cancel': 'Cancelar',
   'ui.upd.restartNow': 'Reiniciar o app agora',
   'ui.upd.autoLaunch': 'A nova versão será iniciada automaticamente',
   'ui.upd.dlComplete': 'Download concluído!',

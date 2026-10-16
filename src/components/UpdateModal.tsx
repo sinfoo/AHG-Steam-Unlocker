@@ -149,12 +149,13 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
 
   useEffect(() => {
     const api = (window as any).electronAPI
-    if (api && api.onDownloadProgress) {
-      api.onDownloadProgress((data: { percent: number, message?: string }) => {
-        setProgress(data.percent)
-        if (data.message) addLog(data.message)
-      })
-    }
+    // Own subscription with cleanup (a shared global handler used to be replaced by App's,
+    // which froze this bar at 0%). Only update-download events carry `received`.
+    return api?.onDownloadProgress?.((data: { percent: number, received?: number, message?: string }) => {
+      if (data.received === undefined) return
+      setProgress(data.percent)
+      if (data.message) addLog(data.message)
+    })
   }, [])
 
   const handleDownload = useCallback(async () => {
@@ -186,6 +187,10 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
             // Seamless: staged update is applied on exit, so restart right away
             setTimeout(() => api.restartApp?.(), 1500)
           }
+        } else if (res.message === 'Download cancelled') {
+          // user cancelled: back to the ready-to-download state, no error banner
+          setProgress(0)
+          setLogs([])
         } else {
           setError(res.message || tNow('ui.upd.dlFailed'))
           addLog(tNow('ui.fx.err', { err: res.message }))
@@ -388,12 +393,21 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
                                 {downloadComplete ? t('ui.upd.readyShort') : t('ui.upd.downloadingPct', { n: progress })}
                               </p>
                               {downloading && (
-                                <motion.div
-                                  animate={{ rotate: 360 }}
-                                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                                >
-                                  <Loader2 size={16} style={{ color: COLORS.violet }} />
-                                </motion.div>
+                                <div className="flex items-center gap-2">
+                                  <motion.div
+                                    animate={{ rotate: 360 }}
+                                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                                  >
+                                    <Loader2 size={16} style={{ color: COLORS.violet }} />
+                                  </motion.div>
+                                  <button
+                                    onClick={() => (window as any).electronAPI?.cancelUpdateDownload?.()}
+                                    className="text-xs font-semibold px-2.5 py-1 rounded-lg"
+                                    style={{ color: '#fca5a5', background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', transition: 'background 80ms cubic-bezier(0.4,0,0.2,1)' }}
+                                  >
+                                    {t('ui.upd.cancel')}
+                                  </button>
+                                </div>
                               )}
                             </div>
                             

@@ -255,6 +255,7 @@ const uiTR: Record<string, string> = {
   'ui.upd.readyTitle': 'Güncelleme hazır!',
   'ui.upd.staged': 'v{v} hazırlandı — {n} dosya yeniden başlatınca uygulanacak',
   'ui.upd.stagedMsi': "v{v} hazır — yüklemek için yeniden başlatılıyor",
+  'ui.upd.cancel': 'İptal',
   'ui.upd.restartNow': 'Uygulamayı şimdi yeniden başlat',
   'ui.upd.autoLaunch': 'Yeni sürüm otomatik olarak başlayacak',
   'ui.upd.dlComplete': 'İndirme tamamlandı!',

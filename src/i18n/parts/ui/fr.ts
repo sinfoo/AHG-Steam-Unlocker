@@ -255,6 +255,7 @@ const uiFR: Record<string, string> = {
   'ui.upd.readyTitle': 'Mise à jour prête !',
   'ui.upd.staged': 'v{v} préparée : {n} fichiers seront appliqués au redémarrage',
   'ui.upd.stagedMsi': "v{v} prête — redémarrage pour l'installer",
+  'ui.upd.cancel': 'Annuler',
   'ui.upd.restartNow': 'Redémarrer l\'application maintenant',
   'ui.upd.autoLaunch': 'La nouvelle version se lancera automatiquement',
   'ui.upd.dlComplete': 'Téléchargement terminé !',

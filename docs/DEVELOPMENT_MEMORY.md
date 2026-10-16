@@ -190,7 +190,7 @@ filesOPENCODE/                # Project root
 - **Authenticated manifest sources**: auto-fetches API keys via Discord token (Morrenus key endpoint, etc.)
 
 ### License System
-- GitHub Gist-backed (`02dd98bd9581f70b6e88d333e59332dc`, owned by the `ahg-team` account —
+- GitHub Gist-backed (`02dd98bd9581f70b6e88d333e59332dc`, originally created on the old `ahg-team` account —
   the `githubToken` in secrets must be issued by that account with `gist` scope or all writes 404)
 - Machine ID via CIM (`Win32_ComputerSystemProduct.UUID`), falling back to `wmic` then a random id.
   `wmic` alone was broken on Windows 11 24H2+, where it no longer exists.

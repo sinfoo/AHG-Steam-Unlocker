@@ -84,6 +84,7 @@ interface ElectronAPI {
     downloadSize: number
   }>
   downloadUpdate?: (downloadUrl: string, savePath: string) => Promise<{ success: boolean; message: string; path: string }>
+  cancelUpdateDownload?: () => Promise<{ success: boolean }>
   installUpdate?: () => Promise<{ success: boolean; message: string; filesCopied: number }>
   getDownloadPath?: () => Promise<string | null>
   getLastSeenVersion?: () => Promise<{ version: string; date: string } | null>
@@ -103,14 +104,14 @@ interface ElectronAPI {
   checkLicense?: () => Promise<{ activated: boolean; machineId?: string; integrityFailed?: boolean; machineMismatch?: boolean }>
   activateLicense?: (licenseKey: string) => Promise<{ success: boolean; error?: string; message?: string }>
   deactivateLicense?: () => Promise<{ success: boolean; message?: string }>
-  onLicenseStateChanged?: (callback: (data: { activated: boolean }) => void) => void
+  onLicenseStateChanged?: (callback: (data: { activated: boolean }) => void) => () => void
   getSupportLink?: () => Promise<string>
 
   // ── Event Listeners ──
-  onDownloadProgress?: (callback: (data: { percent: number; bytes: number; total: number; speed?: number }) => void) => void
+  onDownloadProgress?: (callback: (data: { percent: number; bytes: number; total: number; speed?: number }) => void) => () => void
   onScanProgress?: (callback: (data: { current: number; total: number; appid?: string; status?: string }) => void) => void
   onFixProgress?: (callback: (data: any) => void) => () => void
-  onInstallLog?: (callback: (data: { appid: string; message: string }) => void) => void
+  onInstallLog?: (callback: (data: { appid: string; message: string }) => void) => () => void
   // ── Image Fetching (Steam images as base64 data URLs) ──
   fetchImage?: (appid: string, localHeaderUrl?: string, preferredImageTypes?: string[]) => Promise<string | null>
 
@@ -195,7 +196,7 @@ interface ElectronAPI {
   saveOwnedGames?: (owned: string[]) => Promise<{ success: boolean }>
   getOwnedGames?: () => Promise<string[]>
   detectOwnedGames?: () => Promise<number[]>
-  onOwnedGamesUpdated?: (callback: (newGames: string[]) => void) => void
+  onOwnedGamesUpdated?: (callback: (newGames: string[]) => void) => () => void
 
   // ── v0.8 Fix Health Data ──
   saveFixHealth?: (health: any) => Promise<{ success: boolean }>
@@ -219,7 +220,7 @@ interface ElectronAPI {
 
   // ── v0.9 Cover Fetcher ──
   fetchMissingCovers?: () => Promise<{ success: boolean; scanned?: number; fixed?: number; message?: string; error?: string }>
-  onCoverFetchProgress?: (callback: (data: { progress: number; status: string }) => void) => void
+  onCoverFetchProgress?: (callback: (data: { progress: number; status: string }) => void) => () => void
 
   // ── v0.9 NEW FEATURES ──
   cancelDownload?: (appid?: string) => Promise<{ success: boolean; aborted: number }>

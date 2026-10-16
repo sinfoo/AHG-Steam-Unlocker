@@ -12,7 +12,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-const GITHUB_REPO = 'ahg-team/AHG-Custom-Fixes';
+const GITHUB_REPO = 'sinfoo/AHG-Custom-Fixes';
 const STORAGE_FILE = 'custom-fixes.json';
 
 let electronApp = null;

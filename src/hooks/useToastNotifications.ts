@@ -22,7 +22,7 @@ export function useToastNotifications() {
 
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
     const time = new Date().toLocaleTimeString('en-US', { hour12: false })
-    setLogs(prev => [...prev, { time, message, type }])
+    setLogs(prev => [...prev.slice(-499), { time, message, type }])
     if (type === 'error') showToast(message, 'error')
   }, [showToast, setLogs])
 

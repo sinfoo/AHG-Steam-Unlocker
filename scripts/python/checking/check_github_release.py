@@ -1,6 +1,6 @@
 import urllib.request
 import json
-url = 'https://api.github.com/repos/ahg-team/AHG-Steam-Unlocker/releases/latest'
+url = 'https://api.github.com/repos/sinfoo/AHG-Steam-Unlocker-Releases/releases/latest'
 req = urllib.request.Request(url, headers={'User-Agent': 'AHGSteamUnlocker/9.2'})
 with urllib.request.urlopen(req, timeout=10) as resp:
     data = json.loads(resp.read().decode())

@@ -588,8 +588,27 @@ function updateGameCover(appid, headerImage) {
  * Called after write operations to save changes.
  * Returns the path to the saved file.
  */
+// Writes are debounced: every upsert/cover/scan used to export + writeFileSync the whole
+// ~54 MB database on the main thread. Now bursts collapse into one write 5 s after the last
+// change; flushPersist() runs synchronously on quit so nothing is lost.
+const PERSIST_DELAY_MS = 5000;
+let _persistTimer = null;
 function persist() {
   ensureInit();
+  if (_persistTimer) clearTimeout(_persistTimer);
+  _persistTimer = setTimeout(() => { _persistTimer = null; persistNow(); }, PERSIST_DELAY_MS);
+  return path.join(findDbDir(), DB_FILENAME);
+}
+
+function flushPersist() {
+  if (!_persistTimer) return;
+  clearTimeout(_persistTimer);
+  _persistTimer = null;
+  persistNow();
+}
+
+function persistNow() {
+  if (!_db) return null;
   const data = _db.export();
   const buffer = Buffer.from(data);
   const destPath = path.join(findDbDir(), DB_FILENAME);
@@ -1096,6 +1115,7 @@ function getSchemaVersion() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function close() {
+  flushPersist();
   if (_db) {
     _db.close();
     _db = null;
@@ -1117,6 +1137,7 @@ module.exports = {
   initialize,
   close,
   persist,
+  flushPersist,
 
   // Game queries
   queryGames,

@@ -255,6 +255,7 @@ const uiES: Record<string, string> = {
   'ui.upd.readyTitle': '¡Actualización lista!',
   'ui.upd.staged': 'v{v} preparada: {n} archivos se aplicarán al reiniciar',
   'ui.upd.stagedMsi': "v{v} lista: reiniciando para instalar",
+  'ui.upd.cancel': 'Cancelar',
   'ui.upd.restartNow': 'Reiniciar la aplicación ahora',
   'ui.upd.autoLaunch': 'La nueva versión se abrirá automáticamente',
   'ui.upd.dlComplete': '¡Descarga completada!',

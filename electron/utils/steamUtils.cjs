@@ -74,8 +74,16 @@ function loadApiConfig() {
   }
 }
 
+// The registry fallback is a blocking execSync (up to 3 s) and ~26 call sites hit this:
+// remember the detected path (custom paths are still checked first, every call).
+let _detectedSteamPath = null;
 function findSteamPath() {
   if (state.customSteamConfig?.steamPath && fs.existsSync(state.customSteamConfig.steamPath)) return state.customSteamConfig.steamPath;
+  if (_detectedSteamPath && fs.existsSync(_detectedSteamPath)) return _detectedSteamPath;
+  return (_detectedSteamPath = detectSteamPath());
+}
+
+function detectSteamPath() {
   const candidates = [
     'C:\\Program Files (x86)\\Steam',
     'C:\\Program Files\\Steam',

@@ -31,7 +31,8 @@ export const useFixGamesStore = create<FixGamesState>((set) => ({
   previewFix: null,
 
   setFixGamesStatus: (v) => set((s) => ({ fixGamesStatus: typeof v === 'function' ? v(s.fixGamesStatus) : v })),
-  setFixGamesOutput: (v) => set((s) => ({ fixGamesOutput: typeof v === 'function' ? v(s.fixGamesOutput) : v })),
+  // keep only the tail: a noisy fix script used to grow this string without bound
+  setFixGamesOutput: (v) => set((s) => ({ fixGamesOutput: (typeof v === 'function' ? v(s.fixGamesOutput) : v).slice(-20000) })),
   setFixGamesScriptStatus: (v) => set((s) => ({ fixGamesScriptStatus: typeof v === 'function' ? v(s.fixGamesScriptStatus) : v })),
   setFixGamesScriptOutput: (v) => set((s) => ({ fixGamesScriptOutput: typeof v === 'function' ? v(s.fixGamesScriptOutput) : v })),
   setFixGamesScriptProgress: (v) => set((s) => ({ fixGamesScriptProgress: typeof v === 'function' ? v(s.fixGamesScriptProgress) : v })),

@@ -18,6 +18,15 @@ type Changelog = {
 
 const CHANGELOGS: Changelog[] = [
   {
+    version: '1.2.5',
+    date: '2026-10-16',
+    items: [
+      { type: 'fix', title: 'Update progress', description: 'The update download bar no longer sticks at 0%, and you can cancel a download.' },
+      { type: 'fix', title: 'Update install', description: 'Fixed "could not install ... app.asar" when installing an update from the zip package.' },
+      { type: 'improvement', title: 'Faster and lighter', description: 'Faster startup, fewer UI freezes, smaller disk footprint (logs, caches and leftover update files are now cleaned up).' },
+    ],
+  },
+  {
     version: '1.2.4',
     date: '2026-10-16',
     items: [

@@ -583,6 +583,7 @@ function App() {
 
         // Listen for download progress events from main process
         window.electronAPI?.onDownloadProgress?.((data: any) => {
+          if (data.received !== undefined) return // app-update download: UpdateModal owns it
           setDownloadProgress(Math.round(data.percent))
           setDownloadDetails({ totalSize: data.totalSize, downloaded: data.downloaded, speed: data.speed })
         })
@@ -726,7 +727,7 @@ function App() {
         })
       }
     })
-    window.electronAPI?.onOwnedGamesUpdated?.((newGames: string[]) => {
+    const unlistenOwned = window.electronAPI?.onOwnedGamesUpdated?.((newGames: string[]) => {
         if (newGames && newGames.length > 0) {
           setOwnedGameIds((prev: Set<string>) => {
             const updated = new Set(prev)
@@ -739,6 +740,7 @@ function App() {
           })
         }
       })
+    return () => unlistenOwned?.()
   }, [splashDone])
 
   // userStats save effect moved to useAchievements hook

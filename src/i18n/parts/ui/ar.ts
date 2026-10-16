@@ -255,6 +255,7 @@ const uiAR: Record<string, string> = {
   'ui.upd.readyTitle': 'التحديث جاهز!',
   'ui.upd.staged': 'تم تجهيز v{v} — سيتم تطبيق {n} ملفات عند إعادة التشغيل',
   'ui.upd.stagedMsi': "v{v} جاهز — إعادة التشغيل للتثبيت",
+  'ui.upd.cancel': 'إلغاء',
   'ui.upd.restartNow': 'أعد تشغيل التطبيق الآن',
   'ui.upd.autoLaunch': 'سيتم تشغيل الإصدار الجديد تلقائيًا',
   'ui.upd.dlComplete': 'اكتمل التنزيل!',

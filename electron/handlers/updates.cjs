@@ -77,6 +77,14 @@ function validateStagedLayout() {
 }
 
 function stageUpdate(zipPath) {
+  // Electron's patched fs treats paths ending in .asar as archives: writing or listing the
+  // package's own resourcespp.asar fails (ENOENT chmod ...app.asar) unless asar support is off.
+  const prevNoAsar = process.noAsar;
+  process.noAsar = true;
+  try { return stageUpdateRaw(zipPath); } finally { process.noAsar = prevNoAsar; }
+}
+
+function stageUpdateRaw(zipPath) {
   // Validate the ZIP itself before touching the staging dir
   let zip;
   try {
@@ -212,10 +220,14 @@ function pickReleaseAsset(assets) {
 }
 
 /** Stream an HTTPS response to disk with progress events. */
+let activeDownload = null; // response stream of the running update download (for cancel)
+
 function streamToFile(res, filePath, onProgress, hash) {
   return new Promise((resolve, reject) => {
     const total = parseInt(res.headers['content-length'] || '0', 10);
     let received = 0;
+    let lastSent = 0;
+    activeDownload = res;
     const out = fs.createWriteStream(filePath);
     // On any error, close the write stream and delete the truncated file so a
     // dropped download doesn't leak a handle or leave a corrupt partial zip behind.
@@ -226,12 +238,19 @@ function streamToFile(res, filePath, onProgress, hash) {
     res.on('data', (chunk) => {
       received += chunk.length;
       if (hash) hash.update(chunk);
-      if (total && onProgress) onProgress(received, total);
+      // one IPC message per chunk flooded the renderer; ~6 updates/s is plenty for a progress bar
+      const now = Date.now();
+      if (total && onProgress && (now - lastSent >= 150 || received === total)) { lastSent = now; onProgress(received, total); }
     });
     res.pipe(out);
-    out.on('finish', () => out.close(() => resolve({ received, total })));
+    out.on('finish', () => {
+      activeDownload = null;
+      if (res.destroyed && total && received < total) return fail(new Error('Download cancelled'));
+      out.close(() => resolve({ received, total }));
+    });
     out.on('error', fail);
     res.on('error', fail);
+    res.on('close', () => { if (activeDownload === res) activeDownload = null; });
   });
 }
 
@@ -260,7 +279,24 @@ function httpsGet(url, headers, redirectDepth = 0) {
   });
 }
 
+// A staged update is only applied from restart-app, so anything still in temp at startup is
+// stale (applied, failed or abandoned): ~150-230 MB per update otherwise left behind forever.
+function cleanupUpdateLeftovers() {
+  const tmp = app.getPath('temp');
+  for (const f of ['ahg-update.zip', 'ahg-update.msi', 'ahg-update-staged', 'ahg-apply-update.bat']) {
+    fs.rm(path.join(tmp, f), { recursive: true, force: true }, () => {});
+  }
+}
+
 function registerUpdateHandlers() {
+  cleanupUpdateLeftovers();
+
+  ipcMain.handle('cancel-update-download', () => {
+    if (!activeDownload) return { success: false };
+    activeDownload.destroy(new Error('Download cancelled'));
+    activeDownload = null;
+    return { success: true };
+  });
   // Check for new releases on GitHub
   ipcMain.handle('check-for-updates', async () => {
     console.log('[MAIN] Checking for updates from GitHub...');

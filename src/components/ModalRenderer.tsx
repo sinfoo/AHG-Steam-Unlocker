@@ -6,6 +6,7 @@ import { RefreshCw, AlertTriangle, CheckCircle2, MessageCircle } from 'lucide-re
 
 // ── Internal store reads — prevents App.tsx from subscribing to modal state ──
 import { useAppInstallState, useAppUIState, useAppUserState, useAppGameState } from '../hooks/useAppState'
+import { useLogs } from '../store/userStore'
 import type { AppInstallRenderState, AppUIRenderState, AppUserRenderState, AppGameRenderState } from '../hooks/useAppState'
 import { useAppSetters } from '../hooks/useAppSetters'
 
@@ -94,9 +95,7 @@ const ModalRenderer = memo(function ModalRenderer({ modalProps }: { modalProps: 
   const {
     updateModalOpen, changelogOpen, changelogVersion, activationOpen, thankYouOpen,
   } = ui
-  const {
-    logs,
-  } = user
+  const logs = useLogs() // own subscription: only this modal re-renders per log line
   const {
     installedGames,
   } = game

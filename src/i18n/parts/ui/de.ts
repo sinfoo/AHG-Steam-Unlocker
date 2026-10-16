@@ -255,6 +255,7 @@ const uiDE: Record<string, string> = {
   'ui.upd.readyTitle': 'Update bereit!',
   'ui.upd.staged': 'v{v} bereitgestellt – {n} Dateien werden beim Neustart angewendet',
   'ui.upd.stagedMsi': "v{v} bereit – Neustart zur Installation",
+  'ui.upd.cancel': 'Abbrechen',
   'ui.upd.restartNow': 'App jetzt neu starten',
   'ui.upd.autoLaunch': 'Die neue Version startet automatisch',
   'ui.upd.dlComplete': 'Download abgeschlossen!',

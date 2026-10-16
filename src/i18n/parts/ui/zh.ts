@@ -255,6 +255,7 @@ const uiZH: Record<string, string> = {
   'ui.upd.readyTitle': '更新已就绪！',
   'ui.upd.staged': 'v{v} 已准备好 —— 重启时将应用 {n} 个文件',
   'ui.upd.stagedMsi': "v{v} 已就绪 —— 正在重启以安装",
+  'ui.upd.cancel': '取消',
   'ui.upd.restartNow': '立即重启应用',
   'ui.upd.autoLaunch': '新版本将自动启动',
   'ui.upd.dlComplete': '下载完成！',

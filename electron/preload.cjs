@@ -6,7 +6,12 @@ const http = require('http');
 const dns = require('dns');
 
 // Track active IPC listeners to prevent duplicate handler leaks
-let _downloadProgressHandler = null;
+// Subscribe to a main->renderer channel; returns an unsubscribe function.
+const subscribe = (channel, callback) => {
+  const handler = (_event, data) => callback(data);
+  ipcRenderer.on(channel, handler);
+  return () => ipcRenderer.removeListener(channel, handler);
+};
 let _scanProgressHandler = null;
 let _contextMenuHandler = null;
 let _fixProgressHandler = null;
@@ -213,18 +218,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // load-fixes) were removed — they sourced stale data from games.json/fixes.json.
   getCustomFixes: () => ipcRenderer.invoke('get-custom-fixes'),
   checkNewCustomFixes: () => ipcRenderer.invoke('check-new-custom-fixes'),
-  onCustomFixesUpdated: (callback) => {
-    ipcRenderer.on('custom-fixes-updated', (_event, data) => callback(data));
-  },
+  onCustomFixesUpdated: (callback) => subscribe('custom-fixes-updated', callback),
   // ── Remote Sync ──
   checkRemoteSync: () => ipcRenderer.invoke('remote-sync:check'),
-  onRemoteSyncUpdated: (callback) => {
-    ipcRenderer.on('remote-sync-updated', (_event, data) => callback(data));
-  },
+  onRemoteSyncUpdated: (callback) => subscribe('remote-sync-updated', callback),
   // ── Install Log Streaming ──
-  onInstallLog: (callback) => {
-    ipcRenderer.on('install-log', (_event, data) => callback(data));
-  },
+  onInstallLog: (callback) => subscribe('install-log', callback),
   setOnlineFixAuth: (username, password) => ipcRenderer.invoke('set-onlinefix-auth', username, password),
   // ── Generator Ryuu Auth ──
   setRyuuAuth: (authKey) => ipcRenderer.invoke('set-ryuu-auth', authKey),
@@ -279,6 +278,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Update checker
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   downloadUpdate: (downloadUrl, savePath) => ipcRenderer.invoke('download-update', downloadUrl, savePath),
+  cancelUpdateDownload: () => ipcRenderer.invoke('cancel-update-download'),
   installUpdate: () => ipcRenderer.invoke('install-update'),
   getDownloadPath: () => ipcRenderer.invoke('get-download-path'),
   getLastSeenVersion: () => ipcRenderer.invoke('get-last-seen-version'),
@@ -299,19 +299,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   checkLicense: () => ipcRenderer.invoke('check-license'),
   activateLicense: (licenseKey) => ipcRenderer.invoke('activate-license', licenseKey),
   deactivateLicense: () => ipcRenderer.invoke('deactivate-license'),
-  onLicenseStateChanged: (callback) => {
-    ipcRenderer.on('license-state-changed', (_event, data) => callback(data));
-  },
+  onLicenseStateChanged: (callback) => subscribe('license-state-changed', callback),
   getSupportLink: () => ipcRenderer.invoke('get-support-link'),
   
   // Download progress listener
-  onDownloadProgress: (callback) => {
-    if (_downloadProgressHandler) {
-      ipcRenderer.removeListener('download-progress', _downloadProgressHandler);
-    }
-    _downloadProgressHandler = (event, data) => callback(data);
-    ipcRenderer.on('download-progress', _downloadProgressHandler);
-  },
+  onDownloadProgress: (callback) => subscribe('download-progress', callback),
   
   // Scan progress listener
   onScanProgress: (callback) => {
@@ -480,9 +472,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveOwnedGames: (owned) => ipcRenderer.invoke('save-owned-games', owned),
   getOwnedGames: () => ipcRenderer.invoke('get-owned-games'),
   detectOwnedGames: () => ipcRenderer.invoke('detect-owned-games'),
-  onOwnedGamesUpdated: (callback) => {
-    ipcRenderer.on('owned-games-updated', (_event, data) => callback(data));
-  },
+  onOwnedGamesUpdated: (callback) => subscribe('owned-games-updated', callback),
   
   // Fix Health data
   saveFixHealth: (health) => ipcRenderer.invoke('save-fix-health', health),
@@ -505,7 +495,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ── v0.9 NEW FEATURES ──
 
   fetchMissingCovers: () => ipcRenderer.invoke('fetch-missing-covers'),
-  onCoverFetchProgress: (callback) => ipcRenderer.on('cover-fetch-progress', (_event, data) => callback(data)),
+  onCoverFetchProgress: (callback) => subscribe('cover-fetch-progress', callback),
   exportLibrary: () => ipcRenderer.invoke('export-library'),
   importLibrary: () => ipcRenderer.invoke('import-library'),
   getSearchHistory: () => ipcRenderer.invoke('get-search-history'),

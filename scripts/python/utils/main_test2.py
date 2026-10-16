@@ -393,7 +393,7 @@ MIRROR_REPOS = [
 ]
 
 # GitHub Update Configuration
-GITHUB_UPDATE_REPO = "ahg-team/AHG-Steam-Unlocker"
+GITHUB_UPDATE_REPO = "sinfoo/AHG-Steam-Unlocker-Releases"
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_UPDATE_REPO}/releases/latest"
 
 POPULAR_GAMES = [
