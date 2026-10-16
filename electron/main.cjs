@@ -1,4 +1,20 @@
 const { app, BrowserWindow, ipcMain, Menu, shell, session, dialog, Tray, nativeImage, screen, protocol } = require('electron');
+
+// One instance only. Without this, a second launch ran a full second app on the same
+// games.db (two writers), and its startup cleanup deleted the update file the first
+// instance had just downloaded. A second launch now just focuses the existing window.
+if (!app.requestSingleInstanceLock()) {
+  app.exit(0);
+  return;
+}
+app.on('second-instance', () => {
+  const win = BrowserWindow.getAllWindows()[0];
+  if (!win) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+});
+
 const path = require('path');
 const { spawn, execSync } = require('child_process');
 const fs = require('fs');

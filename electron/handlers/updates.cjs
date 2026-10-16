@@ -122,13 +122,16 @@ const msiPath = () => path.join(app.getPath('temp'), 'ahg-update.msi');
 let msiStaged = false;
 
 // Shared wait-for-exit prelude: exact PID filter; a match row contains the image
-// name, the "no tasks" INFO line doesn't.
+// name, the "no tasks" INFO line doesn't. No pipe: in the detached, console-less cmd
+// this runs in, `tasklist | find` hung forever on find's stdin, so the update never ran.
 function waitForExitLines(next) {
+  const pidFile = path.join(app.getPath('temp'), 'ahg-update-pid.txt');
   return [
     '@echo off',
     'set TRIES=0',
     ':wait',
-    `tasklist /NH /FI "PID eq ${process.pid}" 2>nul | find /I ".exe" >nul`,
+    `tasklist /NH /FI "PID eq ${process.pid}" > "${pidFile}" 2>nul`,
+    `findstr /I /C:".exe" "${pidFile}" >nul`,
     'if not errorlevel 1 (',
     '  set /a TRIES+=1',
     `  if %TRIES% GEQ 60 goto ${next}`,
@@ -148,7 +151,7 @@ function applyMsiOnExit() {
     ...waitForExitLines('install'),
     ':install',
     // /passive = progress bar only, no prompts; per-user so no UAC
-    `start "" /wait msiexec /i "${msi}" /passive /norestart ALLUSERS=2 MSIINSTALLPERUSER=1 APPLICATIONFOLDER="${installDir}\\" /l*v "${logPath}"`,
+    `start "" /wait msiexec /i "${msi}" /passive /norestart ALLUSERS=2 MSIINSTALLPERUSER=1 REINSTALLMODE=amus APPLICATIONFOLDER="${installDir}\\" /l*v "${logPath}"`,
     // 0 = ok, 3010 = ok but reboot pending; anything else = failed (MSI already rolled back)
     'if %errorlevel%==0 goto ok',
     'if %errorlevel%==3010 goto ok',
@@ -283,7 +286,7 @@ function httpsGet(url, headers, redirectDepth = 0) {
 // stale (applied, failed or abandoned): ~150-230 MB per update otherwise left behind forever.
 function cleanupUpdateLeftovers() {
   const tmp = app.getPath('temp');
-  for (const f of ['ahg-update.zip', 'ahg-update.msi', 'ahg-update-staged', 'ahg-apply-update.bat']) {
+  for (const f of ['ahg-update.zip', 'ahg-update.msi', 'ahg-update-staged', 'ahg-apply-update.bat', 'ahg-update-pid.txt']) {
     fs.rm(path.join(tmp, f), { recursive: true, force: true }, () => {});
   }
 }
@@ -350,7 +353,17 @@ function registerUpdateHandlers() {
   });
 
   // Download update ZIP from GitHub (streamed to disk — no 200+MB memory buffer)
-  ipcMain.handle('download-update', async (event, downloadUrl, savePath) => {
+  // One update download at a time: a second trigger (auto-check modal + manual click, or a
+  // double click) used to run two streams into the same file, so the bar jumped between
+  // their two percentages and the file was corrupted.
+  let downloadInFlight = false;
+  ipcMain.handle('download-update', async (_event, downloadUrl) => {
+    if (downloadInFlight) return { success: false, message: 'An update download is already running' };
+    downloadInFlight = true;
+    try { return await downloadUpdate(downloadUrl); } finally { downloadInFlight = false; }
+  });
+
+  async function downloadUpdate(downloadUrl) {
     console.log('[MAIN] Downloading update from:', downloadUrl);
     try {
       if (!checkedAsset || downloadUrl !== checkedAsset.url) {
@@ -410,7 +423,7 @@ function registerUpdateHandlers() {
       console.error('[MAIN] Download error:', error);
       return { success: false, message: error.message };
     }
-  });
+  }
 
   // Install update from cached ZIP (re-extract)
   ipcMain.handle('install-update', async () => {

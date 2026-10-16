@@ -275,7 +275,7 @@ namespace AhgSetup
                 var code = await Task.Run(() =>
                 {
                     var psi = new ProcessStartInfo("msiexec.exe",
-                        $"/i \"{msi}\" /qn /norestart ALLUSERS=2 MSIINSTALLPERUSER=1 APPLICATIONFOLDER=\"{dir}\\\" /l*v \"{log}\"")
+                        $"/i \"{msi}\" /qn /norestart ALLUSERS=2 MSIINSTALLPERUSER=1 REINSTALLMODE=amus APPLICATIONFOLDER=\"{dir}\\\" /l*v \"{log}\"")
                     { UseShellExecute = false, CreateNoWindow = true };
                     using (var p = Process.Start(psi)) { p.WaitForExit(); return p.ExitCode; }
                 });

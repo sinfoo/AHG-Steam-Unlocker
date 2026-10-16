@@ -18,6 +18,15 @@ type Changelog = {
 
 const CHANGELOGS: Changelog[] = [
   {
+    version: '1.2.6',
+    date: '2026-10-16',
+    items: [
+      { type: 'fix', title: 'Updates install reliably', description: 'Fixed updates that downloaded but never installed, or installed without replacing the old files.' },
+      { type: 'fix', title: 'One window only', description: 'Opening AHG Unlocker twice now brings the existing window to the front instead of starting a second copy.' },
+      { type: 'fix', title: 'No more flickering progress', description: 'Only one update download can run at a time.' },
+    ],
+  },
+  {
     version: '1.2.5',
     date: '2026-10-16',
     items: [
