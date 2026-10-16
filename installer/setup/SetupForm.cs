@@ -43,10 +43,64 @@ namespace AhgSetup
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.CenterScreen;
             BackColor = Color.FromArgb(8, 8, 15);
-            AutoScaleMode = AutoScaleMode.Dpi;
-            ClientSize = new Size(640, 500);
+            // Size is set in DIPs below from the real monitor DPI. WinForms Dpi autoscaling on
+            // .NET Framework never scaled this borderless window, so on 125-200% displays the
+            // WebView content (which does scale) was cropped inside a 640x500-pixel window.
+            AutoScaleMode = AutoScaleMode.None;
+            Padding = new Padding(ResizeGrip); // keeps the window edges free for resize hit-testing
             Controls.Add(_web);
             Load += async (_, __) => await InitWeb();
+        }
+
+        private const int ResizeGrip = 6;
+        private const int BaseW = 640, BaseH = 500, MinW = 480, MinH = 400;
+
+        // Ask Windows for this monitor's real scale (the PerMonitorV2 manifest makes it accurate);
+        // WinForms' own DeviceDpi needs an extra .config file, which a single-file setup can't ship.
+        private int Dpi => GetDpiForWindow(Handle) is var d && d > 0 ? (int)d : 96;
+
+        protected override void OnLoad(EventArgs e)
+        {
+            ApplyDpiSize(Dpi);
+            base.OnLoad(e);
+        }
+
+        private void ApplyDpiSize(int dpi, Point? at = null)
+        {
+            var s = dpi / 96f;
+            var area = Screen.FromHandle(Handle).WorkingArea;
+            MinimumSize = new Size((int)(MinW * s), (int)(MinH * s));
+            // never larger than the screen's usable area
+            var w = Math.Min((int)(BaseW * s), area.Width - 40);
+            var h = Math.Min((int)(BaseH * s), area.Height - 40);
+            Size = new Size(w, h);
+            Location = at ?? new Point(area.Left + (area.Width - w) / 2, area.Top + (area.Height - h) / 2);
+        }
+
+        // Borderless window: report edges/corners as resize areas so the user can drag-resize.
+        protected override void WndProc(ref Message m)
+        {
+            const int WM_NCHITTEST = 0x84, WM_DPICHANGED = 0x02E0;
+            if (m.Msg == WM_DPICHANGED) // dragged to a monitor with a different scale
+            {
+                var rc = (RECT)Marshal.PtrToStructure(m.LParam, typeof(RECT));
+                ApplyDpiSize((int)((long)m.WParam & 0xFFFF), new Point(rc.Left, rc.Top));
+                m.Result = IntPtr.Zero;
+                return;
+            }
+            base.WndProc(ref m);
+            if (m.Msg != WM_NCHITTEST || WindowState == FormWindowState.Maximized) return;
+            var p = PointToClient(new Point(unchecked((short)(long)m.LParam), unchecked((short)((long)m.LParam >> 16))));
+            int g = (int)(ResizeGrip * Dpi / 96f) + 2;
+            bool l = p.X < g, r = p.X >= ClientSize.Width - g, t = p.Y < g, b = p.Y >= ClientSize.Height - g;
+            if (t && l) m.Result = (IntPtr)13;      // HTTOPLEFT
+            else if (t && r) m.Result = (IntPtr)14; // HTTOPRIGHT
+            else if (b && l) m.Result = (IntPtr)16; // HTBOTTOMLEFT
+            else if (b && r) m.Result = (IntPtr)17; // HTBOTTOMRIGHT
+            else if (l) m.Result = (IntPtr)10;      // HTLEFT
+            else if (r) m.Result = (IntPtr)11;      // HTRIGHT
+            else if (t) m.Result = (IntPtr)12;      // HTTOP
+            else if (b) m.Result = (IntPtr)15;      // HTBOTTOM
         }
 
         protected override void OnHandleCreated(EventArgs e)
@@ -375,6 +429,8 @@ namespace AhgSetup
         private static void TryDelete(string f) { try { if (File.Exists(f)) File.Delete(f); } catch { } }
 
         // ── Win32 ──
+        [StructLayout(LayoutKind.Sequential)] private struct RECT { public int Left, Top, Right, Bottom; }
+        [DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr hwnd);
         [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr h, int attr, ref int val, int size);
         [DllImport("user32.dll")] private static extern bool ReleaseCapture();
         [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr h, int msg, IntPtr w, IntPtr l);
