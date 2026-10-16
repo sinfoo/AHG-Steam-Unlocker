@@ -2,6 +2,9 @@ import { defineConfig, type PluginOption } from 'vite'
 import react from '@vitejs/plugin-react'
 import pkg from './package.json'
 
+// %VITE_APP_VERSION% in index.html (splash) — same single source as __APP_VERSION__
+process.env.VITE_APP_VERSION = pkg.version
+
 async function getVisualizerPlugin(): Promise<PluginOption | null> {
   if (process.env.ANALYZE !== 'true') return null
   try {

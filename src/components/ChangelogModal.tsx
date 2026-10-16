@@ -18,6 +18,15 @@ type Changelog = {
 
 const CHANGELOGS: Changelog[] = [
   {
+    version: '1.2.7',
+    date: '2026-10-16',
+    items: [
+      { type: 'fix', title: 'Smooth first launch', description: 'After a fresh install the loading screen now waits for the game catalogue instead of showing an empty app and restarting the splash.' },
+      { type: 'fix', title: 'Resizable installer', description: 'The setup window scales with your display and can be resized.' },
+      { type: 'improvement', title: 'Cleaner code', description: 'Removed unused code from the app.' },
+    ],
+  },
+  {
     version: '1.2.6',
     date: '2026-10-16',
     items: [

@@ -133,6 +133,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getResourcePath: (relativePath) => ipcRenderer.invoke('get-resource-path', relativePath),
   
   loadGames: () => ipcRenderer.invoke('load-games'),
+  onCatalogueReady: (callback) => subscribe('catalogue-ready', callback),
 
   // ── SQLite paginated queries (used via bridge.ts, needed for batcher too) ──
   queryGames: (opts) => ipcRenderer.invoke('db:query-games', opts),

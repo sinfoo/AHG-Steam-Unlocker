@@ -452,7 +452,24 @@ function App() {
         // ── LOAD GAMES FROM SQLite ──
         console.log('[APP-TRACE] Calling bridge.loadGames()...')
         const loadStart = performance.now()
-        const data = await bridge.loadGames()
+        let data = await bridge.loadGames()
+        if (!data?.length) {
+          // Fresh install: games.db is empty until the first remote sync downloads the catalogue.
+          // Keep the loading screen up and load it in place when main says it's ready
+          // (the old path showed an empty app, then reloaded the window and replayed the splash).
+          setProgress(40)
+          addLog('Downloading game catalogue (first launch)...', 'info')
+          await new Promise<void>((resolve) => {
+            const api = (window as any).electronAPI
+            let poll: ReturnType<typeof setInterval> | undefined
+            const done = () => { off?.(); if (poll) clearInterval(poll); clearTimeout(cap); resolve() }
+            const off = api?.onCatalogueReady?.(done)
+            // fallback if the event was missed (count is cached up to 30 s in main)
+            poll = setInterval(async () => { if ((await bridge.getGameCount()) > 0) done() }, 5000)
+            const cap = setTimeout(done, 5 * 60 * 1000) // offline: give up and show what we have
+          })
+          data = await bridge.loadGames()
+        }
         const loadMs = (performance.now() - loadStart).toFixed(0)
         console.log('[APP-TRACE] bridge.loadGames() returned in ' + loadMs + 'ms, count:', data?.length || 0)
         setProgress(55)

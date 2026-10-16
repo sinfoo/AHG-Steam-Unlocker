@@ -2821,8 +2821,10 @@ app.whenReady().then(async () => {
       console.log('[MAIN] Remote sync result:', result.newGames?.length || 0, 'new games,', result.newFixes?.length || 0, 'new fixes');
       const wc = mainWindow?.webContents;
       if (wasEmpty && db.getGameCount() > 0 && wc && !wc.isDestroyed()) {
-        console.log('[MAIN] First-run catalogue built — reloading window to load it');
-        wc.reload();
+        // Tell the waiting renderer to load it in place. A wc.reload() here replayed the whole
+        // splash on first launch after the window had already shown an empty app.
+        console.log('[MAIN] First-run catalogue built — notifying renderer');
+        wc.send('catalogue-ready');
         return;
       }
       if (wc && !wc.isDestroyed()) {

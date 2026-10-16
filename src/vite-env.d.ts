@@ -85,6 +85,7 @@ interface ElectronAPI {
   }>
   downloadUpdate?: (downloadUrl: string, savePath: string) => Promise<{ success: boolean; message: string; path: string }>
   cancelUpdateDownload?: () => Promise<{ success: boolean }>
+  onCatalogueReady?: (callback: () => void) => () => void
   installUpdate?: () => Promise<{ success: boolean; message: string; filesCopied: number }>
   getDownloadPath?: () => Promise<string | null>
   getLastSeenVersion?: () => Promise<{ version: string; date: string } | null>
