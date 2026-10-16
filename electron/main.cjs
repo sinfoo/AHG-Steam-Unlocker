@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, shell, session, dialog, Tray, nativeImage, screen, protocol } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, session, dialog, Tray, nativeImage, screen, protocol } = require('electron');
 
 // One instance only. Without this, a second launch ran a full second app on the same
 // games.db (two writers), and its startup cleanup deleted the update file the first
@@ -16,7 +16,7 @@ app.on('second-instance', () => {
 });
 
 const path = require('path');
-const { spawn, execSync } = require('child_process');
+const { spawn } = require('child_process');
 const fs = require('fs');
 const https = require('https');
 const httpsAgent = new https.Agent({ keepAlive: true });
@@ -31,12 +31,11 @@ const { registerWindowIpc } = require('./handlers/window.cjs');
 const { registerImageNativeHandlers } = require('./handlers/imageNative.cjs');
 const state = require('./utils/state.cjs');
 const { getHealthyEndpoints, markHealthy, warmupHealthChecks } = require('./utils/apiHealthCheck.cjs');
-const APP_VERSION = require('../package.json').version;
 const { DiskCacheManager } = require('./services/imageDiskCache.cjs');
 const { preloader } = require('./services/imagePreloader.cjs');
 const nativeImageAddon = require('../native');
-const { dlcInfoCache, DLC_CACHE_FILE, getCustomSteamConfig, saveCustomSteamConfig, loadDlcInfoCache, saveDlcInfoCache, fetchDlcInfos } = require('./utils/config.cjs');
-const { getDepotDownloaderPath, DEPOT_DOWNLOADER_PATH, DEFAULT_STEAM_PATH, getResourcePath, findSteamPath, getCustomDepotCachePath, getCustomStPluginPath } = require('./utils/paths.cjs');
+const { dlcInfoCache, loadDlcInfoCache, saveDlcInfoCache, fetchDlcInfos } = require('./utils/config.cjs');
+const { getDepotDownloaderPath, getResourcePath, findSteamPath, getCustomDepotCachePath, getCustomStPluginPath } = require('./utils/paths.cjs');
 
 // ── ipcMain.handle uses the original Electron binding ──
 // The duplicate-handler guard was removed after inline→module handler migration completed.
@@ -93,27 +92,6 @@ app.commandLine.appendSwitch('disable-gpu-sandbox');
 app.commandLine.appendSwitch('js-flags', '--max-old-space-size=4096');
 app.commandLine.appendSwitch('disable-features', 'CalculateWebWinVisibility');
 app.commandLine.appendSwitch('enable-features', 'TaskManagerShowInExtensions');
-
-// ── Steam cover URL fetcher ──────────────────────────────────────────────
-async function fetchSteamGameCover(appid) {
-  try {
-    const url = `https://store.steampowered.com/api/appdetails?appids=${appid}&cc=us&l=en&filters=basic`;
-    const resp = await fetch(url, {
-      headers: { 'User-Agent': 'AHGUnlocker/1.0.0' },
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!resp.ok) return null;
-    const json = await resp.json();
-    const entry = json[appid];
-    if (entry && entry.success && entry.data && entry.data.header_image) {
-      return entry.data.header_image;
-    }
-    return null;
-  } catch (e) {
-    console.log('[MAIN] fetchSteamGameCover error for', appid, ':', e.message);
-    return null;
-  }
-}
 // ─────────────────────────────────────────────────────────────────────────
 
 function safeLog(...args) {
@@ -319,9 +297,7 @@ const LUATOOLS_APIS = [
 const repoSpeedCache = new Map();
 const repoNegativeCache = new Map();
 const depotKeysCache = new Map(); // key: repo name, value: { data: Buffer, parsed: object|null, timestamp: number }
-const downloadControllers = new Map(); // key: controller ID, value: AbortController
-const REPO_CONCURRENCY = 15;
-const REPO_TIMEOUT_MS = 1000; // Timeout per repo URL attempt (halved for faster fallback)
+const downloadControllers = new Map();const REPO_TIMEOUT_MS = 1000; // Timeout per repo URL attempt (halved for faster fallback)
 const NEGATIVE_CACHE_TTL = 1800000; // 30 min for failed repos (was 5 min)
 
 // Per-repo manifest count tracking for intelligent ordering
@@ -455,13 +431,6 @@ function recordRepoManifestCount(repo, count) {
     repoHitCache.add(repo);
   }
 }
-
-const MIRROR_ALT_URLS = [
-  "refs/heads/main",
-  "refs/heads/master",
-  "main",
-  "master",
-];
 
 // Config, cache, and path functions imported from ./utils/config.cjs and ./utils/paths.cjs
 
@@ -689,65 +658,6 @@ function startPythonBackend() {
   }
 }
 
-async function downloadFromMirror(appid, onProgress) {
-  return new Promise((resolve, reject) => {
-    for (let i = 0; i < MIRROR_REPOS.length; i++) {
-      const repo = MIRROR_REPOS[i];
-      const url = `https://github.com/${repo}/archive/refs/heads/${appid}.zip`;
-      
-      console.log(`[MAIN] Trying ${repo} for app ${appid}...`);
-      
-      const req = https.get(url, { agent: httpsAgent, headers: { 'User-Agent': 'AHG-Steam-Unlocker' } }, (res) => {
-        if (res.statusCode === 404) {
-          if (i === MIRROR_REPOS.length - 1) {
-            reject(new Error(`Game ${appid} not found in any mirror`));
-          }
-          return;
-        }
-        if (res.statusCode !== 200) {
-          if (i === MIRROR_REPOS.length - 1) {
-            reject(new Error(`HTTP ${res.statusCode}`));
-          }
-          return;
-        }
-        
-        const chunks = [];
-        const contentLength = parseInt(res.headers['content-length'] || 0);
-        let received = 0;
-        
-        res.on('data', (chunk) => {
-          chunks.push(chunk);
-          received += chunk.length;
-          if (contentLength && onProgress) {
-            onProgress(Math.round(received * 100 / contentLength));
-          }
-        });
-        
-        res.on('end', () => {
-          console.log(`[MAIN] Downloaded ${received} bytes from ${repo}`);
-          resolve(Buffer.concat(chunks));
-        });
-      });
-      
-      req.on('error', (e) => {
-        console.log(`[MAIN] Error from ${repo}:`, e.message);
-        if (i === MIRROR_REPOS.length - 1) {
-          reject(e);
-        }
-      });
-      
-      req.setTimeout(15000, () => {
-        req.destroy();
-        if (i === MIRROR_REPOS.length - 1) {
-          reject(new Error('Timeout'));
-        }
-      });
-      
-      return;
-    }
-  });
-}
-
 // handled by handlers/db.cjs: ipcMain.handle('load-games', ...)
 
 // ── Removed legacy games.json/fixes.json IPC paths ──
@@ -934,165 +844,6 @@ async function downloadDepotKeys(repo) {
   const firstError = results[0]?.reason?.message || 'Unknown';
   console.log(`[MAIN] All ${urlFormats.length} URLs failed for ${repo}: ${firstError}`);
   throw new Error(`Not found in any branch (${firstError})`);
-}
-
-// Try to get app data from Steam API
-async function getSteamAppData(appid) {
-  return new Promise((resolve, reject) => {
-    const url = `https://store.steampowered.com/api/appdetails?appids=${appid}`;
-    const req = https.get(url, { agent: httpsAgent, headers: { 'User-Agent': 'AHG-Steam-Unlocker' } }, (res) => {
-      if (res.statusCode === 200) {
-        const chunks = [];
-        res.on('data', (chunk) => chunks.push(chunk));
-        res.on('end', () => resolve(Buffer.concat(chunks)));
-      } else {
-        reject(new Error(`HTTP ${res.statusCode}`));
-      }
-    });
-    req.on('error', reject);
-    req.setTimeout(10000, () => { req.destroy(); reject(new Error('Timeout')); });
-  });
-}
-
-// Download actual manifest files
-async function downloadManifest(appid, depotid, manifestid, repo, steamPath) {
-  const depotCache = getCustomDepotCachePath(state.customSteamConfig) || path.join(steamPath, 'depotcache');
-  fs.mkdirSync(depotCache, { recursive: true });
-  
-  // Try different URL formats for manifests
-  const urlFormats = [
-    `https://raw.githubusercontent.com/${repo}/main/depotcache/${depotid}_${manifestid}.manifest`,
-    `https://raw.githubusercontent.com/${repo}/main/manifests/${depotid}_${manifestid}.manifest`,
-    `https://raw.githubusercontent.com/${repo}/master/depotcache/${depotid}_${manifestid}.manifest`,
-    `https://raw.githubusercontent.com/${repo}/master/manifests/${depotid}_${manifestid}.manifest`,
-    `https://raw.githubusercontent.com/${repo}/refs/heads/main/depotcache/${depotid}_${manifestid}.manifest`,
-  ];
-  
-  for (const url of urlFormats) {
-    try {
-      const data = await new Promise((resolve, reject) => {
-        const req = https.get(url, { agent: httpsAgent, headers: { 'User-Agent': 'AHG-Steam-Unlocker' } }, (res) => {
-          if (res.statusCode === 200) {
-            const chunks = [];
-            res.on('data', (chunk) => chunks.push(chunk));
-            res.on('end', () => resolve(Buffer.concat(chunks)));
-          } else {
-            reject(new Error(`HTTP ${res.statusCode}`));
-          }
-        });
-        req.on('error', reject);
-        req.setTimeout(10000, () => { req.destroy(); reject(new Error('Timeout')); });
-      });
-      
-      // Save the manifest file
-      const manifestPath = path.join(depotCache, `${depotid}_${manifestid}.manifest`);
-      fs.writeFileSync(manifestPath, data);
-      console.log(`[MAIN] Saved manifest to ${manifestPath}`);
-      return true;
-    } catch (e) {
-      continue;
-    }
-  }
-  return false;
-}
-
-// Download full zip from GitHub releases for the game
-async function downloadFromMirrorSingle(appid, repo) {
-  return new Promise(async (resolve, reject) => {
-    // First, try to get the depotkeys to find app manifests
-    let depotKeysData = null;
-    try {
-      depotKeysData = await downloadDepotKeys(repo);
-      const depotKeys = JSON.parse(depotKeysData.toString());
-      
-      // Look for this appid in depotkeys
-      if (depotKeys[appid]) {
-        const appData = depotKeys[appid];
-        const depots = appData.depots || {};
-        
-        // Download each depot's manifest
-        for (const depotId in depots) {
-          const depotData = depots[depotId];
-          if (depotData.manifestid) {
-            await downloadManifest(appid, depotId, depotData.manifestid, repo, findSteamPath(state.customSteamConfig));
-          }
-        }
-        
-        resolve(Buffer.from(JSON.stringify({ appid, depots, installed: true })));
-        return;
-      }
-    } catch (e) {
-      console.log(`[MAIN] Could not get depotkeys: ${e.message}`);
-    }
-    
-    // Fallback: try to get direct manifest files
-    const urlFormats = [
-      `https://raw.githubusercontent.com/${repo}/main/depotcache/${appid}.json`,
-      `https://raw.githubusercontent.com/${repo}/main/depotcache/${appid}_manifest.json`,
-      `https://raw.githubusercontent.com/${repo}/master/depotcache/${appid}.json`,
-      `https://raw.githubusercontent.com/${repo}/master/manifests/${appid}.json`,
-      `https://raw.githubusercontent.com/${repo}/refs/heads/main/${appid}.json`,
-    ];
-    
-    for (const url of urlFormats) {
-      try {
-        const data = await new Promise((resolve, reject) => {
-          const req = https.get(url, { agent: httpsAgent, headers: { 'User-Agent': 'AHG-Steam-Unlocker' } }, (res) => {
-            if (res.statusCode === 200) {
-              const chunks = [];
-              res.on('data', (chunk) => chunks.push(chunk));
-              res.on('end', () => resolve(Buffer.concat(chunks)));
-            } else {
-              reject(new Error(`HTTP ${res.statusCode}`));
-            }
-          });
-          req.on('error', reject);
-          req.setTimeout(10000, () => { req.destroy(); reject(new Error('Timeout')); });
-        });
-        resolve(data);
-        return;
-      } catch (e) {
-        continue;
-      }
-    }
-    
-    reject(new Error('Not found in any format'));
-  });
-}
-
-// Copy manifest to Steam depotcache
-async function copyManifestToSteam(manifestData, appid, steamPath) {
-  const depotCache = getCustomDepotCachePath(state.customSteamConfig) || path.join(steamPath, 'depotcache');
-  const luaPath = getCustomStPluginPath(state.customSteamConfig) || path.join(steamPath, 'config', 'stplug-in');
-  
-  fs.mkdirSync(depotCache, { recursive: true });
-  fs.mkdirSync(luaPath, { recursive: true });
-  
-  try {
-    const data = JSON.parse(manifestData.toString());
-    
-    // If we have depot info, save it
-    if (data.depots) {
-      for (const [depotId, depotData] of Object.entries(data.depots)) {
-        if (depotData.manifestid) {
-          const manifestPath = path.join(depotCache, `${depotId}_${depotData.manifestid}.manifest`);
-          // The downloadManifest function already saves these
-          console.log(`[MAIN] Would save ${manifestPath}`);
-        }
-      }
-    }
-    
-    // Save app info
-    const appInfoPath = path.join(depotCache, `${appid}_appinfo.json`);
-    enqueueAppinfoWrite(appid, () => fs.writeFileSync(appInfoPath, manifestData.toString()), appInfoPath);
-    
-    return { success: true, saved: true };
-  } catch (e) {
-    // Save raw data
-    const rawPath = path.join(depotCache, `${appid}_info.txt`);
-    fs.writeFileSync(rawPath, manifestData.toString());
-    return { success: true, warning: 'Saved as raw file' };
-  }
 }
 
 // Helper: download from DepotBox.org
@@ -2095,21 +1846,6 @@ function httpGet(url, signal, timeoutMs) {
   return httpGetWithProgress(url, null, signal, timeoutMs);
 }
 
-function execCmd(cmd) {
-  return new Promise(function(res, rej) {
-    console.log('[EXEC] ' + cmd);
-    var c = spawn('powershell', ['-ExecutionPolicy', 'Bypass', '-Command', cmd], { shell: false });
-    var err = '';
-    c.stderr.on('data', function(d) { err += d.toString(); });
-    c.on('close', function(code) { 
-      console.log('[EXEC] Exit code: ' + code);
-      if (code === 0) res(); 
-      else rej(new Error(err || 'Exit code ' + code)); 
-    });
-    c.on('error', function(e) { console.log('[EXEC] Error: ' + e.message); rej(e); });
-  });
-}
-
 // End of install function
 
 ipcMain.handle('add-to-steam', async (event, appid) => {
@@ -2865,19 +2601,7 @@ console.log('[MAIN] get-installed-games handler called');
 // Remove installed game
 // handled by handlers/installed.cjs: ipcMain.handle('remove-installed-game', ...)
 
-// GitHub Update Checker
-const GITHUB_REPO = 'sinfoo/AHG-Steam-Unlocker';
-
 // handled by handlers/updates.cjs: ipcMain.handle('check-for-updates', ...)
-
-// ── Helper ──
-function formatBytes(bytes) {
-  if (!bytes || bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-}
 
 // handled by handlers/updates.cjs: ipcMain.handle('download-update', ...)
 
@@ -3394,30 +3118,6 @@ ipcMain.handle('get-fix-health', async () => {
 });
 
 // ── LuaTools / Multi-Source Import System ──
-
-// Parse a .lua activation file to extract app IDs and depot info
-function parseLuaFile(luaContent) {
-  const result = { appid: null, depots: [] };
-  
-  // Match patterns like: appid = 730 or appid="730"
-  const appidMatch = luaContent.match(/appid\s*[=:]\s*["']?(\d+)["']?/i);
-  if (appidMatch) result.appid = appidMatch[1];
-  
-  // Match depot entries: { depot = 731, manifest = 1234567890123456789 }
-  const depotRegex = /depot\s*[=:]\s*["']?(\d+)["']?[^}]*?manifest\s*[=:]\s*["']?(\d+)["']?/gi;
-  let match;
-  while ((match = depotRegex.exec(luaContent)) !== null) {
-    result.depots.push({ depot: match[1], manifest: match[2] });
-  }
-  
-  // Also match addappid(appid) calls
-  const addappidRegex = /addappid\s*\(\s*["']?(\d+)["']?\s*\)/gi;
-  while ((match = addappidRegex.exec(luaContent)) !== null) {
-    result.depots.push({ depot: match[1], manifest: null, isDlc: true });
-  }
-  
-  return result;
-  }
 
 // ── Save onlinefix auth credentials ──
 ipcMain.handle('set-onlinefix-auth', async (event, data) => {

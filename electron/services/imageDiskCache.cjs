@@ -11,9 +11,7 @@
 //   5. Custom protocol handler serves cached files directly to renderer
 
 const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
-const { pathToFileURL } = require('url');
+const path = require('path');const { pathToFileURL } = require('url');
 const { app, protocol, net } = require('electron');
 
 const DEFAULT_MAX_SIZE = 500 * 1024 * 1024;     // 500 MB

@@ -1,16 +1,12 @@
 // ── Install/Game IPC handlers ──
 const path = require('path');
 const fs = require('fs');
-const https = require('https');
-const AdmZip = require('adm-zip');
-const { ipcMain, app, dialog } = require('electron');
+const { ipcMain } = require('electron');
 const state = require('../utils/state.cjs');
-const { ensureRepoIndex } = require('../utils/repoUtils.cjs');
-const { fetchDlcInfos, saveDlcInfoCache } = require('../utils/steamApi.cjs');
 const { findSteamPath, getCustomDepotCachePath, getCustomStPluginPath } = require('../utils/steamUtils.cjs');
 const { wrapHandler } = require('../utils/rateLimiter.cjs');
 const ryuuDownloader = require('../ryuuDownloader.cjs');
-const { installSteamGame, tryDlcManifests, downloadManifest, downloadFromMirrorSingle } = require('./install-helpers.cjs');
+const { downloadManifest, downloadFromMirrorSingle } = require('./install-helpers.cjs');
 // ── Install handler registration ──
 
 function registerInstallHandlers() {

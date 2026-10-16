@@ -1,6 +1,3 @@
-// ── Logging utilities for main process ──
-const path = require('path');
-const { app } = require('electron');
 
 function safeLog(...args) {
   try { console.log(...args); } catch (e) { /* ignore */ }

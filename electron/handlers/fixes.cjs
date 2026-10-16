@@ -1,12 +1,12 @@
 // ── Fix-related IPC handlers ──
 const path = require('path');
 const fs = require('fs');
-const { ipcMain, app, dialog, BrowserWindow, session, shell, clipboard } = require('electron');
+const { ipcMain, app, dialog, BrowserWindow, session, clipboard } = require('electron');
 const { spawn } = require('child_process');
 const state = require('../utils/state.cjs');
 const { findSteamPath, getCustomDepotCachePath } = require('../utils/steamUtils.cjs');
 const { getOrderedRepos } = require('../utils/repoUtils.cjs');
-const { httpGet, httpGetWithProgress } = require('../utils/httpUtils.cjs');
+const { httpGetWithProgress } = require('../utils/httpUtils.cjs');
 const { downloadFromMirrorSingle } = require('./install-helpers.cjs'); // for copy-manifest handler
 const { DEFAULT_AUTH_CODE: RYUU_AUTH_CODE } = require('../ryuuDownloader.cjs');
 

@@ -3,7 +3,6 @@ const path = require('path');
 const fs = require('fs');
 const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, screen, session } = require('electron');
 const state = require('../utils/state.cjs');
-const { safeLog } = require('../utils/log.cjs');
 const { getResourcePath } = require('../utils/pathUtils.cjs');
 const { wrapHandler } = require('../utils/rateLimiter.cjs');
 const remoteSyncManager = require('../remote-sync-manager.cjs');

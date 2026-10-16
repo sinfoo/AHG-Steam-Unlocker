@@ -1,19 +1,12 @@
 // ── Install/Game IPC handlers ──
 const path = require('path');
 const fs = require('fs');
-const https = require('https');
-const http = require('http');
-const AdmZip = require('adm-zip');
-const { ipcMain, app, dialog } = require('electron');
+const https = require('https');const AdmZip = require('adm-zip');
+const { app } = require('electron');
 const { spawn } = require('child_process');
 const state = require('../utils/state.cjs');
-const { httpGet, httpGetWithProgress, execCmd } = require('../utils/httpUtils.cjs');
-const { downloadDepotKeys, findInCachedDepotkeys, ensureRepoIndex, getOrderedRepos, recordRepoManifestCount, recordRepoSpeed, indexRepoAppids } = require('../utils/repoUtils.cjs');
-const { fetchDlcInfos, saveDlcInfoCache } = require('../utils/steamApi.cjs');
-const { findSteamPath, getCustomDepotCachePath, getCustomStPluginPath, getDepotDownloaderPath } = require('../utils/steamUtils.cjs');
-const { getResourcePath } = require('../utils/pathUtils.cjs');
-const { wrapHandler } = require('../utils/rateLimiter.cjs');
-const db = require('../db.cjs');
+const { httpGet, httpGetWithProgress } = require('../utils/httpUtils.cjs');
+const { downloadDepotKeys, findInCachedDepotkeys, getOrderedRepos, recordRepoManifestCount, recordRepoSpeed } = require('../utils/repoUtils.cjs');const { findSteamPath, getCustomDepotCachePath, getCustomStPluginPath, getDepotDownloaderPath } = require('../utils/steamUtils.cjs');
 const ryuuDownloader = require('../ryuuDownloader.cjs');
 const { getHealthyEndpoints, markHealthy } = require('../utils/apiHealthCheck.cjs');
 

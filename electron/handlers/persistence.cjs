@@ -7,31 +7,6 @@ const { ipcMain, app, shell } = require('electron');
 const state = require('../utils/state.cjs');
 const { wrapHandler } = require('../utils/rateLimiter.cjs');
 const { findSteamPath } = require('../utils/steamUtils.cjs');
-
-// ── Parse a .lua activation file to extract app IDs and depot info ──
-function parseLuaFile(luaContent) {
-  const result = { appid: null, depots: [] };
-
-  // Match patterns like: appid = 730 or appid="730"
-  const appidMatch = luaContent.match(/appid\s*[=:]\s*["']?(\d+)["']?/i);
-  if (appidMatch) result.appid = appidMatch[1];
-
-  // Match depot entries: { depot = 731, manifest = 1234567890123456789 }
-  const depotRegex = /depot\s*[=:]\s*["']?(\d+)["']?[^}]*?manifest\s*[=:]\s*["']?(\d+)["']?/gi;
-  let match;
-  while ((match = depotRegex.exec(luaContent)) !== null) {
-    result.depots.push({ depot: match[1], manifest: match[2] });
-  }
-
-  // Also match addappid(appid) calls
-  const addappidRegex = /addappid\s*\(\s*["']?(\d+)["']?\s*\)/gi;
-  while ((match = addappidRegex.exec(luaContent)) !== null) {
-    result.depots.push({ depot: match[1], manifest: null, isDlc: true });
-  }
-
-  return result;
-}
-
 function registerPersistenceHandlers() {
   // ── Generic Save/Load Handlers ──
 

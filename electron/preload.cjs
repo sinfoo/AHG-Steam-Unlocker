@@ -1,9 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
-const fs = require('fs');
-const path = require('path');
 const https = require('https');
 const http = require('http');
-const dns = require('dns');
 
 // Track active IPC listeners to prevent duplicate handler leaks
 // Subscribe to a main->renderer channel; returns an unsubscribe function.
@@ -22,54 +19,6 @@ let _preloaderCompleteHandler = null;
 let _preloaderPausedHandler = null;
 let _preloaderResumedHandler = null;
 let _preloaderCancelledHandler = null;
-
-function readJsonFile(relativePath) {
-  try {
-    console.log('[PRELOAD] readJsonFile:', relativePath)
-    console.log('[PRELOAD] process.resourcesPath:', process.resourcesPath)
-    console.log('[PRELOAD] __dirname:', __dirname)
-    
-    // Build list of possible paths
-    const possiblePaths = []
-    
-    // 1. In packaged app - resources folder
-    if (process.resourcesPath) {
-      possiblePaths.push(path.join(process.resourcesPath, relativePath))
-    }
-    
-    // 2. Next to preload.cjs (for development)
-    possiblePaths.push(path.join(__dirname, '..', relativePath))
-    
-    // 3. Two levels up
-    possiblePaths.push(path.join(__dirname, '..', '..', relativePath))
-    
-    // 4. Three levels up (nested structure)
-    possiblePaths.push(path.join(__dirname, '..', '..', '..', relativePath))
-    
-    // 5. In app folder
-    possiblePaths.push(path.join(process.resourcesPath || '', 'app', relativePath))
-    
-    console.log('[PRELOAD] Trying paths:', possiblePaths)
-    
-    for (const p of possiblePaths) {
-      try {
-        if (fs.existsSync(p)) {
-          console.log('[PRELOAD] Found file at:', p)
-          const content = fs.readFileSync(p, 'utf-8')
-          return JSON.parse(content)
-        }
-      } catch (e) { 
-        console.log('[PRELOAD] Failed:', p, e.message)
-        continue 
-      }
-    }
-    console.log('[PRELOAD] File not found:', relativePath)
-    return null
-  } catch (e) {
-    console.error('[PRELOAD] Error reading file:', e)
-    return null
-  }
-}
 
 // Fetch JSON from Steam Store API using Node.js https (bypasses CORS restrictions of browser fetch in preload)
 function fetchSteamAPIData(appid) {

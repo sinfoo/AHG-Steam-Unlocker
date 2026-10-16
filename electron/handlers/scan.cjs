@@ -4,7 +4,6 @@ const fs = require('fs');
 const { ipcMain, app } = require('electron');
 const db = require('../db.cjs');
 const state = require('../utils/state.cjs');
-const { findSteamPath } = require('../utils/steamUtils.cjs');
 const { getOrderedRepos, downloadDepotKeys, MIRROR_REPOS } = require('../utils/repoUtils.cjs');
 const { fetchSteamGameCover } = require('../utils/steamApi.cjs');
 const { wrapHandler } = require('../utils/rateLimiter.cjs');

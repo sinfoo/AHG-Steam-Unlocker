@@ -2,7 +2,7 @@
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
-const { ipcMain, app, shell, Menu, BrowserWindow, Notification } = require('electron');
+const { ipcMain, shell, Menu, BrowserWindow, Notification } = require('electron');
 const state = require('../utils/state.cjs');
 const { findSteamPath } = require('../utils/steamUtils.cjs');
 const { withCache } = require('../utils/ttlCache.cjs');

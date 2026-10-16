@@ -5,7 +5,6 @@ const { ipcMain, app } = require('electron');
 const db = require('../db.cjs');
 const customFixesManager = require('../custom-fixes-manager.cjs');
 const remoteSyncManager = require('../remote-sync-manager.cjs');
-const state = require('../utils/state.cjs');
 const { withCache } = require('../utils/ttlCache.cjs');
 const { wrapHandler } = require('../utils/rateLimiter.cjs');
 
