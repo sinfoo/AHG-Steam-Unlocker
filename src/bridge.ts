@@ -341,6 +341,18 @@ export const bridge = {
     return { success: false, message: 'Not available in browser' }
   },
 
+  async getUnlockMode(): Promise<UnlockModeStatus | null> {
+    return getAPI()?.getUnlockMode?.() ?? null
+  },
+
+  async setUnlockMode(mode: string, reinstall = false): Promise<{ success: boolean; message?: string }> {
+    return getAPI()?.setUnlockMode?.(mode, reinstall) ?? { success: false, message: 'Not available in browser' }
+  },
+
+  onUnlockModeProgress(cb: (step: string) => void): () => void {
+    return getAPI()?.onUnlockModeProgress?.(cb) ?? (() => {})
+  },
+
   async openSteamFolder(): Promise<{ success: boolean; message: string }> {
     const api = getAPI()
     if (api && api.openSteamFolder) {

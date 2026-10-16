@@ -268,6 +268,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Path operations
   restartSteam: () => ipcRenderer.invoke('restart-steam'),
   openSteamFolder: () => ipcRenderer.invoke('open-steam-folder'),
+  getUnlockMode: () => ipcRenderer.invoke('get-unlock-mode'),
+  setUnlockMode: (mode, reinstall) => ipcRenderer.invoke('set-unlock-mode', mode, reinstall),
+  onUnlockModeProgress: (callback) => {
+    const handler = (_event, step) => callback(step);
+    ipcRenderer.on('unlock-mode-progress', handler);
+    return () => ipcRenderer.removeListener('unlock-mode-progress', handler);
+  },
   
   // Update checker
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),

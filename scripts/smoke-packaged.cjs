@@ -17,7 +17,7 @@ const http = require('http');
 const { spawn, execSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
-const EXE = path.join(ROOT, 'dev-release', 'win-unpacked', 'AHG Unlocker.exe');
+const EXE = process.env.AHG_SMOKE_EXE || path.join(ROOT, 'dev-release', 'win-unpacked', 'AHG Unlocker.exe');
 const PORT = (() => { const i = process.argv.indexOf('--port'); return i !== -1 ? Number(process.argv[i + 1]) : 9333; })();
 const KEEP = process.argv.includes('--keep');
 

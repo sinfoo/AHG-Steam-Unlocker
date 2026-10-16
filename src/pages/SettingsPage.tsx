@@ -9,6 +9,8 @@ import { useGameStore } from '../store'
 import { useUIStore } from '../store/uiStore'
 import { PageBanner } from '../components/PageParts'
 import { useShallow } from 'zustand/react/shallow'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Loader2, X, AlertTriangle } from 'lucide-react'
 import { useT, useLangStore, LANGUAGES, type TKey } from '../i18n'
 
 const EASE = 'cubic-bezier(.16,1,.3,1)'
@@ -34,7 +36,7 @@ const SettingsPage = memo(function SettingsPage({ colors, accentColor, setAccent
   const setLang = useLangStore(s => s.setLang)
   const [activeTab, setActiveTab] = useState('general')
 
-  const [appVersion, setAppVersion] = useState('0.90')
+  const [appVersion, setAppVersion] = useState(__APP_VERSION__)
   const [cacheSize, setCacheSize] = useState('0 MB')
   const [customSteamPath, setCustomSteamPath] = useState('')
   const [customDepotCachePath, setCustomDepotCachePath] = useState('')
@@ -51,6 +53,20 @@ const SettingsPage = memo(function SettingsPage({ colors, accentColor, setAccent
 
   const rm = !!reducedMotion
   const rise = (delay = 0) => (rm ? undefined : `v2-riseIn .35s ${delay}ms ${EASE} both`)
+
+  const [mode, setMode] = useState<UnlockModeStatus | null>(null)
+  const [sw, setSw] = useState<ModeSwitch | null>(null)
+  const refreshMode = () => { bridge.getUnlockMode?.().then((m: UnlockModeStatus | null) => m && setMode(m)) }
+  useEffect(() => { if (activeTab === 'steam') refreshMode() }, [activeTab])
+  const applyMode = async (m: string, reinstall = false) => {
+    if (sw?.state === 'running') return
+    setSw({ target: m, steps: [], state: 'running' })
+    const off = bridge.onUnlockModeProgress((step: string) => setSw(p => p && ({ ...p, steps: [...p.steps, step] })))
+    const r = await bridge.setUnlockMode(m, reinstall)
+    off()
+    setSw(p => p && ({ ...p, state: r.success ? 'done' : 'error', error: r.message }))
+    refreshMode()
+  }
 
   useEffect(() => {
     window.electronAPI?.getCustomSteamConfig?.().then((cfg: any) => {
@@ -197,6 +213,20 @@ const SettingsPage = memo(function SettingsPage({ colors, accentColor, setAccent
 
             {activeTab === 'steam' && (
               <>
+                {(['steamtools', 'bst', 'custom'] as const).map((id, i) => {
+                  const active = mode?.mode === id
+                  const bst = id === 'bst'
+                  const desc = bst
+                    ? (!mode ? '' : !mode.installed ? t('ui.mode.notInstalled') : mode.updateAvailable ? t('ui.mode.update') : t('ui.mode.upToDate'))
+                    : t(`ui.mode.${id}Desc` as TKey)
+                  return (
+                    <Row key={id} rm={rm} i={i} label={`${t(`ui.mode.${id}` as TKey)}${active ? ' • ' + t('ui.mode.active') : ''}`} desc={desc}>
+                      {active && bst
+                        ? <ActBtn icon={RefreshCw} label={mode?.updateAvailable ? t('ui.mode.updateBtn') : t('ui.mode.reinstall')} onClick={() => applyMode(id, true)} />
+                        : !active && <ActBtn icon={Zap} label={t('ui.mode.switch')} onClick={() => applyMode(id)} />}
+                    </Row>
+                  )
+                })}
                 {pathItems.map((item, i) => (
                   <Row key={item.key} rm={rm} i={i} label={item.label} desc={item.desc}>
                     <div style={{ display: 'flex', gap: 8, width: 'min(420px,52%)', minWidth: 0 }}>
@@ -265,9 +295,64 @@ const SettingsPage = memo(function SettingsPage({ colors, accentColor, setAccent
           </div>
         </div>
       </div>
+      <ModeSwitchModal sw={sw} onClose={() => setSw(null)} />
     </div>
   )
 })
+
+type ModeSwitch = { target: string; steps: string[]; state: 'running' | 'done' | 'error'; error?: string }
+
+// Live status of an unlock-mode switch; steps arrive from main via 'unlock-mode-progress'.
+function ModeSwitchModal({ sw, onClose }: { sw: ModeSwitch | null; onClose: () => void }) {
+  const t = useT()
+  const name = sw ? t(`ui.mode.${sw.target}` as TKey) : ''
+  const running = sw?.state === 'running'
+  return (
+    <AnimatePresence>
+      {sw && (
+        <motion.div key="ms" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}
+          onClick={() => !running && onClose()}
+          style={{ position: 'fixed', inset: 0, zIndex: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(4,4,10,.62)', backdropFilter: 'blur(10px)' }}>
+          <motion.div role="dialog" aria-modal="true" aria-live="polite" onClick={e => e.stopPropagation()}
+            initial={{ scale: 0.94, opacity: 0, y: 16 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.94, opacity: 0, y: 16 }}
+            transition={{ type: 'spring', damping: 24, stiffness: 340 }}
+            style={{ width: 'min(400px,100%)', borderRadius: 20, background: '#0f0f1b', border: '1px solid rgba(255,255,255,.08)', boxShadow: `0 30px 80px rgba(0,0,0,.55), 0 0 0 1px ${mix(18)}`, padding: 22 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: sw.steps.length ? 18 : 0 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 12, display: 'grid', placeItems: 'center', flex: 'none',
+                background: sw.state === 'error' ? 'rgba(239,68,68,.14)' : mix(16), color: sw.state === 'error' ? '#fca5a5' : ACC }}>
+                {running ? <Loader2 size={18} className="animate-spin" /> : sw.state === 'done' ? <Check size={18} /> : <AlertTriangle size={18} />}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 15.5, fontWeight: 700 }}>
+                  {running ? t('ui.mode.switching', { m: name }) : sw.state === 'done' ? t('ui.mode.doneTitle', { m: name }) : t('ui.mode.failTitle')}
+                </div>
+                {sw.state === 'error' && <div style={{ fontSize: 12.5, color: '#fca5a5', marginTop: 3 }}>{sw.error}</div>}
+              </div>
+              {!running && <button aria-label={t('ui.mode.close')} onClick={onClose} className="v2-ctl"
+                style={{ width: 32, height: 32, borderRadius: 9, border: 'none', background: 'rgba(255,255,255,.06)', color: '#c9c8da', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><X size={15} /></button>}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {sw.steps.map((step, i) => {
+                const last = i === sw.steps.length - 1
+                const current = running && last
+                const failed = sw.state === 'error' && last
+                return (
+                  <motion.div key={step + i} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.08, ease: [0.4, 0, 0.2, 1] }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: current ? '#fff' : '#a6a5bb' }}>
+                    <span style={{ width: 18, display: 'grid', placeItems: 'center', color: failed ? '#fca5a5' : current ? ACC : '#4ade80' }}>
+                      {current ? <Loader2 size={14} className="animate-spin" /> : failed ? <X size={14} /> : <Check size={14} />}
+                    </span>
+                    {t(`ui.mode.step.${step}` as TKey)}
+                  </motion.div>
+                )
+              })}
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
+}
 
 function Row({ label, desc, children, i, rm, stack }: { label: string; desc: string; children: React.ReactNode; i: number; rm: boolean; stack?: boolean }) {
   return (

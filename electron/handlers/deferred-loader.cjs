@@ -18,6 +18,7 @@ const { registerLicenseHandlers } = require('./license.cjs');
 const { registerMiscHandlers } = require('./misc.cjs');
 const { registerScanHandlers } = require('./scan.cjs');
 const { registerSteamHandlers } = require('./steam.cjs');
+const { registerModeHandlers } = require('./mode.cjs');
 const { registerSystemHandlers } = require('./system.cjs');
 const { registerUpdateHandlers } = require('./updates.cjs');
 const { createLazyModule } = require('../utils/lazyLoader.cjs');
@@ -44,6 +45,7 @@ function registerDeferredHandlers() {
   registerMiscHandlers();
   registerScanHandlers();
   registerSteamHandlers();
+  registerModeHandlers();
   registerSystemHandlers();
   registerUpdateHandlers();
   console.log('[MAIN] Deferred IPC handlers registered');

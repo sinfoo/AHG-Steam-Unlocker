@@ -178,11 +178,13 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
           addLog(tNow('ui.upd.logDlDone'))
           setProgress(100)
           setDownloadComplete(true)
-          if (res.filesCopied) {
+          if (res.staged) {
             setInstallComplete(true)
-            setInstallFilesCount(res.filesCopied)
+            setInstallFilesCount(res.filesCopied || 0)
             setRestartNeeded(true)
-            addLog(tNow('ui.upd.logInstalled', { n: res.filesCopied }))
+            if (res.filesCopied) addLog(tNow('ui.upd.logInstalled', { n: res.filesCopied }))
+            // Seamless: staged update is applied on exit, so restart right away
+            setTimeout(() => api.restartApp?.(), 1500)
           }
         } else {
           setError(res.message || tNow('ui.upd.dlFailed'))
@@ -214,6 +216,7 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
           setInstallComplete(true)
           setInstallFilesCount(res.filesCopied || 0)
           setRestartNeeded(true)
+          setTimeout(() => api.restartApp?.(), 1500)
         } else {
           setError(res.message || tNow('ui.upd.installFailed'))
           addLog(tNow('ui.fx.err', { err: res.message }))
@@ -434,7 +437,7 @@ export const UpdateModal = memo(function UpdateModal({ isOpen, onClose, currentV
                               </motion.div>
                               <p className="text-lg font-bold" style={{ color: COLORS.green }}>{t('ui.upd.readyTitle')}</p>
                               <p className="text-sm mt-1" style={{ color: COLORS.textMuted }}>
-                                {t('ui.upd.staged', { v: result.latestVersion, n: installFilesCount })}
+                                {installFilesCount ? t('ui.upd.staged', { v: result.latestVersion, n: installFilesCount }) : t('ui.upd.stagedMsi', { v: result.latestVersion })}
                               </p>
                             </div>
                             

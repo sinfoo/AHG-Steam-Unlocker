@@ -62,3 +62,12 @@ bot/bot.log
 
 # Private repo: app keys are shared with the team (they ship inside the app anyway)
 !config/secrets.json
+
+# -- setup.exe bootstrapper build output --
+installer/setup/bin/
+installer/setup/obj/
+/release/
+/release-*/
+
+# client keys: local only, never pushed
+config/secrets.json

@@ -1,7 +1,7 @@
 {
   "name": "ahg-unlocker",
   "productName": "AHG Unlocker",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "AHG Steam Unlocker - Professional Game Manager",
   "author": "AHG Team",
   "private": true,
@@ -96,7 +96,11 @@
       "!native/build/**/*.tlog",
       "!native/build/**/*.pdb",
       "!dist/**/*.map",
-      "!bot/**"
+      "!bot/**",
+      "!dev-release/**",
+      "!release/**",
+      "!release-*/**",
+      "!installer/**"
     ],
     "asarUnpack": [
       "dist/assets/**",
@@ -115,6 +119,15 @@
         "dir"
       ],
       "icon": "AHG Unlocker Icon.ico"
+    },
+    "msi": {
+      "perMachine": false,
+      "oneClick": false,
+      "runAfterFinish": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "AHG Unlocker",
+      "artifactName": "AHG-Unlocker-${version}.msi"
     }
   },
   "allowScripts": {

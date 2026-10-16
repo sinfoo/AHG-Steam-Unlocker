@@ -108,7 +108,62 @@ function stageUpdate(zipPath) {
 // process to exit, robocopies the staged files onto the install dir (the release zip
 // root IS the install root: exe + resources\ — NOT resources\ as the old code
 // assumed), starts the new exe, and cleans up after itself.
+// MSI releases: Windows Installer does the swap (MajorUpgrade replaces the old
+// product, keeps Add/Remove Programs correct, rolls back on failure).
+const msiPath = () => path.join(app.getPath('temp'), 'ahg-update.msi');
+let msiStaged = false;
+
+// Shared wait-for-exit prelude: exact PID filter; a match row contains the image
+// name, the "no tasks" INFO line doesn't.
+function waitForExitLines(next) {
+  return [
+    '@echo off',
+    'set TRIES=0',
+    ':wait',
+    `tasklist /NH /FI "PID eq ${process.pid}" 2>nul | find /I ".exe" >nul`,
+    'if not errorlevel 1 (',
+    '  set /a TRIES+=1',
+    `  if %TRIES% GEQ 60 goto ${next}`,
+    '  ping -n 2 127.0.0.1 >nul',
+    '  goto wait',
+    ')',
+  ];
+}
+
+function applyMsiOnExit() {
+  const msi = msiPath();
+  const logPath = path.join(app.getPath('temp'), 'ahg-update-msi.log');
+  const batPath = path.join(app.getPath('temp'), 'ahg-apply-update.bat');
+  // Upgrade in place: same folder (honours a custom path picked in setup.exe; migrates zip installs)
+  const installDir = path.dirname(process.execPath);
+  const bat = [
+    ...waitForExitLines('install'),
+    ':install',
+    // /passive = progress bar only, no prompts; per-user so no UAC
+    `start "" /wait msiexec /i "${msi}" /passive /norestart ALLUSERS=2 MSIINSTALLPERUSER=1 APPLICATIONFOLDER="${installDir}\\" /l*v "${logPath}"`,
+    // 0 = ok, 3010 = ok but reboot pending; anything else = failed (MSI already rolled back)
+    'if %errorlevel%==0 goto ok',
+    'if %errorlevel%==3010 goto ok',
+    `start "" "${process.execPath}"`,
+    'del "%~f0"',
+    'exit',
+    ':ok',
+    `del "${msi}"`,
+    `start "" "${process.execPath}"`,
+    'del "%~f0"',
+  ].join('\r\n');
+  fs.writeFileSync(batPath, bat);
+  const { spawn } = require('child_process');
+  spawn('cmd.exe', ['/c', batPath], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+  console.log('[UPDATES] Staged MSI will be installed by', batPath);
+  return true;
+}
+
 function applyStagedUpdateOnExit() {
+  if (msiStaged && fs.existsSync(msiPath())) {
+    if (!app.isPackaged) { console.log('[UPDATES] Dev build — skipping MSI install'); return false; }
+    return applyMsiOnExit();
+  }
   const layout = validateStagedLayout();
   if (!layout.ok) {
     console.error('[UPDATES] Refusing to apply staged update:', layout.reason);
@@ -124,18 +179,9 @@ function applyStagedUpdateOnExit() {
   const logPath = path.join(app.getPath('temp'), 'ahg-update-apply.log');
   const batPath = path.join(app.getPath('temp'), 'ahg-apply-update.bat');
   const bat = [
-    '@echo off',
-    'set TRIES=0',
-    ':wait',
-    `tasklist /FI "PID eq ${process.pid}" 2>nul | find "${process.pid}" >nul`,
-    'if not errorlevel 1 (',
-    '  set /a TRIES+=1',
-    '  if %TRIES% GEQ 60 goto copy',
-    '  ping -n 2 127.0.0.1 >nul',
-    '  goto wait',
-    ')',
+    ...waitForExitLines('copy'),
     ':copy',
-    `robocopy "${sourceRoot}" "${installDir}" /E /IS /IT /R:3 /W:1 /LOG:"${logPath}" /NFL /NDL /NP >nul`,
+    `robocopy "${sourceRoot}" "${installDir}" /E /IS /IT /R:15 /W:1 /LOG:"${logPath}" /NFL /NDL /NP >nul`,
     // Robocopy exit codes 0–7 are success (copied/purged/extras); 8+ is failure.
     'if errorlevel 8 goto fail',
     `start "" "${exePath}"`,
@@ -155,16 +201,18 @@ function applyStagedUpdateOnExit() {
   return true;
 }
 
-/** Pick the best downloadable asset from a GitHub release (prefer .zip). */
+/** Pick the best downloadable asset from a GitHub release (prefer .msi, then .zip). */
 function pickReleaseAsset(assets) {
   if (!Array.isArray(assets) || assets.length === 0) return null;
+  const msi = assets.find(a => /\.msi$/i.test(a.name || ''));
+  if (msi) return msi;
   const zips = assets.filter(a => /\.zip$/i.test(a.name || ''));
   const winZip = zips.find(a => /win|windows|portable|x64/i.test(a.name || ''));
   return winZip || zips[0] || assets[0];
 }
 
 /** Stream an HTTPS response to disk with progress events. */
-function streamToFile(res, filePath, onProgress) {
+function streamToFile(res, filePath, onProgress, hash) {
   return new Promise((resolve, reject) => {
     const total = parseInt(res.headers['content-length'] || '0', 10);
     let received = 0;
@@ -177,6 +225,7 @@ function streamToFile(res, filePath, onProgress) {
     };
     res.on('data', (chunk) => {
       received += chunk.length;
+      if (hash) hash.update(chunk);
       if (total && onProgress) onProgress(received, total);
     });
     res.pipe(out);
@@ -244,7 +293,7 @@ function registerUpdateHandlers() {
       }
 
       const asset = pickReleaseAsset(latest.assets);
-      checkedAsset = asset ? { url: asset.browser_download_url, digest: asset.digest || null } : null;
+      checkedAsset = asset ? { url: asset.browser_download_url, digest: asset.digest || null, msi: /\.msi$/i.test(asset.name || '') } : null;
       return {
         success: true,
         latestTag,
@@ -271,11 +320,20 @@ function registerUpdateHandlers() {
       if (!checkedAsset || downloadUrl !== checkedAsset.url) {
         return { success: false, message: 'Invalid download URL — check for updates first' };
       }
-      const tempDir = app.getPath('temp');
-      const zipFileName = 'ahg-update.zip';
+      const isMsi = checkedAsset.msi;
       // Always the temp dir: never write to a renderer-chosen path.
-      const finalSavePath = path.join(tempDir, zipFileName);
+      const finalSavePath = isMsi ? msiPath() : path.join(app.getPath('temp'), 'ahg-update.zip');
+      msiStaged = false;
 
+      // Zip swap writes into the install dir: fail before a 230MB download if that can't work.
+      // (MSI installs per-user via Windows Installer, so it doesn't need this.)
+      if (app.isPackaged && !isMsi) {
+        const probe = path.join(path.dirname(process.execPath), '.ahg-write-test');
+        try { fs.writeFileSync(probe, ''); fs.unlinkSync(probe); }
+        catch { return { success: false, message: 'Install folder is not writable. Move AHG Unlocker to a folder you own (e.g. Desktop) and retry.' }; }
+      }
+      const [algo, expected] = (checkedAsset.digest || '').split(':');
+      const hash = expected ? crypto.createHash(algo) : null;
       const res = await httpsGet(downloadUrl, {
         'User-Agent': 'AHG-Steam-Unlocker',
         'Accept': 'application/octet-stream',
@@ -288,15 +346,18 @@ function registerUpdateHandlers() {
             percent: Math.round(received * 100 / total),
           });
         }
-      });
-      console.log('[MAIN] Update ZIP saved to:', finalSavePath);
-      if (checkedAsset.digest) {
-        const [algo, expected] = checkedAsset.digest.split(':');
-        const actual = crypto.createHash(algo).update(fs.readFileSync(finalSavePath)).digest('hex');
-        if (actual !== expected) {
+      }, hash);
+      console.log('[MAIN] Update saved to:', finalSavePath);
+      if (hash) {
+        if (hash.digest('hex') !== expected) {
           try { fs.unlinkSync(finalSavePath); } catch { /* best effort */ }
           return { success: false, message: 'Update download failed integrity check — please retry' };
         }
+      }
+
+      if (isMsi) {
+        msiStaged = true;
+        return { success: true, message: 'Update ready — restarting to install', path: finalSavePath, staged: true };
       }
 
       // Stage the update — actual file replacement happens on restart, when the
@@ -319,8 +380,11 @@ function registerUpdateHandlers() {
   ipcMain.handle('install-update', async () => {
     console.log('[MAIN] Installing update from cached ZIP...');
     try {
-      const tempDir = app.getPath('temp');
-      const zipPath = path.join(tempDir, 'ahg-update.zip');
+      if (checkedAsset?.msi && fs.existsSync(msiPath())) {
+        msiStaged = true;
+        return { success: true, message: 'Update ready — restarting to install', staged: true };
+      }
+      const zipPath = path.join(app.getPath('temp'), 'ahg-update.zip');
 
       if (!fs.existsSync(zipPath)) {
         return { success: false, message: 'Update file not found. Please download again.' };

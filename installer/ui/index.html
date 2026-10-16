@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AHG Unlocker Setup</title>
+<style>
+@font-face { font-family: 'Geist'; src: url('geist.woff2') format('woff2'); font-weight: 100 900; }
+:root {
+  --acc: #a77dff;
+  --acc-2: #8b5cf6;
+  --bg: #08080f;
+  --card: #0f0f1b;
+  --line: rgba(255,255,255,.08);
+  --line-2: rgba(255,255,255,.12);
+  --text: #f8fafc;
+  --muted: #a6a5bb;
+  --dim: #6f6e88;
+  --green: #22c55e;
+  --red: #ef4444;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --spring: cubic-bezier(.16,1,.3,1);
+  --mono: 'Geist Mono', ui-monospace, Consolas, monospace;
+}
+* { box-sizing: border-box; margin: 0; }
+html, body { height: 100%; background: var(--bg); color: var(--text); font: 14px/1.45 'Geist', 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif; -webkit-font-smoothing: antialiased; overflow: hidden; user-select: none; }
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--acc-2); outline-offset: 2px; }
+
+/* ambient backdrop: two slow violet blobs + dot grid */
+.bg { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+.bg i { position: absolute; border-radius: 50%; filter: blur(70px); opacity: .55; animation: drift 14s ease-in-out infinite alternate; }
+.bg i:nth-child(1) { width: 420px; height: 420px; left: -140px; top: -160px; background: radial-gradient(circle, rgba(139,92,246,.55), transparent 65%); }
+.bg i:nth-child(2) { width: 360px; height: 360px; right: -120px; bottom: -170px; background: radial-gradient(circle, rgba(167,125,255,.35), transparent 65%); animation-delay: -6s; }
+.bg::after { content: ''; position: absolute; inset: 0; background-image: radial-gradient(rgba(255,255,255,.05) 1px, transparent 1px); background-size: 22px 22px; mask-image: linear-gradient(180deg, #000 0%, transparent 85%); }
+@keyframes drift { to { transform: translate(40px, 30px) scale(1.08); } }
+
+/* title bar */
+.bar { position: relative; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 8px 0 16px; z-index: 2; }
+.bar .brand { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); flex: 1; }
+.bar .brand b { color: var(--acc); font-weight: 700; }
+.win { width: 34px; height: 30px; display: grid; place-items: center; border: 0; background: transparent; border-radius: 8px; color: var(--muted); cursor: pointer; transition: background 80ms var(--ease), color 80ms var(--ease); }
+.win:hover { background: rgba(255,255,255,.07); color: #fff; }
+.win.x:hover { background: rgba(239,68,68,.18); color: #fca5a5; }
+
+main { position: relative; z-index: 1; height: calc(100% - 44px); padding: 6px 28px 24px; display: flex; flex-direction: column; }
+.screen { display: none; flex: 1; flex-direction: column; min-height: 0; animation: rise .32s var(--spring) both; }
+.screen.on { display: flex; }
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } }
+
+/* hero */
+.hero { display: flex; align-items: center; gap: 16px; margin-bottom: 22px; }
+.hero img { width: 60px; height: 60px; object-fit: contain; filter: drop-shadow(0 10px 26px rgba(139,92,246,.55)); animation: float 5s ease-in-out infinite; }
+@keyframes float { 50% { transform: translateY(-4px); } }
+.hero h1 { font-size: 24px; font-weight: 700; letter-spacing: -.02em; }
+.hero p { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.ver { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font: 600 11px var(--mono); color: var(--acc); background: color-mix(in oklch, var(--acc) 14%, transparent); border: 1px solid color-mix(in oklch, var(--acc) 28%, transparent); vertical-align: 3px; }
+
+/* panel */
+.panel { border-radius: 16px; background: rgba(15,15,27,.72); border: 1px solid var(--line); backdrop-filter: blur(14px); }
+.field { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.label { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); margin-bottom: 8px; display: flex; justify-content: space-between; }
+.label span:last-child { text-transform: none; letter-spacing: 0; font: 500 11.5px var(--mono); color: var(--muted); }
+.path { display: flex; gap: 8px; }
+.path input { flex: 1; min-width: 0; height: 38px; border-radius: 10px; border: 1px solid var(--line-2); background: rgba(0,0,0,.3); padding: 0 12px; font: 12.5px var(--mono); color: #d6d5e6; outline: none; transition: border-color 80ms var(--ease); }
+.path input:focus { border-color: color-mix(in oklch, var(--acc) 60%, transparent); }
+.path input.bad { border-color: rgba(239,68,68,.55); }
+.hint { font-size: 12px; margin-top: 6px; color: #fca5a5; min-height: 0; }
+.hint:empty { display: none; }
+
+.opt { display: flex; align-items: center; gap: 12px; padding: 11px 16px; cursor: pointer; transition: background 80ms var(--ease); }
+.opt + .opt { border-top: 1px solid var(--line); }
+.opt:hover { background: rgba(255,255,255,.025); }
+.opt .ic { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; color: var(--acc); background: color-mix(in oklch, var(--acc) 12%, transparent); flex: none; }
+.opt .tx { flex: 1; min-width: 0; }
+.opt .tx b { display: block; font-size: 13.5px; font-weight: 600; }
+.opt .tx small { display: block; font-size: 12px; color: var(--dim); }
+
+.sw { position: relative; width: 40px; height: 24px; border-radius: 12px; border: 0; padding: 0; flex: none; cursor: pointer; background: rgba(255,255,255,.14); transition: background 80ms var(--ease); }
+.sw::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.4); transition: transform .3s cubic-bezier(.34,1.56,.64,1); }
+.sw[aria-checked="true"] { background: var(--acc-2); }
+.sw[aria-checked="true"]::after { transform: translateX(16px); }
+
+/* buttons */
+.foot { margin-top: auto; padding-top: 18px; display: flex; align-items: center; gap: 10px; }
+.foot .note { flex: 1; font-size: 11.5px; color: var(--dim); }
+.btn { height: 40px; padding: 0 18px; border-radius: 11px; border: 1px solid var(--line-2); background: rgba(255,255,255,.05); font-weight: 600; font-size: 13.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: background 80ms var(--ease), transform 80ms var(--ease), box-shadow 80ms var(--ease); white-space: nowrap; }
+.btn:hover { background: rgba(255,255,255,.09); }
+.btn:active { transform: scale(.97); }
+.btn.sm { height: 38px; padding: 0 12px; font-size: 12.5px; border-radius: 10px; }
+.btn.pri { border: 0; color: #fff; background: linear-gradient(135deg, #9d6bff, #7c3aed); box-shadow: 0 8px 28px rgba(139,92,246,.45), inset 0 1px 0 rgba(255,255,255,.18); padding: 0 22px; }
+.btn.pri:hover { box-shadow: 0 10px 34px rgba(139,92,246,.6), inset 0 1px 0 rgba(255,255,255,.22); }
+.btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+/* progress screen */
+.stage { text-align: center; padding-top: 6px; }
+.ring { position: relative; width: 132px; height: 132px; margin: 6px auto 18px; }
+.ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring circle { fill: none; stroke-width: 7; }
+.ring .trk { stroke: rgba(255,255,255,.07); }
+.ring .val { stroke: url(#g); stroke-linecap: round; transition: stroke-dashoffset .25s var(--ease); filter: drop-shadow(0 0 8px rgba(139,92,246,.55)); }
+.ring .pct { position: absolute; inset: 0; display: grid; place-items: center; font: 700 26px/1 'Geist', sans-serif; letter-spacing: -.03em; }
+.ring .pct small { display: block; font: 500 11px var(--mono); color: var(--muted); letter-spacing: 0; margin-top: 4px; text-align: center; }
+.stage h2 { font-size: 17px; font-weight: 700; }
+.stage .sub { color: var(--muted); font-size: 12.5px; margin-top: 3px; font-family: var(--mono); }
+
+.steps { margin: 18px auto 0; width: min(360px, 100%); display: flex; flex-direction: column; gap: 9px; text-align: left; }
+.step { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--dim); transition: color .2s; }
+.step .dot { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; border: 1.5px solid rgba(255,255,255,.14); flex: none; transition: all .2s var(--ease); }
+.step.active { color: #fff; }
+.step.active .dot { border-color: var(--acc); border-top-color: transparent; animation: spin .7s linear infinite; }
+.step.done { color: var(--muted); }
+.step.done .dot { border: 0; background: color-mix(in oklch, var(--green) 22%, transparent); color: var(--green); }
+.step.done .dot::after { content: '✓'; font-size: 11px; font-weight: 700; }
+.step.fail { color: #fca5a5; }
+.step.fail .dot { border: 0; background: rgba(239,68,68,.2); color: #fca5a5; }
+.step.fail .dot::after { content: '✕'; font-size: 10px; font-weight: 700; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* result */
+.result { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 6px; }
+.badge { width: 78px; height: 78px; border-radius: 24px; display: grid; place-items: center; margin-bottom: 10px; animation: pop .5s cubic-bezier(.34,1.56,.64,1) both; }
+.badge.ok { background: color-mix(in oklch, var(--green) 16%, transparent); color: var(--green); box-shadow: 0 0 0 1px color-mix(in oklch, var(--green) 30%, transparent), 0 14px 40px rgba(34,197,94,.25); }
+.badge.err { background: rgba(239,68,68,.14); color: #fca5a5; box-shadow: 0 0 0 1px rgba(239,68,68,.3); }
+@keyframes pop { from { transform: scale(.6); opacity: 0; } }
+.result h2 { font-size: 21px; font-weight: 700; letter-spacing: -.02em; }
+.result p { color: var(--muted); font-size: 13px; max-width: 420px; }
+.result code { font: 12px var(--mono); color: #d6d5e6; background: rgba(0,0,0,.3); border: 1px solid var(--line); padding: 3px 8px; border-radius: 7px; word-break: break-all; }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+</style>
+</head>
+<body>
+<div class="bg"><i></i><i></i></div>
+
+<div class="bar" id="bar">
+  <div class="brand"><b>AHG</b> Setup</div>
+  <button class="win" id="min" aria-label="Minimize"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6h8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
+  <button class="win x" id="close" aria-label="Close"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
+</div>
+
+<main>
+  <!-- 1. options -->
+  <section class="screen on" id="s-setup">
+    <div class="hero">
+      <img src="logo.png" alt="">
+      <div>
+        <h1>AHG Unlocker <span class="ver" id="ver">latest</span></h1>
+        <p>Choose where to install and how you want to launch it.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="field">
+        <div class="label"><span>Install location</span><span id="space"></span></div>
+        <div class="path">
+          <input id="dir" spellcheck="false" aria-label="Install location">
+          <button class="btn sm" id="browse">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Browse
+          </button>
+        </div>
+        <div class="hint" id="dirHint"></div>
+      </div>
+
+      <label class="opt" for="o-desktop">
+        <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></span>
+        <span class="tx"><b>Desktop shortcut</b><small>Add AHG Unlocker to your desktop</small></span>
+        <button class="sw" id="o-desktop" role="switch" aria-checked="true"></button>
+      </label>
+      <label class="opt" for="o-start">
+        <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
+        <span class="tx"><b>Start menu shortcut</b><small>Find it from the Windows search</small></span>
+        <button class="sw" id="o-start" role="switch" aria-checked="true"></button>
+      </label>
+      <label class="opt" for="o-launch">
+        <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 9-14 9z"/></svg></span>
+        <span class="tx"><b>Launch when finished</b><small>Open the app right after installing</small></span>
+        <button class="sw" id="o-launch" role="switch" aria-checked="true"></button>
+      </label>
+    </div>
+
+    <div class="foot">
+      <span class="note">Downloads the latest release from GitHub and verifies it before installing.</span>
+      <button class="btn pri" id="install">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Install
+      </button>
+    </div>
+  </section>
+
+  <!-- 2. progress -->
+  <section class="screen" id="s-work">
+    <div class="stage">
+      <div class="ring">
+        <svg viewBox="0 0 132 132" aria-hidden="true">
+          <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c4a6ff"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs>
+          <circle class="trk" cx="66" cy="66" r="58"/>
+          <circle class="val" id="arc" cx="66" cy="66" r="58" stroke-dasharray="364.4" stroke-dashoffset="364.4"/>
+        </svg>
+        <div class="pct"><div><span id="pct">0%</span><small id="pctSub"></small></div></div>
+      </div>
+      <h2 id="workTitle">Downloading AHG Unlocker</h2>
+      <div class="sub" id="workSub">Connecting to GitHub…</div>
+      <div class="steps" role="list" aria-live="polite">
+        <div class="step" data-s="download" role="listitem"><span class="dot"></span>Download latest release</div>
+        <div class="step" data-s="verify" role="listitem"><span class="dot"></span>Verify integrity</div>
+        <div class="step" data-s="install" role="listitem"><span class="dot"></span>Install files</div>
+        <div class="step" data-s="shortcuts" role="listitem"><span class="dot"></span>Set up shortcuts</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. done -->
+  <section class="screen" id="s-done">
+    <div class="result">
+      <div class="badge ok"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+      <h2>You're all set</h2>
+      <p>AHG Unlocker <span id="doneVer"></span> is installed in</p>
+      <code id="doneDir"></code>
+    </div>
+    <div class="foot">
+      <span class="note"></span>
+      <button class="btn" id="finish">Close</button>
+      <button class="btn pri" id="launch">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8z"/></svg>Launch AHG
+      </button>
+    </div>
+  </section>
+
+  <!-- 4. error -->
+  <section class="screen" id="s-err">
+    <div class="result">
+      <div class="badge err"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 7v6M12 17h.01"/></svg></div>
+      <h2>Installation failed</h2>
+      <p id="errMsg"></p>
+    </div>
+    <div class="foot">
+      <span class="note">Nothing was changed on your PC.</span>
+      <button class="btn" id="errClose">Close</button>
+      <button class="btn pri" id="retry">Try again</button>
+    </div>
+  </section>
+</main>
+
+<script>
+// Host bridge: WebView2 (chrome.webview) in setup.exe; a demo simulation when opened in a browser.
+const host = window.chrome && window.chrome.webview;
+const $ = (id) => document.getElementById(id);
+const send = (msg) => host ? host.postMessage(msg) : demo(msg);
+let state = { dir: '', ok: true, version: '' };
+
+function show(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === id));
+}
+function setDir(dir, ok, reason) {
+  state.dir = dir; state.ok = ok;
+  if ($('dir').value !== dir) $('dir').value = dir;
+  $('dir').classList.toggle('bad', !ok);
+  $('dirHint').textContent = ok ? '' : reason || 'This folder cannot be used.';
+  $('install').disabled = !ok;
+}
+const fmt = (b) => b >= 1073741824 ? (b / 1073741824).toFixed(1) + ' GB' : (b / 1048576).toFixed(b >= 104857600 ? 0 : 1) + ' MB';
+const order = ['download', 'verify', 'install', 'shortcuts'];
+function stage(name, failed) {
+  const idx = order.indexOf(name);
+  document.querySelectorAll('.step').forEach((el, i) => {
+    el.className = 'step' + (i < idx ? ' done' : i === idx ? (failed ? ' fail' : ' active') : '');
+  });
+}
+function setPct(p, sub) {
+  const v = Math.max(0, Math.min(100, p));
+  $('pct').textContent = Math.round(v) + '%';
+  $('pctSub').textContent = sub || '';
+  $('arc').style.strokeDashoffset = String(364.4 * (1 - v / 100));
+}
+const titles = { download: 'Downloading AHG Unlocker', verify: 'Verifying download', install: 'Installing', shortcuts: 'Finishing up' };
+
+function onHost(m) {
+  switch (m.type) {
+    case 'init':
+      state.version = m.version || '';
+      $('ver').textContent = m.version || 'latest';
+      setDir(m.dir, m.ok !== false, m.reason);
+      $('space').textContent = m.free ? fmt(m.free) + ' free · needs ~' + fmt(m.need || 600 * 1048576) : '';
+      break;
+    case 'dir':
+      setDir(m.dir, m.ok, m.reason);
+      $('space').textContent = m.free ? fmt(m.free) + ' free · needs ~' + fmt(m.need || 600 * 1048576) : '';
+      break;
+    case 'progress': {
+      show('s-work');
+      stage(m.stage);
+      $('workTitle').textContent = titles[m.stage] || 'Working';
+      if (m.stage === 'download' && m.total) {
+        setPct(m.received / m.total * 100, fmt(m.speed || 0) + '/s');
+        $('workSub').textContent = fmt(m.received) + ' of ' + fmt(m.total);
+      } else {
+        // later stages fill the ring proportionally so it never sits still
+        setPct({ verify: 92, install: 96, shortcuts: 99 }[m.stage] || 0, '');
+        $('workSub').textContent = m.detail || '';
+      }
+      break;
+    }
+    case 'done':
+      setPct(100);
+      $('doneVer').textContent = state.version;
+      $('doneDir').textContent = m.dir;
+      show('s-done');
+      break;
+    case 'error':
+      if (document.getElementById('s-work').classList.contains('on')) stage(m.stage || 'download', true);
+      $('errMsg').textContent = m.message;
+      setTimeout(() => show('s-err'), 350);
+      break;
+  }
+}
+if (host) host.addEventListener('message', (e) => onHost(e.data));
+
+// switches
+document.querySelectorAll('.sw').forEach(sw => sw.addEventListener('click', (e) => {
+  e.preventDefault();
+  sw.setAttribute('aria-checked', sw.getAttribute('aria-checked') === 'true' ? 'false' : 'true');
+}));
+const on = (id) => $(id).getAttribute('aria-checked') === 'true';
+
+$('browse').onclick = () => send({ type: 'browse', dir: $('dir').value });
+let t; $('dir').oninput = () => { clearTimeout(t); t = setTimeout(() => send({ type: 'check', dir: $('dir').value }), 250); };
+$('install').onclick = () => {
+  if (!state.ok) return;
+  show('s-work'); stage('download'); setPct(0);
+  send({ type: 'install', dir: $('dir').value, desktop: on('o-desktop'), startMenu: on('o-start'), launch: on('o-launch') });
+};
+// no release info yet (GitHub unreachable at start) => full restart of the flow
+$('retry').onclick = () => state.version ? show('s-setup') : location.reload();
+$('launch').onclick = () => send({ type: 'launch' });
+$('finish').onclick = $('errClose').onclick = $('close').onclick = () => send({ type: 'close' });
+$('min').onclick = () => send({ type: 'minimize' });
+$('bar').addEventListener('mousedown', (e) => { if (!e.target.closest('button')) send({ type: 'drag' }); });
+document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+send({ type: 'ready' });
+
+// ── browser-only demo so the design can be reviewed without the host ──
+function demo(m) {
+  if (m.type === 'ready') onHost({ type: 'init', version: 'v1.2.4', dir: 'C:\\Users\\you\\AppData\\Local\\Programs\\AHG Unlocker', free: 182 * 1073741824, need: 640 * 1048576 });
+  if (m.type === 'install') {
+    const total = 297 * 1048576; let r = 0;
+    const iv = setInterval(() => {
+      r = Math.min(total, r + 9.5 * 1048576);
+      onHost({ type: 'progress', stage: 'download', received: r, total, speed: 38 * 1048576 });
+      if (r >= total) {
+        clearInterval(iv);
+        setTimeout(() => onHost({ type: 'progress', stage: 'verify', detail: 'sha256 matches GitHub' }), 300);
+        setTimeout(() => onHost({ type: 'progress', stage: 'install', detail: 'Windows Installer' }), 1100);
+        setTimeout(() => onHost({ type: 'progress', stage: 'shortcuts' }), 2600);
+        setTimeout(() => onHost({ type: 'done', dir: m.dir }), 3200);
+      }
+    }, 80);
+  }
+}
+</script>
+</body>
+</html>

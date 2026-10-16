@@ -18,6 +18,17 @@ type Changelog = {
 
 const CHANGELOGS: Changelog[] = [
   {
+    version: '1.2.4',
+    date: '2026-10-16',
+    items: [
+      { type: 'feature', title: 'AHG Plus mode', description: 'New unlock mode in Settings > AHG Tools. Switching closes and restarts Steam for you and shows live progress.' },
+      { type: 'feature', title: 'New installer', description: 'AHG Unlocker now installs with a proper Windows installer: pick the folder and shortcuts, uninstall from Settings > Apps.' },
+      { type: 'improvement', title: 'Seamless updates', description: 'Updates download, verify and install themselves, then restart the app automatically.' },
+      { type: 'improvement', title: 'Smaller download', description: 'The app package is about half the size it was.' },
+      { type: 'fix', title: 'More reliable downloads', description: 'GitHub downloads fall back to a CDN mirror when GitHub is unreachable, and manifests from a custom depotcache are migrated.' },
+    ],
+  },
+  {
     version: '0.5',
     date: '2024-04-23',
     items: [

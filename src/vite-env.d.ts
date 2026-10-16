@@ -20,6 +20,13 @@ declare module "*.jpg" {
 
 // Electron preload API exposed via contextBridge.exposeInMainWorld('electronAPI', {...})
 // All methods are optional since they only exist at runtime in the Electron context.
+declare const __APP_VERSION__: string
+
+interface UnlockModeStatus {
+  success: boolean; mode: 'steamtools' | 'bst' | 'custom'; installed: boolean
+  version: string | null; latest: string | null; updateAvailable: boolean; steamFound: boolean; error?: string
+}
+
 interface ElectronAPI {
   // ── Basic App Paths ──
   getAppPath?: () => Promise<string>
@@ -61,6 +68,9 @@ interface ElectronAPI {
   // ── Steam Path Operations ──
   restartSteam?: () => Promise<{ success: boolean; message: string }>
   openSteamFolder?: () => Promise<{ success: boolean; message: string }>
+  getUnlockMode?: () => Promise<UnlockModeStatus>
+  setUnlockMode?: (mode: string, reinstall?: boolean) => Promise<{ success: boolean; message?: string; version?: string }>
+  onUnlockModeProgress?: (callback: (step: string) => void) => () => void
 
   // ── Update Checker ──
   checkForUpdates?: () => Promise<{

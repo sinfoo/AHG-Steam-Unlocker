@@ -85,7 +85,7 @@ export const useUIStore = create<UIState>((set) => ({
   // Modals
   updateModalOpen: false,
   changelogOpen: false,
-  changelogVersion: '1.0',
+  changelogVersion: __APP_VERSION__,
   activationOpen: false,
   isActivated: false,
   thankYouOpen: false,

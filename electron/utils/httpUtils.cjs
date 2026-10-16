@@ -3,7 +3,7 @@ const https = require('https');
 const http = require('http');
 const { spawn } = require('child_process');
 
-function httpGetWithProgress(url, onProgress, signal, timeoutMs) {
+function httpGetOnce(url, onProgress, signal, timeoutMs) {
   if (timeoutMs === undefined) timeoutMs = 30000;
   return new Promise(function(res, rej) {
     if (signal && signal.aborted) {
@@ -31,7 +31,7 @@ function httpGetWithProgress(url, onProgress, signal, timeoutMs) {
         var loc = rsp.headers.location;
         if (loc) {
           if (!loc.startsWith('http')) loc = u.origin + loc;
-          httpGetWithProgress(loc, onProgress, signal, timeoutMs).then(res).catch(rej);
+          httpGetOnce(loc, onProgress, signal, timeoutMs).then(res).catch(rej);
           return;
         }
       }
@@ -81,6 +81,20 @@ function httpGetWithProgress(url, onProgress, signal, timeoutMs) {
       }, { once: true });
     }
     req.end();
+  });
+}
+
+// raw.githubusercontent.com -> jsDelivr (same repo content via a reputable CDN).
+// Only on network failure/timeout/5xx: a 404 is a real "not found", not an outage.
+// ponytail: jsDelivr only; third-party GitHub proxies could serve tampered .lua, so none are used.
+const RAW = /^https:\/\/raw\.githubusercontent\.com\/([^/]+\/[^/]+)\/(?:refs\/heads\/)?([^/]+)\/(.+)$/;
+function httpGetWithProgress(url, onProgress, signal, timeoutMs) {
+  return httpGetOnce(url, onProgress, signal, timeoutMs).catch(function(e) {
+    const m = RAW.exec(url);
+    const outage = e && e.name !== 'AbortError' && e.message !== '404' && !/^HTTP 4/.test(e.message);
+    if (!m || !outage) throw e;
+    return httpGetOnce('https://cdn.jsdelivr.net/gh/' + m[1] + '@' + m[2] + '/' + m[3], onProgress, signal, timeoutMs)
+      .catch(function() { throw e; });
   });
 }
 

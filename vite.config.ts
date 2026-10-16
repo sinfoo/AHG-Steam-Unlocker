@@ -1,5 +1,6 @@
 import { defineConfig, type PluginOption } from 'vite'
 import react from '@vitejs/plugin-react'
+import pkg from './package.json'
 
 async function getVisualizerPlugin(): Promise<PluginOption | null> {
   if (process.env.ANALYZE !== 'true') return null
@@ -32,6 +33,8 @@ function removeElectronCrossOrigin(): PluginOption {
 export default defineConfig(async () => {
   const visualizerPlugin = await getVisualizerPlugin()
   return {
+    // single source of truth for the version shown anywhere in the UI
+    define: { __APP_VERSION__: JSON.stringify(pkg.version) },
     plugins: [
       react(),
       removeElectronCrossOrigin(),
