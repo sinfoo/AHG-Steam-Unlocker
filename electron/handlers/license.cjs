@@ -95,12 +95,70 @@ function persistMachineId(machineId, source) {
   }
 }
 
-// Asks the license API (served by the Discord bot) about ONE key. The app never
-// holds a GitHub token or the gist ID: the bot owns the registry and does all writes.
+// Same rules as the bot's _license_status: missing | used | pending | bound | other.
+function keyStatus(licenses, key, machineId) {
+  const value = licenses[key];
+  if (value === undefined) return 'missing';
+  if (value === 'used' || value === 'pending') return value;
+  return value === machineId ? 'bound' : 'other';
+}
+
+const GIST_HEADERS = { 'User-Agent': 'AHG-Steam-Unlocker', Accept: 'application/vnd.github.v3+json' };
+
+// Reads license_keys.json from the gist, or null when it could not be read.
+// Unauthenticated on purpose: a secret gist is readable with its id, and a read
+// must keep working even if the bundled token is revoked.
+async function readLicenseGist() {
+  try {
+    const res = await fetch(`https://api.github.com/gists/${secrets.licenseGistId}`,
+      { headers: GIST_HEADERS, signal: AbortSignal.timeout(15000) });
+    if (!res.ok) { console.warn('[LICENSE] Gist read failed — HTTP', res.status); return null; }
+    const file = (await res.json()).files?.['license_keys.json'];
+    if (!file) return null;
+    // Content past 1 MB is truncated inline; a partial read would look like revocations.
+    const text = file.truncated
+      ? await (await fetch(file.raw_url, { signal: AbortSignal.timeout(15000) })).text()
+      : file.content;
+    return JSON.parse(text || '{}');
+  } catch (e) {
+    console.warn('[LICENSE] Gist read error:', e.message);
+    return null;
+  }
+}
+
+// Direct gist flow (as in v1.2.3): works on any PC without the bot being online.
+// ponytail: read-modify-write of the whole file, so two activations in the same few
+// seconds can overwrite each other (the loser is asked for its key again on next start).
+// Move writes behind an always-on server if that ever shows up in practice.
+async function gistLicenseApi(action, key, machineId) {
+  const licenses = await readLicenseGist();
+  if (licenses === null) return null;
+  const status = keyStatus(licenses, key, machineId);
+  if (action !== 'activate' || status !== 'pending') return status;
+  licenses[key] = machineId;
+  try {
+    const res = await fetch(`https://api.github.com/gists/${secrets.licenseGistId}`, {
+      method: 'PATCH',
+      headers: { ...GIST_HEADERS, Authorization: `token ${secrets.githubToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: { 'license_keys.json': { content: JSON.stringify(licenses, null, 2) } } }),
+      signal: AbortSignal.timeout(20000),
+    });
+    // 404 here means the token cannot write this gist (wrong account or no `gist` scope).
+    if (!res.ok) { console.error('[LICENSE] Gist update failed — HTTP', res.status); return null; }
+    return 'bound';
+  } catch (e) {
+    console.error('[LICENSE] Gist update error:', e.message);
+    return null;
+  }
+}
+
+// Asks the registry about ONE key: straight from the gist when this build carries
+// licenseGistId + githubToken, otherwise through the Discord bot's license API.
 // Returns 'missing' | 'pending' | 'used' | 'bound' | 'other', or null when the
-// server could not be reached. null means "unknown" — callers must never treat it
+// registry could not be reached. null means "unknown" — callers must never treat it
 // as a revocation (offline starts used to delete valid licenses that way).
 async function licenseApi(action, key, machineId) {
+  if (secrets.licenseGistId && secrets.githubToken) return gistLicenseApi(action, key, machineId);
   const res = await botApi(`license/${action}`, { key, machineId });
   if (!res || !res.ok) return null;
   const status = res.data && res.data.status;

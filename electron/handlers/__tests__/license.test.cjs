@@ -35,7 +35,7 @@ function stub(id, exports) {
   require.cache[id] = { id, filename: id, loaded: true, exports, paths: [], children: [] };
 }
 
-function setupMocks() {
+function setupMocks(mode) {
   handlers = {};
   fakeFiles = {};
   writeStatus = 200;
@@ -45,13 +45,28 @@ function setupMocks() {
     app: { getPath: () => '/userData', isPackaged: true },
     BrowserWindow: { getAllWindows: () => [] },
   });
-  stub(SECRETS_MOCK_ID, { secrets: { licenseApiUrl: 'https://license.test' } });
+  // 'bot': registry behind the bot's license API. 'gist': build ships licenseGistId +
+  // githubToken and talks to the GitHub gist directly (the v1.2.3 flow).
+  stub(SECRETS_MOCK_ID, { secrets: mode === 'gist'
+    ? { licenseGistId: 'gist123', githubToken: 'tok' }
+    : { licenseApiUrl: 'https://license.test' } });
 
   // Fake license API (the bot): answers from `gistResponse`'s registry with the
   // same status semantics as bot.py, and fails activation writes when writeStatus != 200.
   origFetch = global.fetch;
   global.fetch = async (url, opts) => {
     if (gistResponse.networkError) throw new Error('ENOTFOUND');
+    if (mode === 'gist') {
+      assert.equal(url, 'https://api.github.com/gists/gist123');
+      if (opts?.method === 'PATCH') {
+        assert.equal(opts.headers.Authorization, 'token tok');
+        if (writeStatus === 200) gistResponse.body = JSON.stringify({ files: JSON.parse(opts.body).files });
+        return { ok: writeStatus === 200, status: writeStatus };
+      }
+      assert.ok(!opts?.headers?.Authorization, 'reads must stay unauthenticated');
+      if (gistResponse.status !== 200) return { ok: false, status: gistResponse.status };
+      return { ok: true, status: 200, json: async () => JSON.parse(gistResponse.body) };
+    }
     if (gistResponse.status !== 200) return { ok: false, status: gistResponse.status };
     let reg;
     try { reg = JSON.parse(JSON.parse(gistResponse.body).files['license_keys.json'].content); }
@@ -112,7 +127,8 @@ function givenRegistry(obj) {
 }
 
 let restore;
-beforeEach(() => { restore = setupMocks(); });
+for (const MODE of ['bot', 'gist']) describe(`${MODE} registry`, () => {
+beforeEach(() => { restore = setupMocks(MODE); });
 afterEach(() => restore());
 
 describe('check-license — revocation decision table', () => {
@@ -305,4 +321,5 @@ describe('deactivate-license', () => {
     assert.ok(!(licensePath in fakeFiles), 'license must be removed');
     assert.ok(machinePath in fakeFiles, 'machine identity must survive deactivation');
   });
+});
 });
