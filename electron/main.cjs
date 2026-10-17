@@ -2354,6 +2354,11 @@ async function tryDlcManifests(dlcIds, depotCache, sourceRepo) {
 // Register DLCs (create lua/appinfo files) - batched per game
 ipcMain.handle('register-dlcs', async (event, appid, dlcIds, dlcDetails, sourceRepo) => {
   try {
+    // Renderer input goes into file names: accept real Steam app ids only. Bad DLC data used to
+    // write junk 0.lua / 1.lua into stplug-in, and an unchecked id could escape the folder.
+    const isAppId = (v) => /^[1-9]\d{1,9}$/.test(String(v));
+    if (!isAppId(appid)) return { success: false, message: 'Invalid app id' };
+    dlcIds = (Array.isArray(dlcIds) ? dlcIds : []).map(String).filter(isAppId);
     console.log('[MAIN] register-dlcs for appid:', appid, 'dlcs:', dlcIds.length, 'sourceRepo:', sourceRepo || '(none)');
     const steamPath = findSteamPath(state.customSteamConfig);
     const depotCache = getCustomDepotCachePath(state.customSteamConfig) || path.join(steamPath, 'depotcache');
