@@ -10,9 +10,15 @@ namespace AhgSetup
         // Scratch dir for the WebView2 loader, UI files, browser profile and the downloaded MSI.
         internal static readonly string Work = Path.Combine(Path.GetTempPath(), "ahg-setup");
 
+        // `--update <install dir>`: started by the app's updater. Installs the latest release
+        // into that folder with no clicks, then relaunches the app.
+        internal static string UpdateDir;
+
         [STAThread]
-        private static void Main()
+        private static void Main(string[] args)
         {
+            var i = Array.IndexOf(args, "--update");
+            if (i >= 0 && i + 1 < args.Length) UpdateDir = args[i + 1].TrimEnd('\\', '"');
             // Must be wired before any WebView2 type is touched (JIT resolves them in Run()).
             AppDomain.CurrentDomain.AssemblyResolve += (_, e) =>
             {

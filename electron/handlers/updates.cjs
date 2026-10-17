@@ -116,10 +116,11 @@ function stageUpdateRaw(zipPath) {
 // process to exit, robocopies the staged files onto the install dir (the release zip
 // root IS the install root: exe + resources\ — NOT resources\ as the old code
 // assumed), starts the new exe, and cleans up after itself.
-// MSI releases: Windows Installer does the swap (MajorUpgrade replaces the old
-// product, keeps Add/Remove Programs correct, rolls back on failure).
-const msiPath = () => path.join(app.getPath('temp'), 'ahg-update.msi');
-let msiStaged = false;
+// Setup releases: AHG-Unlocker-Setup.exe --update <install dir> waits for this process to
+// exit, downloads + verifies the latest MSI, installs it into the same folder with its own
+// progress window, and relaunches the app (or the old build if the install fails).
+const setupPath = () => path.join(app.getPath('temp'), 'ahg-update-setup.exe');
+let setupStaged = false;
 
 // Shared wait-for-exit prelude: exact PID filter; a match row contains the image
 // name, the "no tasks" INFO line doesn't. No pipe: in the detached, console-less cmd
@@ -141,39 +142,18 @@ function waitForExitLines(next) {
   ];
 }
 
-function applyMsiOnExit() {
-  const msi = msiPath();
-  const logPath = path.join(app.getPath('temp'), 'ahg-update-msi.log');
-  const batPath = path.join(app.getPath('temp'), 'ahg-apply-update.bat');
-  // Upgrade in place: same folder (honours a custom path picked in setup.exe; migrates zip installs)
+function applySetupOnExit() {
   const installDir = path.dirname(process.execPath);
-  const bat = [
-    ...waitForExitLines('install'),
-    ':install',
-    // /passive = progress bar only, no prompts; per-user so no UAC
-    `start "" /wait msiexec /i "${msi}" /passive /norestart ALLUSERS=2 MSIINSTALLPERUSER=1 REINSTALLMODE=amus APPLICATIONFOLDER="${installDir}\\" /l*v "${logPath}"`,
-    // 0 = ok, 3010 = ok but reboot pending; anything else = failed (MSI already rolled back)
-    'if %errorlevel%==0 goto ok',
-    'if %errorlevel%==3010 goto ok',
-    `start "" "${process.execPath}"`,
-    'del "%~f0"',
-    'exit',
-    ':ok',
-    `del "${msi}"`,
-    `start "" "${process.execPath}"`,
-    'del "%~f0"',
-  ].join('\r\n');
-  fs.writeFileSync(batPath, bat);
   const { spawn } = require('child_process');
-  spawn('cmd.exe', ['/c', batPath], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
-  console.log('[UPDATES] Staged MSI will be installed by', batPath);
+  spawn(setupPath(), ['--update', installDir], { detached: true, stdio: 'ignore' }).unref();
+  console.log('[UPDATES] Setup will update', installDir);
   return true;
 }
 
 function applyStagedUpdateOnExit() {
-  if (msiStaged && fs.existsSync(msiPath())) {
-    if (!app.isPackaged) { console.log('[UPDATES] Dev build — skipping MSI install'); return false; }
-    return applyMsiOnExit();
+  if (setupStaged && fs.existsSync(setupPath())) {
+    if (!app.isPackaged) { console.log('[UPDATES] Dev build — skipping setup update'); return false; }
+    return applySetupOnExit();
   }
   const layout = validateStagedLayout();
   if (!layout.ok) {
@@ -212,11 +192,11 @@ function applyStagedUpdateOnExit() {
   return true;
 }
 
-/** Pick the best downloadable asset from a GitHub release (prefer .msi, then .zip). */
+/** Pick the best downloadable asset from a GitHub release (prefer the setup exe, then .zip). */
 function pickReleaseAsset(assets) {
   if (!Array.isArray(assets) || assets.length === 0) return null;
-  const msi = assets.find(a => /\.msi$/i.test(a.name || ''));
-  if (msi) return msi;
+  const setup = assets.find(a => /setup\.exe$/i.test(a.name || ''));
+  if (setup) return setup;
   const zips = assets.filter(a => /\.zip$/i.test(a.name || ''));
   const winZip = zips.find(a => /win|windows|portable|x64/i.test(a.name || ''));
   return winZip || zips[0] || assets[0];
@@ -286,7 +266,7 @@ function httpsGet(url, headers, redirectDepth = 0) {
 // stale (applied, failed or abandoned): ~150-230 MB per update otherwise left behind forever.
 function cleanupUpdateLeftovers() {
   const tmp = app.getPath('temp');
-  for (const f of ['ahg-update.zip', 'ahg-update.msi', 'ahg-update-staged', 'ahg-apply-update.bat', 'ahg-update-pid.txt']) {
+  for (const f of ['ahg-update.zip', 'ahg-update.msi', 'ahg-update-setup.exe', 'ahg-update-staged', 'ahg-apply-update.bat', 'ahg-update-pid.txt']) {
     fs.rm(path.join(tmp, f), { recursive: true, force: true }, () => {});
   }
 }
@@ -332,7 +312,7 @@ function registerUpdateHandlers() {
       }
 
       const asset = pickReleaseAsset(latest.assets);
-      checkedAsset = asset ? { url: asset.browser_download_url, digest: asset.digest || null, msi: /\.msi$/i.test(asset.name || '') } : null;
+      checkedAsset = asset ? { url: asset.browser_download_url, digest: asset.digest || null, setup: /setup\.exe$/i.test(asset.name || '') } : null;
       return {
         success: true,
         latestTag,
@@ -369,14 +349,14 @@ function registerUpdateHandlers() {
       if (!checkedAsset || downloadUrl !== checkedAsset.url) {
         return { success: false, message: 'Invalid download URL — check for updates first' };
       }
-      const isMsi = checkedAsset.msi;
+      const isSetup = checkedAsset.setup;
       // Always the temp dir: never write to a renderer-chosen path.
-      const finalSavePath = isMsi ? msiPath() : path.join(app.getPath('temp'), 'ahg-update.zip');
-      msiStaged = false;
+      const finalSavePath = isSetup ? setupPath() : path.join(app.getPath('temp'), 'ahg-update.zip');
+      setupStaged = false;
 
       // Zip swap writes into the install dir: fail before a 230MB download if that can't work.
-      // (MSI installs per-user via Windows Installer, so it doesn't need this.)
-      if (app.isPackaged && !isMsi) {
+      // (Setup installs per-user via Windows Installer, so it doesn't need this.)
+      if (app.isPackaged && !isSetup) {
         const probe = path.join(path.dirname(process.execPath), '.ahg-write-test');
         try { fs.writeFileSync(probe, ''); fs.unlinkSync(probe); }
         catch { return { success: false, message: 'Install folder is not writable. Move AHG Unlocker to a folder you own (e.g. Desktop) and retry.' }; }
@@ -404,8 +384,8 @@ function registerUpdateHandlers() {
         }
       }
 
-      if (isMsi) {
-        msiStaged = true;
+      if (isSetup) {
+        setupStaged = true;
         return { success: true, message: 'Update ready — restarting to install', path: finalSavePath, staged: true };
       }
 
@@ -429,8 +409,8 @@ function registerUpdateHandlers() {
   ipcMain.handle('install-update', async () => {
     console.log('[MAIN] Installing update from cached ZIP...');
     try {
-      if (checkedAsset?.msi && fs.existsSync(msiPath())) {
-        msiStaged = true;
+      if (checkedAsset?.setup && fs.existsSync(setupPath())) {
+        setupStaged = true;
         return { success: true, message: 'Update ready — restarting to install', staged: true };
       }
       const zipPath = path.join(app.getPath('temp'), 'ahg-update.zip');

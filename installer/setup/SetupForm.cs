@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Runtime.InteropServices;
@@ -33,6 +34,7 @@ namespace AhgSetup
         private string _installedDir;
         private bool _busy;      // true while msiexec runs: closing then would leave a half install
         private bool _working;   // download/install in progress
+        private bool _launched;  // the app was started by us (update mode relaunches it otherwise)
 
         private sealed class Release { public string Version, Url, Name, Digest; public long Size; }
 
@@ -50,6 +52,9 @@ namespace AhgSetup
             Padding = new Padding(ResizeGrip); // keeps the window edges free for resize hit-testing
             Controls.Add(_web);
             Load += async (_, __) => await InitWeb();
+            // Update mode: never leave the user without their app (failed install rolled back,
+            // or the window was closed) — start whatever build is in the folder.
+            FormClosed += (_, __) => { if (Program.UpdateDir != null && !_launched) { _installedDir = Program.UpdateDir; LaunchApp(); } };
         }
 
         private const int ResizeGrip = 6;
@@ -192,7 +197,7 @@ namespace AhgSetup
         // ── 1. release lookup ──
         private async Task OnReady()
         {
-            var def = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", AppName);
+            var def = Program.UpdateDir ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", AppName);
             var init = DirInfo("init", def);
             try
             {
@@ -205,6 +210,30 @@ namespace AhgSetup
                 return;
             }
             Post(init);
+            // Update: same folder, keep the shortcuts the user already has, relaunch when done.
+            if (Program.UpdateDir != null)
+                await Install(Program.UpdateDir, File.Exists(DesktopLnk), File.Exists(StartMenuLnk), true);
+        }
+
+        private static string DesktopLnk => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), AppName + ".lnk");
+        private static string StartMenuLnk => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), AppName + ".lnk");
+
+        // The updater exits the app right after starting us; give it a moment, then end any
+        // copy still running from the install folder so Windows Installer can replace its files.
+        private static void WaitForAppExit(string dir)
+        {
+            var exe = Path.Combine(dir, ExeName);
+            for (var i = 0; i < 40; i++)
+            {
+                var running = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(ExeName)).Where(p =>
+                {
+                    try { return string.Equals(p.MainModule.FileName, exe, StringComparison.OrdinalIgnoreCase); }
+                    catch { return false; }
+                }).ToList();
+                if (running.Count == 0) return;
+                if (i == 39) foreach (var p in running) try { p.Kill(); p.WaitForExit(5000); } catch { }
+                Thread.Sleep(500);
+            }
         }
 
         private static HttpClient Http()
@@ -328,8 +357,10 @@ namespace AhgSetup
                 var log = Path.Combine(Program.Work, "msi-install.log");
                 var code = await Task.Run(() =>
                 {
+                    if (Program.UpdateDir != null) WaitForAppExit(dir);
+                    // MSIFASTINSTALL=1: no System Restore point — it stalled installs for ~2 minutes.
                     var psi = new ProcessStartInfo("msiexec.exe",
-                        $"/i \"{msi}\" /qn /norestart ALLUSERS=2 MSIINSTALLPERUSER=1 REINSTALLMODE=amus APPLICATIONFOLDER=\"{dir}\\\" /l*v \"{log}\"")
+                        $"/i \"{msi}\" /qn /norestart MSIFASTINSTALL=1 ALLUSERS=2 MSIINSTALLPERUSER=1 REINSTALLMODE=amus APPLICATIONFOLDER=\"{dir}\\\" /l*v \"{log}\"")
                     { UseShellExecute = false, CreateNoWindow = true };
                     using (var p = Process.Start(psi)) { p.WaitForExit(); return p.ExitCode; }
                 });
@@ -340,8 +371,8 @@ namespace AhgSetup
                 stage = "shortcuts";
                 Progress(stage, "");
                 // MSI always creates both shortcuts; remove the ones that were switched off
-                if (!desktop) TryDelete(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), AppName + ".lnk"));
-                if (!startMenu) TryDelete(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), AppName + ".lnk"));
+                if (!desktop) TryDelete(DesktopLnk);
+                if (!startMenu) TryDelete(StartMenuLnk);
                 await Task.Delay(400);
 
                 _installedDir = dir;
@@ -422,8 +453,9 @@ namespace AhgSetup
         private void LaunchApp()
         {
             var exe = _installedDir == null ? null : Path.Combine(_installedDir, ExeName);
-            if (exe != null && File.Exists(exe))
-                Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true, WorkingDirectory = _installedDir });
+            if (exe == null || !File.Exists(exe)) return;
+            _launched = true;
+            Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true, WorkingDirectory = _installedDir });
         }
 
         private static void TryDelete(string f) { try { if (File.Exists(f)) File.Delete(f); } catch { } }
