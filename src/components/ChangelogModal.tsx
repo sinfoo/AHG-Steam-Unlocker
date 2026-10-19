@@ -18,6 +18,16 @@ type Changelog = {
 
 const CHANGELOGS: Changelog[] = [
   {
+    version: '1.2.8',
+    date: '2026-10-19',
+    items: [
+      { type: 'fix', title: 'Activation always reachable', description: 'License keys are checked directly against the key registry, so activation no longer fails with "Could not reach the license server".' },
+      { type: 'fix', title: 'Paste keys with dashes', description: 'Pasting ABCD-ABCD-ABCD-ABCD now works the same as ABCDABCDABCDABCD.' },
+      { type: 'fix', title: 'New keys work right away', description: 'A key created a moment ago is no longer reported as invalid.' },
+      { type: 'improvement', title: 'Smoother updates', description: 'Updates now install through AHG Setup with no installer wizard.' },
+    ],
+  },
+  {
     version: '1.2.7',
     date: '2026-10-16',
     items: [
