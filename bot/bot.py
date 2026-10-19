@@ -14,6 +14,7 @@ from discord.ext import commands
 import requests
 import os
 import re
+import secrets
 
 # Load bot/.env (KEY=VALUE lines) without extra dependencies; real env vars win.
 BOT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -157,6 +158,10 @@ def chunk_lines(lines, limit=3800):
         current += line + "\n"
     pages.append(current or "No licenses found.")
     return pages
+
+def norm_key(key):
+    """Same form the app sends: A-Z/0-9 only (drops dashes, spaces, @mention brackets)."""
+    return re.sub(r"[^A-Z0-9]", "", key.upper())
 
 
 async def get_gist(gist_id=None):
@@ -412,75 +417,39 @@ async def mediastats(interaction):
             embed = discord.Embed(title="❌ **Error**", description="An unexpected error occurred.", color=RED)
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
-@tree.command(guild=GUILD_OBJ, name="activate", description="Add a new license (pending)")
-async def add(interaction, license_key: str):
-    license_key = license_key.strip().removeprefix("<@").removeprefix("!").removesuffix(">")  # accept @mentions
+KEY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no I/O/0/1, easy to read back
+
+@tree.command(guild=GUILD_OBJ, name="activate", description="Generate a new license key (only you see it)")
+async def add(interaction):
     if not await check_staff(interaction):
         return
     try:
-        await interaction.response.defer()
-        licenses = await get_gist()
-
-        if licenses is None:
-            embed = discord.Embed(title="❌ **Connection Error**", description="Could not connect to Gist. Please try again later.", color=RED)
-            await interaction.followup.send(embed=embed)
-            return
-
-        if license_key in licenses and licenses[license_key] != "pending":
-            embed = discord.Embed(title="⚠️ **Already Activated**", description="This license is already activated!", color=YELLOW)
-            embed.add_field(name="ℹ️ **Info**", value="The license key is already in use.", inline=False)
-            await interaction.followup.send(embed=embed)
-            return
-
-        licenses[license_key] = "pending"
-
-        if await update_gist(licenses):
-            try:
-                member = await interaction.guild.fetch_member(int(license_key))
-            except (discord.NotFound, ValueError):
-                member = None
-            except discord.Forbidden:
-                print("WARNING: Bot lacks members intent - cannot fetch member")
-                member = None
-
-            embed = discord.Embed(
-                title="✅ **License Activated!**",
-                color=GREEN,
-                description=f"🎉 **Welcome!** License has been activated for <@{license_key}>"
-            )
-
-            role_assigned = False
-            if member:
-                role = interaction.guild.get_role(CUSTOMER_ROLE_ID)
-                if role:
-                    try:
-                        await member.add_roles(role, reason="License activation")
-                        role_assigned = True
-                    except discord.Forbidden:
-                        print(f"WARNING: Missing permissions to assign customer role to {license_key}")
-                        embed.add_field(name="⚠️ **Role Error**", value="Could not assign customer role - check bot permissions.", inline=False)
-                    except discord.HTTPException as e:
-                        print(f"WARNING: HTTP error assigning role to {license_key}: {e}")
-                        embed.add_field(name="⚠️ **Role Error**", value=f"Failed to assign role: {e}", inline=False)
-            else:
-                embed.add_field(name="⚠️ **User Not Found**", value="Could not find this user in the server. Make sure the ID is correct and they have joined.", inline=False)
-
-            if role_assigned:
-                embed.add_field(name="🎭 **Role**", value="✅ Customer role assigned!", inline=False)
-            embed.add_field(name="📖 **Next Steps**", value="Follow the setup guide below and enjoy unlocking games!", inline=False)
-            embed.add_field(name="🔗 **Setup Guide**", value=f"<#{SETUP_GUIDE_CHANNEL_ID}>", inline=False)
-            embed.add_field(name="💬 **Feedback**", value=f"A review in <#{FEEDBACK_CHANNEL_ID}> would help us a lot! ❤️", inline=False)
-            embed.set_footer(text="AHG Script | Thank you for your purchase! 🎮")
-            await interaction.followup.send(embed=embed)
-        else:
+        await interaction.response.defer(ephemeral=True)
+        async with _license_lock:  # same lock as the app's license API: no lost writes
+            licenses = await get_gist()
+            if licenses is None:
+                embed = discord.Embed(title="❌ **Connection Error**", description="Could not connect to Gist. Please try again later.", color=RED)
+                await interaction.followup.send(embed=embed, ephemeral=True)
+                return
+            key = "".join(secrets.choice(KEY_ALPHABET) for _ in range(16))
+            while key in licenses:
+                key = "".join(secrets.choice(KEY_ALPHABET) for _ in range(16))
+            licenses[key] = "pending"
+            saved = await update_gist(licenses)
+        if not saved:
             embed = discord.Embed(title="❌ **Update Failed**", description="Failed to update Gist. Please try again.", color=RED)
-            await interaction.followup.send(embed=embed)
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+        pretty = "-".join(key[i:i + 4] for i in range(0, 16, 4))
+        embed = discord.Embed(title="🔑 **New License Key**", description=f"```{pretty}```", color=GREEN)
+        embed.add_field(name="📋 **Status**", value="⏳ Pending — binds to the first PC that activates it", inline=False)
+        await interaction.followup.send(embed=embed, ephemeral=True)
     except Exception as e:
         print(f"Error in add: {e}")
         traceback.print_exc()
         try:
             embed = discord.Embed(title="❌ **Error**", description="An unexpected error occurred.", color=RED)
-            await interaction.followup.send(embed=embed)
+            await interaction.followup.send(embed=embed, ephemeral=True)
         except:
             pass
 
@@ -680,6 +649,7 @@ async def refresh_universal(interaction, license_key: str):
 
 @tree.command(guild=GUILD_OBJ, name="remove", description="Remove a license")
 async def remove(interaction, license_key: str):
+    license_key = norm_key(license_key)
     if not await check_staff(interaction):
         return
     try:
@@ -767,43 +737,45 @@ async def list_cmd(interaction):
         except:
             pass
 
-@tree.command(guild=GUILD_OBJ, name="check", description="Check license status")
+@tree.command(guild=GUILD_OBJ, name="check", description="Check a license key's status (only you see it)")
 async def check(interaction, license_key: str):
+    license_key = norm_key(license_key)  # ABCDABCDABCDABCD and ABCD-ABCD-ABCD-ABCD both work
     if not await check_staff(interaction):
         return
     try:
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         licenses = await get_gist()
 
         if licenses is None:
             embed = discord.Embed(title="❌ **Connection Error**", description="Could not connect to Gist.", color=RED)
-            await interaction.followup.send(embed=embed)
+            await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
+        shown = "-".join(license_key[i:i + 4] for i in range(0, 16, 4)) if len(license_key) == 16 else license_key
         if license_key not in licenses:
-            embed = discord.Embed(title="❌ **License Not Found**", description=f"License `{license_key}` is not in the list", color=YELLOW)
-            embed.add_field(name="🔍 **Search Tip**", value="Use `/list` to see all active licenses.", inline=False)
-            await interaction.followup.send(embed=embed)
+            embed = discord.Embed(title="❌ **License Not Found**", description=f"`{shown}` is not in the registry.", color=YELLOW)
+            await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
         status = licenses[license_key]
-
         if status == "pending":
-            embed = discord.Embed(title="🔍 **License Status**", color=YELLOW, description="⏳ **Pending Activation**")
-            embed.add_field(name="🎫 **License Key**", value=f"```{license_key}```", inline=False)
-            embed.add_field(name="📊 **Status**", value="```\n⏳ Waiting for first activation\n```", inline=False)
+            color, state = YELLOW, "⏳ Pending — not activated on any PC yet"
+        elif status == "used":
+            color, state = RED, "⛔ Marked as used — cannot be activated"
         else:
-            embed = discord.Embed(title="🔍 **License Status**", color=GREEN, description="✅ **Activated & Ready**")
-            embed.add_field(name="🎫 **License Key**", value=f"```{license_key}```", inline=False)
-            embed.add_field(name="📊 **Status**", value="```\n✅ Active and working\n```", inline=False)
-
-        await interaction.followup.send(embed=embed)
+            color, state = GREEN, "✅ Activated — bound to one PC"
+        embed = discord.Embed(title="🔍 **License Status**", color=color)
+        embed.add_field(name="🎫 **License Key**", value=f"```{shown}```", inline=False)
+        embed.add_field(name="📊 **Status**", value=state, inline=False)
+        if status not in ("pending", "used"):
+            embed.add_field(name="🖥️ **Machine ID**", value=f"`{status}`", inline=False)
+        await interaction.followup.send(embed=embed, ephemeral=True)
     except Exception as e:
         print(f"Error in check: {e}")
         traceback.print_exc()
         try:
             embed = discord.Embed(title="❌ **Error**", description="An error occurred.", color=RED)
-            await interaction.followup.send(embed=embed)
+            await interaction.followup.send(embed=embed, ephemeral=True)
         except:
             pass
 
@@ -1259,13 +1231,13 @@ async def help(interaction):
         embed.add_field(name="📖 `/help`", value="Show this help message", inline=False)
 
         embed.add_field(name="🔒 **Owner Commands**", value="━━━━━━━━━━━━━━━━━━", inline=False)
-        embed.add_field(name="➕ `/activate`", value="Add a new license to the system", inline=False)
+        embed.add_field(name="➕ `/activate`", value="Generate a new 16-character license key (only you see it)", inline=False)
         embed.add_field(name="➕ `/activateuniversal`", value="Add a license to the universal gist", inline=False)
         embed.add_field(name="➖ `/removeuniversal`", value="Remove a license from the universal gist", inline=False)
         embed.add_field(name="🔄 `/refreshuniversal`", value="Reset a universal license for reactivation", inline=False)
         embed.add_field(name="➖ `/remove`", value="Remove a license from the list", inline=False)
         embed.add_field(name="📋 `/list`", value="List all licenses in the system", inline=False)
-        embed.add_field(name="🔍 `/check`", value="Check a specific license status", inline=False)
+        embed.add_field(name="🔍 `/check`", value="Check a license key's status, with or without dashes (only you see it)", inline=False)
         embed.add_field(name="📢 `/notifyall`", value="Send a message to all license holders", inline=False)
         embed.add_field(name="📢 `/notify`", value="Send a message to a specific user", inline=False)
         embed.add_field(name="📢 `/notifyrole`", value="DM all members with a specific role", inline=False)
