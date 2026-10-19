@@ -57,13 +57,14 @@ function setupMocks(mode) {
   global.fetch = async (url, opts) => {
     if (gistResponse.networkError) throw new Error('ENOTFOUND');
     if (mode === 'gist') {
-      assert.equal(url, 'https://api.github.com/gists/gist123');
       if (opts?.method === 'PATCH') {
+        assert.equal(url, 'https://api.github.com/gists/gist123');
         assert.equal(opts.headers.Authorization, 'token tok');
         if (writeStatus === 200) gistResponse.body = JSON.stringify({ files: JSON.parse(opts.body).files });
         return { ok: writeStatus === 200, status: writeStatus };
       }
       assert.ok(!opts?.headers?.Authorization, 'reads must stay unauthenticated');
+      assert.match(url, /^https:\/\/api\.github\.com\/gists\/gist123\?t=\d+$/, 'reads must bust the 60 s cache');
       if (gistResponse.status !== 200) return { ok: false, status: gistResponse.status };
       return { ok: true, status: 200, json: async () => JSON.parse(gistResponse.body) };
     }

@@ -43,6 +43,8 @@ function FloatingEmoji({ emoji, index }: { emoji: string; index: number }) {
 const MONO = "'Geist Mono Variable','Geist Mono',ui-monospace,monospace"
 const ACC = 'var(--acc, #a77dff)'
 const KEY_LEN = 16
+// Keys are A-Z/0-9 only; drop the dashes and spaces people paste from the formatted key.
+const cleanKey = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '')
 
 // Poster wall: bundled local posters (offline-safe) over gradient tiles
 const WALL_COLS = Array.from({ length: 5 }, (_, c) => ({
@@ -384,7 +386,7 @@ export const ActivationModal = memo(function ActivationModal({ isOpen, onActivat
                           <input
                             type="text"
                             value={licenseKey}
-                            onChange={(e) => setLicenseKey(e.target.value.toUpperCase())}
+                            onChange={(e) => setLicenseKey(cleanKey(e.target.value))}
                             onKeyDown={handleKeyPress}
                             onFocus={() => setFocused(true)}
                             onBlur={() => setFocused(false)}
@@ -424,7 +426,7 @@ export const ActivationModal = memo(function ActivationModal({ isOpen, onActivat
                               onClick={async () => {
                                 try {
                                   const text = await navigator.clipboard.readText()
-                                  setLicenseKey(text.trim().toUpperCase())
+                                  setLicenseKey(cleanKey(text))
                                 } catch {}
                               }}
                               title={t('ui.act.paste')}

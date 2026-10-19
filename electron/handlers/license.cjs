@@ -108,9 +108,11 @@ const GIST_HEADERS = { 'User-Agent': 'AHG-Steam-Unlocker', Accept: 'application/
 // Reads license_keys.json from the gist, or null when it could not be read.
 // Unauthenticated on purpose: a secret gist is readable with its id, and a read
 // must keep working even if the bundled token is revoked.
+// The query string busts GitHub's 60 s public cache: without it a key added a minute ago
+// reads as missing, and an activation would write that stale copy back over newer keys.
 async function readLicenseGist() {
   try {
-    const res = await fetch(`https://api.github.com/gists/${secrets.licenseGistId}`,
+    const res = await fetch(`https://api.github.com/gists/${secrets.licenseGistId}?t=${Date.now()}`,
       { headers: GIST_HEADERS, signal: AbortSignal.timeout(15000) });
     if (!res.ok) { console.warn('[LICENSE] Gist read failed — HTTP', res.status); return null; }
     const file = (await res.json()).files?.['license_keys.json'];
@@ -266,7 +268,7 @@ function registerLicenseHandlers() {
         return { success: false, error: 'invalid', message: 'Please enter a license key' };
       }
       const machineId = getMachineId();
-      const key = licenseKey.trim().toUpperCase();
+      const key = licenseKey.toUpperCase().replace(/[^A-Z0-9]/g, '');
       // The bot binds a 'pending' key to this machine atomically and returns the result.
       const status = await licenseApi('activate', key, machineId);
       if (status === null) {
