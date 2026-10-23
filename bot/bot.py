@@ -164,6 +164,13 @@ def norm_key(key):
     return re.sub(r"[^A-Z0-9]", "", key.upper())
 
 
+# The two registries use different file names so they are told apart in the gist list.
+def is_universal(gist_id):
+    return bool(UNIVERSAL_GIST_ID) and gist_id == UNIVERSAL_GIST_ID
+
+def gist_file(gist_id):
+    return "universal_license_keys.json" if is_universal(gist_id) else "license_keys.json"
+
 async def get_gist(gist_id=None):
     """Fetch licenses from GitHub Gist asynchronously"""
     if gist_id is None:
@@ -181,7 +188,7 @@ async def get_gist(gist_id=None):
 
         if resp.status_code == 200:
             data = resp.json()
-            content = data.get("files", {}).get("license_keys.json", {}).get("content", "{}")
+            content = data.get("files", {}).get(gist_file(gist_id), {}).get("content", "{}")
             licenses = json.loads(content) if content else {}
             print(f"Loaded {len(licenses)} licenses from Gist")
             return licenses
@@ -203,9 +210,9 @@ async def update_gist(licenses, retries=3, delay=2, gist_id=None):
     url = f"https://api.github.com/gists/{gist_id}"
     content = json.dumps(licenses, indent=2)
     payload = {
-        "description": "AHG License Keys",
+        "description": "Universal License Keys" if is_universal(gist_id) else "AHG License Keys",
         "files": {
-            "license_keys.json": {
+            gist_file(gist_id): {
                 "content": content
             }
         }
