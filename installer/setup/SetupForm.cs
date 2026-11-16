@@ -239,6 +239,7 @@ namespace AhgSetup
         private static HttpClient Http()
         {
             ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
+            ServicePointManager.DefaultConnectionLimit = 32; // .NET Framework defaults to 2 per host
             var h = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
             h.DefaultRequestHeaders.UserAgent.ParseAdd("AHG-Unlocker-Setup/1.0");
             return h;
@@ -392,26 +393,91 @@ namespace AhgSetup
             finally { _busy = false; _working = false; }
         }
 
+        private const int Parts = 6;
+
+        // GitHub's CDN throttles each connection, so fetch the file in parallel byte ranges.
+        // Falls back to one stream when the server ignores Range or the file is local.
         private async Task Download(string dest)
+        {
+            if (_release.Url.StartsWith("https://") && _release.Size > (8 << 20))
+            {
+                try { await DownloadParallel(dest).ConfigureAwait(false); return; }
+                catch (NotSupportedException) { }
+            }
+            await DownloadSingle(dest).ConfigureAwait(false);
+        }
+
+        private async Task DownloadParallel(string dest)
+        {
+            var total = _release.Size;
+            long got = 0;
+            using (var h = Http())
+            {
+                using (var f = new FileStream(dest, FileMode.Create, FileAccess.Write, FileShare.ReadWrite)) f.SetLength(total);
+                var chunk = (total + Parts - 1) / Parts;
+                var tasks = Enumerable.Range(0, Parts).Select(i => Task.Run(async () =>
+                {
+                    long from = i * chunk, to = Math.Min(total, from + chunk) - 1;
+                    if (from > to) return;
+                    var req = new HttpRequestMessage(HttpMethod.Get, _release.Url);
+                    req.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(from, to);
+                    using (var res = await h.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, _cts.Token).ConfigureAwait(false))
+                    {
+                        if (res.StatusCode != HttpStatusCode.PartialContent) throw new NotSupportedException();
+                        using (var src = await res.Content.ReadAsStreamAsync().ConfigureAwait(false))
+                        using (var dst = new FileStream(dest, FileMode.Open, FileAccess.Write, FileShare.ReadWrite))
+                        {
+                            dst.Seek(from, SeekOrigin.Begin);
+                            var buf = new byte[1 << 17];
+                            int n;
+                            while ((n = await src.ReadAsync(buf, 0, buf.Length, _cts.Token).ConfigureAwait(false)) > 0)
+                            {
+                                dst.Write(buf, 0, n);
+                                Interlocked.Add(ref got, n);
+                            }
+                        }
+                    }
+                })).ToArray();
+                var all = Task.WhenAll(tasks);
+                var sw = Stopwatch.StartNew();
+                long lastTick = 0, lastBytes = 0;
+                double speed = 0;
+                while (!all.IsCompleted)
+                {
+                    await Task.WhenAny(all, Task.Delay(120)).ConfigureAwait(false);
+                    var now = sw.ElapsedMilliseconds;
+                    var cur = Interlocked.Read(ref got);
+                    var inst = (cur - lastBytes) * 1000.0 / Math.Max(1, now - lastTick);
+                    speed = speed == 0 ? inst : speed * 0.7 + inst * 0.3; // smoothed
+                    lastTick = now; lastBytes = cur;
+                    Post(new Dictionary<string, object> { ["type"] = "progress", ["stage"] = "download", ["received"] = cur, ["total"] = total, ["speed"] = (long)speed });
+                }
+                await all.ConfigureAwait(false);
+                Post(new Dictionary<string, object> { ["type"] = "progress", ["stage"] = "download", ["received"] = got, ["total"] = total, ["speed"] = (long)speed });
+                if (got != total) throw new Exception("Download was interrupted. Please try again.");
+            }
+        }
+
+        private async Task DownloadSingle(string dest)
         {
             var isLocal = !_release.Url.StartsWith("https://");
             using (var h = Http())
-            using (var res = isLocal ? null : await h.GetAsync(_release.Url, HttpCompletionOption.ResponseHeadersRead, _cts.Token))
+            using (var res = isLocal ? null : await h.GetAsync(_release.Url, HttpCompletionOption.ResponseHeadersRead, _cts.Token).ConfigureAwait(false))
             {
                 res?.EnsureSuccessStatusCode();
                 var total = res?.Content.Headers.ContentLength ?? _release.Size;
-                using (var src = isLocal ? File.OpenRead(_release.Url) : await res.Content.ReadAsStreamAsync())
+                using (var src = isLocal ? File.OpenRead(_release.Url) : await res.Content.ReadAsStreamAsync().ConfigureAwait(false))
                 using (var dst = File.Create(dest))
                 {
-                    var buf = new byte[1 << 16];
+                    var buf = new byte[1 << 18];
                     long got = 0, lastBytes = 0;
                     var sw = Stopwatch.StartNew();
                     long lastTick = 0;
                     double speed = 0;
                     int n;
-                    while ((n = await src.ReadAsync(buf, 0, buf.Length, _cts.Token)) > 0)
+                    while ((n = await src.ReadAsync(buf, 0, buf.Length, _cts.Token).ConfigureAwait(false)) > 0)
                     {
-                        await dst.WriteAsync(buf, 0, n, _cts.Token);
+                        await dst.WriteAsync(buf, 0, n, _cts.Token).ConfigureAwait(false);
                         got += n;
                         var now = sw.ElapsedMilliseconds;
                         if (now - lastTick >= 120)
