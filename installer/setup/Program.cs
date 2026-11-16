@@ -49,9 +49,15 @@ namespace AhgSetup
 
         private static void Extract(string res, string dest)
         {
-            using (var s = Res(res))
-            using (var f = File.Create(dest))
-                s.CopyTo(f);
+            // A second setup (or a WebView2 left over from a crashed one) can still hold the file:
+            // the copy already there is identical, so keep it instead of crashing at startup.
+            try
+            {
+                using (var s = Res(res))
+                using (var f = File.Create(dest))
+                    s.CopyTo(f);
+            }
+            catch (IOException) when (File.Exists(dest)) { }
         }
     }
 }
