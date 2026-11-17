@@ -393,9 +393,12 @@ namespace AhgSetup
             finally { _busy = false; _working = false; }
         }
 
-        private const int Parts = 6;
+        private const int Workers = 8;
+        private const long ChunkSize = 4L << 20;
 
         // GitHub's CDN throttles each connection, so fetch the file in parallel byte ranges.
+        // Workers pull small chunks from a shared counter: with fixed equal parts, the slowest
+        // connection alone finished the last part and capped the whole download.
         // Falls back to one stream when the server ignores Range or the file is local.
         private async Task Download(string dest)
         {
@@ -410,33 +413,36 @@ namespace AhgSetup
         private async Task DownloadParallel(string dest)
         {
             var total = _release.Size;
-            long got = 0;
+            long got = 0, next = -1;
+            var chunks = (total + ChunkSize - 1) / ChunkSize;
             using (var h = Http())
             {
                 using (var f = new FileStream(dest, FileMode.Create, FileAccess.Write, FileShare.ReadWrite)) f.SetLength(total);
-                var chunk = (total + Parts - 1) / Parts;
-                var tasks = Enumerable.Range(0, Parts).Select(i => Task.Run(async () =>
+                var tasks = Enumerable.Range(0, Workers).Select(_ => Task.Run(async () =>
                 {
-                    long from = i * chunk, to = Math.Min(total, from + chunk) - 1;
-                    if (from > to) return;
-                    var req = new HttpRequestMessage(HttpMethod.Get, _release.Url);
-                    req.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(from, to);
-                    using (var res = await h.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, _cts.Token).ConfigureAwait(false))
-                    {
-                        if (res.StatusCode != HttpStatusCode.PartialContent) throw new NotSupportedException();
-                        using (var src = await res.Content.ReadAsStreamAsync().ConfigureAwait(false))
-                        using (var dst = new FileStream(dest, FileMode.Open, FileAccess.Write, FileShare.ReadWrite))
+                    long i;
+                    using (var dst = new FileStream(dest, FileMode.Open, FileAccess.Write, FileShare.ReadWrite))
+                        while ((i = Interlocked.Increment(ref next)) < chunks)
                         {
-                            dst.Seek(from, SeekOrigin.Begin);
-                            var buf = new byte[1 << 17];
-                            int n;
-                            while ((n = await src.ReadAsync(buf, 0, buf.Length, _cts.Token).ConfigureAwait(false)) > 0)
+                            long from = i * ChunkSize, to = Math.Min(total, from + ChunkSize) - 1;
+                            var req = new HttpRequestMessage(HttpMethod.Get, _release.Url);
+                            req.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(from, to);
+                            using (var res = await h.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, _cts.Token).ConfigureAwait(false))
                             {
-                                dst.Write(buf, 0, n);
-                                Interlocked.Add(ref got, n);
+                                if (res.StatusCode != HttpStatusCode.PartialContent) throw new NotSupportedException();
+                                using (var src = await res.Content.ReadAsStreamAsync().ConfigureAwait(false))
+                                {
+                                    dst.Seek(from, SeekOrigin.Begin);
+                                    var buf = new byte[1 << 17];
+                                    int n;
+                                    while ((n = await src.ReadAsync(buf, 0, buf.Length, _cts.Token).ConfigureAwait(false)) > 0)
+                                    {
+                                        dst.Write(buf, 0, n);
+                                        Interlocked.Add(ref got, n);
+                                    }
+                                }
                             }
                         }
-                    }
                 })).ToArray();
                 var all = Task.WhenAll(tasks);
                 var sw = Stopwatch.StartNew();
