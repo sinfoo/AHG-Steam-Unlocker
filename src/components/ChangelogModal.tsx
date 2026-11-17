@@ -18,6 +18,14 @@ type Changelog = {
 
 const CHANGELOGS: Changelog[] = [
   {
+    version: '1.3.1',
+    date: '2026-11-17',
+    items: [
+      { type: 'fix', title: 'Request a game: search by name works', description: 'Typing a name now lists matching games right away. "spiderman", "gta" and "cod" find what you mean. Soundtracks and tools are left out.' },
+      { type: 'fix', title: 'Title bar always visible', description: 'The window controls stay on top of every popup.' },
+    ],
+  },
+  {
     version: '1.3',
     date: '2026-11-17',
     items: [
