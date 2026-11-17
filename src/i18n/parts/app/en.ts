@@ -427,6 +427,7 @@ const appEN = {
   'app.req.statusUnknown': 'Status unavailable',
   'app.req.failed': 'Request failed. Please try again in a moment.',
   'app.req.notFoundCta': 'Not found? Request your game',
+  'app.req.steamBusy': 'Steam search is busy right now, so only games already in AHG are listed. To request another game, paste its App ID or Steam store link.',
   'app.new.title': 'New games added',
   'app.new.sub': '{n} games added since your last visit',
   'app.new.subOne': '1 game added since your last visit',

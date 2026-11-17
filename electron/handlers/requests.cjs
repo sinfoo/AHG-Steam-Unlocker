@@ -44,7 +44,50 @@ async function getJson(url) {
 
 const headerImage = (appid) => `https://cdn.akamai.steamstatic.com/steam/apps/${appid}/header.jpg`;
 
-/** Name, App ID or Steam link → up to 8 Steam apps: [{ appid, name, image }]. */
+// Soundtracks, DLC, tools and the like are never what someone wants to request. (Copy in src/utils/gameMatch.ts.)
+const NOT_A_GAME = /\b(soundtrack|ost|artbook|art book|wallpapers?|dlc|season pass|expansion pass|upgrade|bundle|pack|demo|playtest|dedicated server|sdk|toolkit|editor|beta|redmod|redkit)\b/i;
+
+// Steam throttles its search endpoints per IP (storesearch answers 403 after a burst), so try
+// three of them in turn, and remember answers: typing the same word twice costs nothing.
+const SEARCHES = [
+  async (term) => (await getJson(`https://steamcommunity.com/actions/SearchApps/${encodeURIComponent(term)}`))
+    .map(it => ({ appid: String(it.appid), name: it.name || '' })),
+  async (term) => ((await getJson(`https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(term)}&l=english&cc=US`)).items || [])
+    .filter(it => it.type === 'app' && it.id).map(it => ({ appid: String(it.id), name: it.name || '' })),
+  async (term) => {
+    const res = await fetch(`https://store.steampowered.com/search/suggest?term=${encodeURIComponent(term)}&f=games&cc=US&realm=1&l=english`,
+      { headers: { 'User-Agent': 'AHG-Steam-Unlocker' }, signal: AbortSignal.timeout(10000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const html = await res.text();
+    return [...html.matchAll(/data-ds-appid="(\d+)"[\s\S]*?class="match_name">([^<]*)</g)].map(m => ({ appid: m[1], name: m[2].replace(/&amp;/g, '&').replace(/&#0?39;/g, "'") }));
+  },
+];
+const searchCache = new Map(); // term → { at, results }
+const CACHE_MS = 15 * 60 * 1000;
+
+async function searchSteam(term) {
+  const key = term.toLowerCase();
+  const hit = searchCache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.results;
+  let lastError = null;
+  for (const search of SEARCHES) {
+    try {
+      const seen = new Set();
+      const results = (await search(term))
+        .filter(r => r.appid && !NOT_A_GAME.test(r.name) && !seen.has(r.appid) && seen.add(r.appid))
+        .slice(0, 8)
+        .map(r => ({ ...r, image: headerImage(r.appid) }));
+      if (results.length === 0) continue; // a source that knows nothing: ask the next one
+      searchCache.set(key, { at: Date.now(), results });
+      return results;
+    } catch (e) { lastError = e; }
+  }
+  if (lastError) throw lastError;
+  searchCache.set(key, { at: Date.now(), results: [] });
+  return [];
+}
+
+/** Name, App ID or Steam link → up to 8 Steam games: [{ appid, name, image }]. */
 async function lookup(query) {
   const appid = parseAppId(query);
   if (appid) {
@@ -56,18 +99,16 @@ async function lookup(query) {
     return [{ appid: String(appid), name, image: headerImage(appid) }];
   }
   const term = String(query ?? '').trim().slice(0, 100);
-  if (term.length < 2) return [];
-  const data = await getJson(`https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(term)}&l=english&cc=US`);
-  return (data?.items || [])
-    .filter(it => it.type === 'app' && it.id)
-    .slice(0, 8)
-    .map(it => ({ appid: String(it.id), name: it.name || '', image: headerImage(it.id) }));
+  return term.length < 3 ? [] : searchSteam(term);
 }
 
 function registerRequestHandlers() {
   ipcMain.handle('ryuu-lookup', wrapHandler('ryuu-lookup', async (_e, query) => {
     try { return { success: true, results: await lookup(query) }; }
-    catch (e) { return { success: false, results: [], message: 'Steam search is unavailable right now. Try an App ID.' }; }
+    catch (e) {
+      console.warn('[REQUESTS] Steam search failed:', e.message);
+      return { success: false, results: [], message: 'busy' };
+    }
   }, { windowMs: 60000, maxCalls: 40 }));
 
   // kind: 'game' asks Ryuu to add a game it doesn't have; 'update' asks it to refresh one it has.
@@ -119,4 +160,4 @@ function registerRequestHandlers() {
   }, { windowMs: 60000, maxCalls: 20 }));
 }
 
-module.exports = { registerRequestHandlers, parseAppId, recordRequest };
+module.exports = { registerRequestHandlers, parseAppId, recordRequest, NOT_A_GAME };

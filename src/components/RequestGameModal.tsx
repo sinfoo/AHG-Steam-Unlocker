@@ -6,11 +6,18 @@ import { useGameStore } from '../store'
 import { bridge, type RyuuLookupResult, type RyuuRequestRecord } from '../bridge'
 import { useT } from '../i18n'
 import type { Game } from '../types'
+import { buildEntry, rankByName } from '../utils/gameMatch'
+import popularGames from '../../data/popular_games.json'
 
 const ACC = 'var(--acc, #a77dff)'
 const MONO = "'Geist Mono Variable','Geist Mono',monospace"
 const GREEN = '#4ade80'
 const AMBER = '#fbbf24'
+// appid → popularity rank, same list the main search ranks with.
+const POPULARITY: Record<string, number> = {}
+;[...new Set(popularGames as string[])].forEach((id, i) => { POPULARITY[id] = i })
+
+const STEAM_LINK = /^\d+$|store\.steampowered\.com\/app\/\d+|steamdb\.info\/app\/\d+|steamcommunity\.com\/app\/\d+/i
 
 type RowState = { busy?: 'game' | 'update'; ok?: boolean; message?: string }
 
@@ -36,6 +43,8 @@ export const RequestGameModal = memo(function RequestGameModal({ onOpenGame }: {
   const close = useUIStore(s => s.closeRequestGame)
   const games = useGameStore(s => s.games) as Game[]
   const catalogue = useMemo(() => new Map(games.map(g => [String(g.appid), g])), [games])
+  // Same matching as the main search (Spider-Man, GTA-style acronyms, word prefixes), built once per catalogue.
+  const entries = useMemo(() => (open ? games.map(buildEntry) : []), [games, open])
 
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<RyuuLookupResult[]>([])
@@ -58,8 +67,9 @@ export const RequestGameModal = memo(function RequestGameModal({ onOpenGame }: {
   // Debounced Steam lookup; a newer keystroke discards older answers.
   useEffect(() => {
     const q = query.trim()
-    if (!open || q.length < 2 && !/^\d+$/.test(q)) { setResults([]); setSearching(false); setError(''); return }
+    if (!open || (q.length < 3 && !STEAM_LINK.test(q))) { setResults([]); setSearching(false); setError(''); return }
     const id = ++seq.current
+    setResults([]); setError('')
     setSearching(true)
     const timer = setTimeout(() => {
       bridge.ryuuLookup(q).then(r => {
@@ -67,7 +77,7 @@ export const RequestGameModal = memo(function RequestGameModal({ onOpenGame }: {
         setResults(r.results || []); setError(r.success ? '' : (r.message || ''))
       }).catch(e => { if (id === seq.current) { setResults([]); setError(String(e?.message || e)) } })
         .finally(() => { if (id === seq.current) setSearching(false) })
-    }, 350)
+    }, 600)
     return () => clearTimeout(timer)
   }, [query, open])
 
@@ -93,6 +103,12 @@ export const RequestGameModal = memo(function RequestGameModal({ onOpenGame }: {
   const openGame = (g: Game) => { close(); onOpenGame(g) }
 
   const q = query.trim()
+  const rowsShown = useMemo(() => {
+    const local: RyuuLookupResult[] = STEAM_LINK.test(q) ? [] : rankByName(games, entries, q, 6, POPULARITY)
+      .map(g => ({ appid: String(g.appid), name: g.name || '', image: g.header_image || `https://cdn.akamai.steamstatic.com/steam/apps/${g.appid}/header.jpg` }))
+    const seen = new Set(local.map(r => r.appid))
+    return [...local, ...results.filter(r => !seen.has(r.appid))]
+  }, [q, games, entries, results])
   return (
     <AnimatePresence>
       {open && (
@@ -134,10 +150,10 @@ export const RequestGameModal = memo(function RequestGameModal({ onOpenGame }: {
             {/* Results */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px 16px' }}>
               {!q && <div style={{ fontSize: 12.5, color: '#77768e', padding: '6px 8px 10px' }}>{t('app.req.hint')}</div>}
-              {q && !searching && results.length === 0 && (
-                <div style={{ fontSize: 13, color: '#8b8aa3', padding: '14px 8px' }}>{error || t('app.req.noResults', { q })}</div>
+              {q && !searching && rowsShown.length === 0 && !error && (
+                <div style={{ fontSize: 13, color: '#8b8aa3', padding: '14px 8px' }}>{t('app.req.noResults', { q })}</div>
               )}
-              {results.map((r, i) => {
+              {rowsShown.map((r, i) => {
                 const g = catalogue.get(r.appid)
                 const row = rows[r.appid] || {}
                 const name = r.name || g?.name || t('app.req.unknownName', { id: r.appid })
@@ -146,14 +162,13 @@ export const RequestGameModal = memo(function RequestGameModal({ onOpenGame }: {
                     <img src={r.image} alt="" loading="lazy" onError={e => { e.currentTarget.style.visibility = 'hidden' }}
                       style={{ width: 128, height: 60, borderRadius: 9, objectFit: 'cover', flex: 'none', background: '#151524' }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 14, fontWeight: 600, color: '#f3f2fa', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
+                      <div title={name} style={{ fontSize: 14, fontWeight: 600, color: '#f3f2fa', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 5, minWidth: 0 }}>
                         {g ? chip(GREEN, t('app.req.available')) : chip(AMBER, t('app.req.missing'))}
-                      </div>
-                      <div style={{ fontFamily: MONO, fontSize: 11, color: '#77768e', marginTop: 4 }}>
-                        {t('app.req.appid', { id: r.appid })}
-                        {g?.added_date && <> · {t('app.req.added', { d: fmtDate(g.added_date) })}</>}
-                        {g?.updated_date && <> · {t('app.req.updated', { d: fmtDate(g.updated_date) })}</>}
+                        <span style={{ fontFamily: MONO, fontSize: 11, color: '#77768e', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {t('app.req.appid', { id: r.appid })}
+                          {g?.updated_date && <> · {t('app.req.updated', { d: fmtDate(g.updated_date) })}</>}
+                        </span>
                       </div>
                       {row.message && (
                         <div style={{ fontSize: 12, marginTop: 5, color: row.ok ? GREEN : '#f87171', display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -178,6 +193,10 @@ export const RequestGameModal = memo(function RequestGameModal({ onOpenGame }: {
                   </div>
                 )
               })}
+
+              {q && error && !searching && (
+                <div style={{ fontSize: 12.5, color: '#8b8aa3', padding: '10px 8px' }}>{t('app.req.steamBusy')}</div>
+              )}
 
               {/* Your requests */}
               {!q && (
