@@ -578,6 +578,7 @@ async function installSteamGame(appid, steamPath, sendLog, signal) {
     try {
       const res = await ryuuDownloader.requestGame(appid, state.apiConfig?.ryuu?.auth_code);
       const outcome = ryuuDownloader.interpretRequestGame(res);
+      if (outcome.requested) require('./requests.cjs').recordRequest(appid, '', 'game');
       sendLog(outcome.reason);
       return { foundRepo: null, manifestCount: 0, requested: outcome.requested, requestMessage: outcome.reason };
     } catch (e) {

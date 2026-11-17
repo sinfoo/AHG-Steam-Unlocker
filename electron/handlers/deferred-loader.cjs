@@ -21,6 +21,7 @@ const { registerSteamHandlers } = require('./steam.cjs');
 const { registerModeHandlers } = require('./mode.cjs');
 const { registerSystemHandlers } = require('./system.cjs');
 const { registerUpdateHandlers } = require('./updates.cjs');
+const { registerRequestHandlers } = require('./requests.cjs');
 const { createLazyModule } = require('../utils/lazyLoader.cjs');
 
 // Fixes handlers (~519 lines) — loaded on first use
@@ -48,6 +49,7 @@ function registerDeferredHandlers() {
   registerModeHandlers();
   registerSystemHandlers();
   registerUpdateHandlers();
+  registerRequestHandlers();
   console.log('[MAIN] Deferred IPC handlers registered');
 }
 

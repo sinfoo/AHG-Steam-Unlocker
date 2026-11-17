@@ -2,6 +2,12 @@ import { Game, Fix } from './types'
 import { useUserStore } from './store/userStore'
 
 // ── SQLite Query Types ──
+export interface RyuuLookupResult { appid: string; name: string; image: string }
+export interface RyuuRequestRecord {
+  appid: string; name: string; kind: 'game' | 'update'; requestedAt: string
+  status: 'pending' | 'fulfilled' | 'unknown'; fulfilledAt: string | null
+}
+
 export interface QueryGamesOpts {
   page?: number
   limit?: number
@@ -273,6 +279,24 @@ export const bridge = {
     }
     // Fallback: use the existing installGame IPC
     return this.installGame(appid) as any
+  },
+
+  async ryuuLookup(query: string): Promise<{ success: boolean; results: RyuuLookupResult[]; message?: string }> {
+    const api = getAPI()
+    if (api?.ryuuLookup) return api.ryuuLookup(query)
+    return { success: false, results: [], message: 'Not available' }
+  },
+
+  async ryuuRequest(appid: string, name: string, kind: 'game' | 'update'): Promise<{ success: boolean; message: string }> {
+    const api = getAPI()
+    if (api?.ryuuRequest) return api.ryuuRequest(appid, name, kind)
+    return { success: false, message: 'Not available' }
+  },
+
+  async ryuuMyRequests(): Promise<{ success: boolean; requests: RyuuRequestRecord[] }> {
+    const api = getAPI()
+    if (api?.ryuuMyRequests) return api.ryuuMyRequests()
+    return { success: false, requests: [] }
   },
 
   async ryuuUpdateGame(appid: string): Promise<{ success: boolean; message: string }> {

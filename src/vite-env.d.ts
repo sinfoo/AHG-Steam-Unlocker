@@ -62,6 +62,9 @@ interface ElectronAPI {
   saveInstalled?: (appids: string[]) => Promise<any>
   recordInstallVersion?: (appid: string, updatedDate: string | null) => Promise<{ success: boolean }>
   ryuuUpdateGame?: (appid: string) => Promise<{ success: boolean; message: string }>
+  ryuuLookup?: (query: string) => Promise<{ success: boolean; results: import('./bridge').RyuuLookupResult[]; message?: string }>
+  ryuuRequest?: (appid: string, name: string, kind: 'game' | 'update') => Promise<{ success: boolean; message: string }>
+  ryuuMyRequests?: () => Promise<{ success: boolean; requests: import('./bridge').RyuuRequestRecord[] }>
   getInstallVersions?: () => Promise<Record<string, { installedAt: string; updatedDate: string | null }>>
   clearInstallVersion?: (appid: string) => Promise<{ success: boolean }>
 
