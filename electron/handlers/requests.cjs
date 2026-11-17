@@ -83,6 +83,11 @@ function registerRequestHandlers() {
       if (ok) recordRequest(appid, name, 'update');
       return { success: ok, message: res.message || res.error || (ok ? 'Update requested.' : 'Could not request an update right now.') };
     }
+    // interpretRequestGame words "already in database" for the failed-install path; here the
+    // user asked for a game Ryuu already has, so say that instead of "we've requested it".
+    if (/already in database/i.test(res.message || res.error || '')) {
+      return { success: true, message: 'Already on Ryuu — it appears in the catalogue after the next sync (up to 30 min).' };
+    }
     const outcome = ryuuDownloader.interpretRequestGame(res);
     if (outcome.requested) recordRequest(appid, name, 'game');
     return { success: outcome.requested, message: outcome.reason };
