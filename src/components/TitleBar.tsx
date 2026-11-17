@@ -66,7 +66,8 @@ const TitleBar = memo(function TitleBar({ colors, currentPage }: TitleBarProps) 
         height: 36,
         flexShrink: 0,
         position: 'relative',
-        zIndex: 50,
+        // Above every overlay (modals 9998, tooltips 9999) so drag + window controls stay reachable.
+        zIndex: 10000,
         background: 'var(--s1, #0f0f1b)',
         borderBottom: '1px solid rgba(255,255,255,0.06)',
         display: 'flex',
