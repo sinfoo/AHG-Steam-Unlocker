@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useCallback, type KeyboardEvent } from 'react'
-import { Search, Clock, ArrowUpDown, X } from 'lucide-react'
+import { Search, Clock, ArrowUpDown, Send, X } from 'lucide-react'
+import { useUIStore } from '../../store/uiStore'
+import { useT } from '../../i18n'
 import { bridge } from '../../bridge'
 import { loadGameImage } from '../../services/imageCache'
 import './search-bar.css'
@@ -65,6 +67,7 @@ function SearchResultCover({ appid, headerImage }: { appid: string; headerImage?
 }
 
 export default function SearchBar({ onSearch, accentColor, colors }: SearchBarProps) {
+  const t = useT()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
   const [showDropdown, setShowDropdown] = useState(false)
@@ -268,9 +271,15 @@ export default function SearchBar({ onSearch, accentColor, colors }: SearchBarPr
 
           {/* No results */}
           {showResults && results.length === 0 && query.trim().length >= 2 && (
-            <div className="search-bar-empty">
-              <span>No games match "{query.trim()}"</span>
-            </div>
+            <>
+              <div className="search-bar-empty">
+                <span>No games match "{query.trim()}"</span>
+              </div>
+              <button className="search-bar-view-all" onClick={() => useUIStore.getState().openRequestGame(query.trim())}>
+                <Send size={13} />
+                <span>{t('app.req.notFoundCta')}</span>
+              </button>
+            </>
           )}
 
           {/* View all */}

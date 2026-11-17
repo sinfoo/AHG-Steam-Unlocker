@@ -1,5 +1,6 @@
 import { memo, useCallback, type ReactNode } from 'react'
-import { Download, FolderOpen, SearchX } from 'lucide-react'
+import { Download, FolderOpen, SearchX, Send } from 'lucide-react'
+import { useUIStore } from '../../store/uiStore'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import type { Game } from '../../types'
 import { PosterCard } from '../cards/PosterCard'
@@ -114,7 +115,7 @@ const ListCell = memo(function ListCell({ game, h, installed, selected, batchMod
   )
 })
 
-export function BrowseEmpty({ onClear }: { onClear: () => void }) {
+export function BrowseEmpty({ onClear, query = '' }: { onClear: () => void; query?: string }) {
   const t = useT()
   return (
     <div style={{ padding: '70px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, textAlign: 'center', animation: 'v2-riseIn .35s both' }}>
@@ -123,7 +124,10 @@ export function BrowseEmpty({ onClear }: { onClear: () => void }) {
       </div>
       <div style={{ fontSize: 17, fontWeight: 600, color: '#f3f2fa' }}>{t('app.grid.noGames')}</div>
       <div style={{ fontSize: 13.5, color: '#8b8aa3' }}>{t('app.browse.noMatchHint')}</div>
-      <button onClick={onClear} className="v2-ctl" style={{ marginTop: 6, height: 38, padding: '0 16px', borderRadius: 11, border: '1px solid rgba(255,255,255,.12)', background: 'rgba(255,255,255,.05)', color: '#fff', fontSize: 13, cursor: 'pointer' }}>{t('app.browse.clearFilters')}</button>
+      <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+        <button onClick={onClear} className="v2-ctl" style={{ height: 38, padding: '0 16px', borderRadius: 11, border: '1px solid rgba(255,255,255,.12)', background: 'rgba(255,255,255,.05)', color: '#fff', fontSize: 13, cursor: 'pointer' }}>{t('app.browse.clearFilters')}</button>
+        <button onClick={() => useUIStore.getState().openRequestGame(query.trim())} className="v2-ctl" style={{ height: 38, padding: '0 16px', borderRadius: 11, border: 'none', background: 'var(--acc,#a77dff)', color: '#0b0614', fontSize: 13, fontWeight: 650, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 7 }}><Send size={14} />{t('app.req.notFoundCta')}</button>
+      </div>
     </div>
   )
 }

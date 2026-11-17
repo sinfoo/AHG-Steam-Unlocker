@@ -215,7 +215,7 @@ const BrowsePage = memo(({ handlers, gamesWithCover, filteredGames, popularGames
           {filtersOpen && <FilterPanel genres={genreOptions} filters={filters} onGenre={onGenre} onToggle={onToggle} />}
           <div ref={gridRef} style={{ flex: 1, minWidth: 0, transition: 'opacity .12s', opacity: fade ? 0 : 1 }}>
             {results.length === 0
-              ? (settled ? <BrowseEmpty onClear={() => { setQ(''); applyFilters(EMPTY_FILTERS) }} /> : null)
+              ? (settled ? <BrowseEmpty query={q} onClear={() => { setQ(''); applyFilters(EMPTY_FILTERS) }} /> : null)
               : <BrowseGameGrid items={results} view={view} columns={columns} scrollMargin={scrollMargin} virtualizer={virtualizer} h={h} flags={flags} />}
           </div>
         </div>

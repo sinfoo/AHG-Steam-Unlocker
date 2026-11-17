@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { BadgeCheck, ChevronDown, ChevronsUpDown, Download, PanelLeftClose, PanelLeftOpen, Settings as SettingsIcon, X, Zap } from 'lucide-react'
+import { BadgeCheck, ChevronDown, ChevronsUpDown, Download, PanelLeftClose, PanelLeftOpen, Send, Settings as SettingsIcon, Sparkles, X, Zap } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { DARK_COLORS } from '../constants/colors'
 import { useUIStore } from '../store/uiStore'
@@ -7,6 +7,7 @@ import { useGameStore, useUserStore } from '../store'
 import { steamPortrait, coverFallback } from '../utils/gameHelpers'
 import type { Game } from '../types'
 import { OfflineIndicator } from './OfflineIndicator'
+import { useNewGames } from '../hooks/useNewGames'
 import { useT } from '../i18n'
 
 interface NavItem {
@@ -86,6 +87,22 @@ function NavList({ items, navigateTo, open }: { items: NavItem[]; navigateTo: (p
       })}
     </>
   )
+}
+
+/** Request-a-game + New-games rows. Not pages, so their ids never match currentPage (never "active"). */
+function RyuuActions({ open }: { open: boolean }) {
+  const t = useT()
+  const newCount = useNewGames().length
+  const items: NavItem[] = [
+    { id: '@new', label: t('app.side.newGames'), icon: Sparkles, color: '', count: newCount },
+    { id: '@request', label: t('app.side.requestGame'), icon: Send, color: '', count: 0 },
+  ]
+  const run = (id: string) => {
+    const ui = useUIStore.getState()
+    if (id === '@new') ui.setNewGamesOpen(true)
+    else ui.openRequestGame()
+  }
+  return <NavList items={newCount > 0 ? items : items.slice(1)} navigateTo={run} open={open} />
 }
 
 /** Up to 5 favourited games (design: PINNED). Own subscriptions so favourite toggles don't re-render the whole sidebar. */
@@ -234,6 +251,7 @@ const Sidebar = memo(function Sidebar({
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', scrollbarWidth: 'none', display: 'flex', flexDirection: 'column', gap: 2, margin: '8px -12px 0', padding: '0 12px' }}>
         {sectionLabel(open, t('app.side.discover'))}
         <NavList items={discover} navigateTo={navigateTo} open={open} />
+        <RyuuActions open={open} />
         {sectionLabel(open, t('app.side.yourGames'))}
         <NavList items={mine} navigateTo={navigateTo} open={open} />
 

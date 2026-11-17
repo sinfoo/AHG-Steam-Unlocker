@@ -55,6 +55,7 @@ import { useAchievements } from './hooks/useAchievements'
 import { useAppSetters } from './hooks/useAppSetters'
 import { useDLCFetching } from './hooks/useDLCFetching'
 import { useContentSync } from './hooks/useContentSync'
+import { useNewGamesTracker } from './hooks/useNewGames'
 import { useFixApplication } from './hooks/useFixApplication'
 import { useInstallGame } from './hooks/useInstallGame'
 import { useScanGames } from './hooks/useScanGames'
@@ -233,6 +234,7 @@ function App() {
   // ── Domain Hook Calls (replacing inlined implementations) ──
   useDLCFetching()
   useContentSync()
+  useNewGamesTracker()
   useLicense()
   const { handleApplyFix, handleDeleteGame } = useFixApplication()
   const { handleInstallGame, handleInstallFromZip, handleInstallGameRef } = useInstallGame()
@@ -892,7 +894,7 @@ function App() {
     runFixGames, startScanGames, reloadGamesList,
     contextMenuInstall, contextMenuOpenSteam, contextMenuToggleFavorite,
     addToDownloadQueue, contextMenuShareCard, contextMenuCopyAppId,
-    contextMenuRemoveGame, openPortalModal,
+    contextMenuRemoveGame, openPortalModal, onOpenGame: handleGameClick,
     processDownloadQueue, removeFromDownloadQueue,
     cancelDownload: (appid?: string) => window.electronAPI?.cancelDownload?.(appid),
     restartSteam: () => window.electronAPI?.restartSteam?.(),
@@ -910,7 +912,7 @@ function App() {
     runFixGames, startScanGames, reloadGamesList,
     contextMenuInstall, contextMenuOpenSteam, contextMenuToggleFavorite,
     addToDownloadQueue, contextMenuShareCard, contextMenuCopyAppId,
-    contextMenuRemoveGame, openPortalModal,
+    contextMenuRemoveGame, openPortalModal, handleGameClick,
     processDownloadQueue, removeFromDownloadQueue,
     showToast,
   ])

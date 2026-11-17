@@ -28,6 +28,8 @@ const PortalGameModal = lazy(() => import('./PortalGameModal').then(m => ({ defa
 const DownloadQueuePanel = lazy(() => import('./DownloadQueuePanel').then(m => ({ default: m.DownloadQueuePanel })))
 const GameActionModal = lazy(() => import('./GameActionModal').then(m => ({ default: m.GameActionModal })))
 const DLCManager = lazy(() => import('./DLCManager').then(m => ({ default: m.DLCManager })))
+const RequestGameModal = lazy(() => import('./RequestGameModal').then(m => ({ default: m.RequestGameModal })))
+const NewGamesModal = lazy(() => import('./NewGamesModal').then(m => ({ default: m.NewGamesModal })))
 
 // ── Props: only local state + action callbacks.
 // Store-based state (install, UI) is read internally via useApp*State hooks.
@@ -66,6 +68,7 @@ export interface ModalRendererProps {
   contextMenuCopyAppId: (game: any) => void
   contextMenuRemoveGame: (game: any) => Promise<void>
   openPortalModal: (game: any) => Promise<void>
+  onOpenGame: (game: any) => void
   processDownloadQueue: () => Promise<void>
   removeFromDownloadQueue: (appid: string) => void
   cancelDownload: (appid?: string) => void
@@ -123,7 +126,7 @@ const ModalRenderer = memo(function ModalRenderer({ modalProps }: { modalProps: 
     runFixGames, startScanGames, reloadGamesList,
     contextMenuInstall, contextMenuOpenSteam, contextMenuToggleFavorite,
     addToDownloadQueue, contextMenuShareCard, contextMenuCopyAppId,
-    contextMenuRemoveGame, openPortalModal,
+    contextMenuRemoveGame, openPortalModal, onOpenGame,
     processDownloadQueue, removeFromDownloadQueue,
     cancelDownload, restartSteam,
     showToast, bridge,
@@ -166,6 +169,9 @@ const ModalRenderer = memo(function ModalRenderer({ modalProps }: { modalProps: 
       />
       </Suspense>
       
+      <Suspense fallback={null}><RequestGameModal onOpenGame={onOpenGame} /></Suspense>
+      <Suspense fallback={null}><NewGamesModal onOpenGame={onOpenGame} /></Suspense>
+
       <Suspense fallback={null}><ChangelogModal
         isOpen={changelogOpen}
         onClose={() => setChangelogOpen(false)}

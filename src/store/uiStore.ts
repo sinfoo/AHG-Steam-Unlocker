@@ -21,6 +21,9 @@ export interface UIState {
   activationOpen: boolean
   isActivated: boolean
   thankYouOpen: boolean
+  /** Request-a-game modal; the query pre-fills its search box (e.g. from an empty search). */
+  requestGame: { open: boolean; query: string }
+  newGamesOpen: boolean
   showExportModal: boolean
   showImportModal: boolean
   importResult: any
@@ -57,6 +60,9 @@ export interface UIState {
   setNavTransition: (value: SetStateAction<boolean>) => void
   setUpdateModalOpen: (value: SetStateAction<boolean>) => void
   setChangelogOpen: (value: SetStateAction<boolean>) => void
+  openRequestGame: (query?: string) => void
+  closeRequestGame: () => void
+  setNewGamesOpen: (open: boolean) => void
   setChangelogVersion: (value: SetStateAction<string>) => void
   setActivationOpen: (value: SetStateAction<boolean>) => void
   setIsActivated: (value: SetStateAction<boolean>) => void
@@ -89,6 +95,8 @@ export const useUIStore = create<UIState>((set) => ({
   activationOpen: false,
   isActivated: false,
   thankYouOpen: false,
+  requestGame: { open: false, query: '' },
+  newGamesOpen: false,
   showExportModal: false,
   showImportModal: false,
   importResult: null,
@@ -140,6 +148,9 @@ export const useUIStore = create<UIState>((set) => ({
   setUpdateModalOpen: (updateModalOpen) => set((state) => ({
     updateModalOpen: typeof updateModalOpen === 'function' ? updateModalOpen(state.updateModalOpen) : updateModalOpen
   })),
+  openRequestGame: (query = '') => set({ requestGame: { open: true, query } }),
+  closeRequestGame: () => set((state) => ({ requestGame: { ...state.requestGame, open: false } })),
+  setNewGamesOpen: (newGamesOpen) => set({ newGamesOpen }),
   setChangelogOpen: (changelogOpen) => set((state) => ({
     changelogOpen: typeof changelogOpen === 'function' ? changelogOpen(state.changelogOpen) : changelogOpen
   })),
