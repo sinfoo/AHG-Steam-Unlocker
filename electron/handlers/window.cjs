@@ -244,7 +244,8 @@ function registerWindowIpc() {
 
   // App path handlers
   ipcMain.handle('get-app-path', () => app.getAppPath());
-  ipcMain.handle('get-app-version', () => app.getVersion());
+  // Same display form as the renderer's __APP_VERSION__ (1.3.0 → 1.3).
+  ipcMain.handle('get-app-version', () => app.getVersion().replace(/\.0$/, ''));
   ipcMain.handle('get-user-data-path', () => app.getPath('userData'));
   ipcMain.handle('get-resource-path', (event, relativePath) => getResourcePath(relativePath));
 

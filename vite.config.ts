@@ -2,8 +2,10 @@ import { defineConfig, type PluginOption } from 'vite'
 import react from '@vitejs/plugin-react'
 import pkg from './package.json'
 
-// %VITE_APP_VERSION% in index.html (splash) — same single source as __APP_VERSION__
-process.env.VITE_APP_VERSION = pkg.version
+// %VITE_APP_VERSION% in index.html (splash) — same single source as __APP_VERSION__.
+// Shown without a trailing ".0" (1.3.0 → 1.3); package.json keeps full semver for the installers.
+const displayVersion = pkg.version.replace(/\.0$/, '')
+process.env.VITE_APP_VERSION = displayVersion
 
 async function getVisualizerPlugin(): Promise<PluginOption | null> {
   if (process.env.ANALYZE !== 'true') return null
@@ -37,7 +39,7 @@ export default defineConfig(async () => {
   const visualizerPlugin = await getVisualizerPlugin()
   return {
     // single source of truth for the version shown anywhere in the UI
-    define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+    define: { __APP_VERSION__: JSON.stringify(displayVersion) },
     plugins: [
       react(),
       removeElectronCrossOrigin(),

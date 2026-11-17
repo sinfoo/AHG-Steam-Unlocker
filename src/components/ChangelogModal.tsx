@@ -18,6 +18,16 @@ type Changelog = {
 
 const CHANGELOGS: Changelog[] = [
   {
+    version: '1.3',
+    date: '2026-11-17',
+    items: [
+      { type: 'feature', title: 'Request a game', description: 'Search any Steam game by name, App ID or store link and ask for it to be added, or ask for a fresh update. Your requests and their status are listed below the search.' },
+      { type: 'feature', title: 'New games since your last visit', description: 'Each launch shows the games added since you last opened AHG, and the sidebar keeps a count.' },
+      { type: 'improvement', title: 'Not found? Request it', description: 'A search with no results now offers to request the game.' },
+      { type: 'fix', title: 'Faster setup download', description: 'AHG Setup downloads in parallel pieces, so one slow connection no longer caps the speed.' },
+    ],
+  },
+  {
     version: '1.2.8',
     date: '2026-10-19',
     items: [

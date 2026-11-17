@@ -296,7 +296,7 @@ function registerUpdateHandlers() {
       if (!latest || !latest.tag_name) {
         return { success: false, message: 'No releases found' };
       }
-      const currentVersion = (app.getVersion() || '').replace(/^v/, '');
+      const currentVersion = (app.getVersion() || '').replace(/^v/, '').replace(/\.0$/, '');
       const normalizeVer = (v) => (v || '').replace(/^v/, '').replace(/(\.0)+$/, '');
       const latestTag = normalizeVer(latest.tag_name || '');
       const curVer = normalizeVer(currentVersion);
