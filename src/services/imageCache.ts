@@ -421,6 +421,15 @@ function loadDirect(appid: string, preferredImageTypes?: readonly string[]): Pro
   return p
 }
 
+// Newer Steam games keep their art under a hashed path (store_item_assets/steam/apps/{id}/{hash}/header.jpg),
+// so every fixed CDN path 404s. Steam's appdetails knows the real header URL: ask once per appid.
+const steamHeaderLookups = new Map<string, Promise<string | null>>()
+export function resolveSteamHeader(appid: string): Promise<string | null> {
+  let p = steamHeaderLookups.get(appid)
+  if (!p) { p = bridge.getSteamHeaderUrl(appid); steamHeaderLookups.set(appid, p) }
+  return p
+}
+
 export async function loadGameImage(appid: string, localHeaderUrl?: string, _gameName?: string, preferredImageTypes?: readonly string[]): Promise<string | null> {
   const key = cacheKey(appid, preferredImageTypes)
 
@@ -573,6 +582,18 @@ export async function loadGameImage(appid: string, localHeaderUrl?: string, _gam
         }
       })
 
+      // Last resort: every fixed path missed, so the art is probably under a hashed path.
+      if (!winner) {
+        const real = await resolveSteamHeader(appid)
+        if (real) {
+          const hit = await fetchAsBlob(real, 6000)
+          if (hit) {
+            setMemoryCache(key, hit.blobUrl, true)
+            backgroundConvertAndCache(appid, hit.blob, preferredImageTypes, key)
+            return hit.blobUrl
+          }
+        }
+      }
       if (winner) {
         setMemoryCache(key, winner.blobUrl, true)
         backgroundConvertAndCache(appid, winner.blob, preferredImageTypes, key)

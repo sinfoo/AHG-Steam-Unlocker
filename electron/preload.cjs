@@ -149,6 +149,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ── Local image fast path (restores dead bridge.ts calls — avoids slow multi-CDN race) ──
   getLocalImage: (appid, suffix) => ipcRenderer.invoke('get-local-image', appid, suffix),
   getLocalImageManifest: () => ipcRenderer.invoke('get-local-image-manifest'),
+  // Real header URL from the Steam store. Newer games keep art under a hashed path, so the fixed
+  // /steam/apps/{appid}/header.jpg 404s for them; appdetails knows the real one.
+  getSteamHeaderUrl: (appid) => (/^\d{1,10}$/.test(String(appid)) ? fetchSteamAPIData(String(appid)).catch(() => null) : Promise.resolve(null)),
   gameExists: (appid) => ipcRenderer.invoke('db:game-exists', appid),
   getFix: (appid) => ipcRenderer.invoke('db:get-fix', appid),
   getAllGameIds: () => ipcRenderer.invoke('db:get-all-game-ids'),

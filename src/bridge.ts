@@ -195,6 +195,12 @@ export const bridge = {
     return null
   },
 
+  /** Real Steam header URL (store appdetails), for games whose art lives under a hashed CDN path. */
+  async getSteamHeaderUrl(appid: string): Promise<string | null> {
+    const api = getAPI()
+    try { return (await api?.getSteamHeaderUrl?.(appid)) || null } catch { return null }
+  },
+
   /** Get the local image manifest (appid → available suffixes) */
   async getLocalImageManifest(): Promise<Record<string, { header: boolean }> | null> {
     const api = getAPI()

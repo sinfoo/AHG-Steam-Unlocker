@@ -1,7 +1,7 @@
 import { memo, useState } from 'react'
 import { ArrowRight, CircleCheck, Wrench } from 'lucide-react'
 import type { Fix, Game } from '../../types'
-import { getSteamImage } from '../../utils/gameHelpers'
+import { getSteamImage, coverFallback } from '../../utils/gameHelpers'
 import { useT } from '../../i18n'
 
 const AMBER = '#f59e0b'
@@ -25,7 +25,7 @@ export const NewFixCard = memo(function NewFixCard({ fix, game, onApply, onAllFi
       className="v2-lift relative overflow-hidden cursor-pointer flex-1"
       style={{ borderRadius: 22, border: '1px solid rgba(255,255,255,.08)', background: '#10101c', minHeight: 200, animation: 'v2-riseIn .45s .06s both' }}
     >
-      <img src={game.header_image || getSteamImage(game.appid)} alt="" loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" onError={e => { e.currentTarget.style.visibility = 'hidden' }} />
+      <img src={game.header_image || getSteamImage(game.appid)} alt="" loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" onError={e => coverFallback(e, game.appid)} />
       <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(0deg, rgba(8,8,16,.97) 15%, rgba(8,8,16,.35) 75%)' }} />
       <span className="mono absolute" style={{ top: 14, insetInlineStart: 14, fontSize: 10.5, fontWeight: 600, letterSpacing: '.12em', padding: '4px 8px', borderRadius: 7, background: 'rgba(245,158,11,.92)', color: '#1f1300' }}>{t('app.fix.newFix')}</span>
       <div className="absolute flex flex-col gap-2" style={{ insetInline: 16, bottom: 14 }}>
