@@ -18,6 +18,16 @@ type Changelog = {
 
 const CHANGELOGS: Changelog[] = [
   {
+    version: '1.3.2',
+    date: '2026-11-24',
+    items: [
+      { type: 'fix', title: 'Fix search takes spaces', description: 'You can type a space in the Fixes search again, so "star wars" or "fc 27" work.' },
+      { type: 'improvement', title: 'Smarter fix search', description: 'Fix search uses the same matcher as the catalogue: best match first, "spiderman" finds Spider-Man, and typos still find the game.' },
+      { type: 'fix', title: 'Covers for the newest games', description: 'New games and their fixes now show their cover, even when Steam keeps the picture somewhere unusual.' },
+      { type: 'feature', title: '6 new fixes', description: 'Demon Slayer: The Hinokami Chronicles 2, EA SPORTS FC 27, NBA 2K27, Onimusha: Way of the Sword, Phantom Blade Zero and STAR WARS: Galactic Racer.' },
+    ],
+  },
+  {
     version: '1.3.1',
     date: '2026-11-17',
     items: [
