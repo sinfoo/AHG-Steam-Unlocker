@@ -63,6 +63,29 @@ function fetchSteamAPIData(appid) {
   });
 }
 
+// Real (hashed-path) header + portrait for a game, from Steam's store-browse API. That host isn't
+// behind the store's Akamai bot wall, which 403s appdetails after a burst of requests.
+function fetchSteamArt(appid) {
+  const input = JSON.stringify({ ids: [{ appid: Number(appid) }], context: { language: 'english', country_code: 'US' }, data_request: { include_assets: true } });
+  return new Promise((resolve, reject) => {
+    const req = https.get(`https://api.steampowered.com/IStoreBrowseService/GetItems/v1?input_json=${encodeURIComponent(input)}`, { timeout: 10000 }, (res) => {
+      if (res.statusCode !== 200) { res.resume(); reject(new Error(`GetItems HTTP ${res.statusCode}`)); return; }
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => {
+        try {
+          const a = JSON.parse(Buffer.concat(chunks).toString())?.response?.store_items?.[0]?.assets;
+          const fmt = a?.asset_url_format;
+          const url = (file) => (fmt && file ? `https://shared.akamai.steamstatic.com/store_item_assets/${fmt.replace('${FILENAME}', file)}` : null);
+          resolve({ header: url(a?.header), portrait: url(a?.library_capsule) });
+        } catch (e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('GetItems timeout')); });
+  });
+}
+
 // Fetch image and return as base64 data URL
 function fetchImageAsDataURL(url) {
   console.log('[PRELOAD] fetchImageAsDataURL:', url);
@@ -152,7 +175,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getLocalImageManifest: () => ipcRenderer.invoke('get-local-image-manifest'),
   // Real header URL from the Steam store. Newer games keep art under a hashed path, so the fixed
   // /steam/apps/{appid}/header.jpg 404s for them; appdetails knows the real one.
-  getSteamHeaderUrl: (appid) => (/^\d{1,10}$/.test(String(appid)) ? fetchSteamAPIData(String(appid)).catch(() => null) : Promise.resolve(null)),
+  getSteamArt: async (appid) => {
+    if (!/^\d{1,10}$/.test(String(appid))) return null;
+    const art = await fetchSteamArt(String(appid)).catch(() => null);
+    if (art?.header) return art;
+    const header = await fetchSteamAPIData(String(appid)).catch(() => null);
+    return header ? { header, portrait: art?.portrait || null } : null;
+  },
   gameExists: (appid) => ipcRenderer.invoke('db:game-exists', appid),
   getFix: (appid) => ipcRenderer.invoke('db:get-fix', appid),
   getAllGameIds: () => ipcRenderer.invoke('db:get-all-game-ids'),

@@ -1,7 +1,7 @@
 import type { Game } from '../types'
 import { COLORS } from '../constants/colors'
 import { getFormatQueryParam } from './formatDetect'
-import { resolveSteamHeader } from '../services/imageCache'
+import { resolveSteamArt } from '../services/imageCache'
 
 // ── Constants ──
 export const FIX_FILTERS = [
@@ -80,14 +80,15 @@ export function isRecentlyAdded(game: Game, days = 14): boolean {
 /** Steam portrait capsule (2:3). Pair with coverFallback on <img onError>. */
 export const steamPortrait = (appid: string) => `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/library_600x900.jpg`
 export const steamHeader = (appid: string) => `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/header.jpg`
-/** onError handler: portrait -> header -> the store's real (hashed-path) header -> hide. */
+/** onError handler: portrait -> header -> the store's real (hashed-path) art -> hide. */
 export function coverFallback(e: { currentTarget: HTMLImageElement }, appid: string) {
   const img = e.currentTarget
   const step = img.dataset.fb
   if (!step) { img.dataset.fb = '1'; img.src = steamHeader(appid); return }
   if (step === '1') {
     img.dataset.fb = '2'
-    resolveSteamHeader(appid).then(url => { if (url) img.src = url; else img.style.visibility = 'hidden' })
+    // Portrait boxes (taller than wide) get the portrait capsule, others the header.
+    resolveSteamArt(appid, img.clientHeight > img.clientWidth).then(url => { if (url) img.src = url; else img.style.visibility = 'hidden' })
     return
   }
   img.style.visibility = 'hidden'

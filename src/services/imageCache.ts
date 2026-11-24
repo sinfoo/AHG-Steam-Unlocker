@@ -422,17 +422,18 @@ function loadDirect(appid: string, preferredImageTypes?: readonly string[]): Pro
 }
 
 // Newer Steam games keep their art under a hashed path (store_item_assets/steam/apps/{id}/{hash}/header.jpg),
-// so every fixed CDN path 404s. Steam's appdetails knows the real header URL: ask once per appid.
-const steamHeaderLookups = new Map<string, Promise<string | null>>()
-export function resolveSteamHeader(appid: string): Promise<string | null> {
-  let p = steamHeaderLookups.get(appid)
+// so every fixed CDN path 404s. Steam's store API knows the real URLs: ask once per appid.
+type SteamArt = { header: string | null; portrait: string | null } | null
+const steamArtLookups = new Map<string, Promise<SteamArt>>()
+export function resolveSteamArt(appid: string, portrait = false): Promise<string | null> {
+  let p = steamArtLookups.get(appid)
   if (!p) {
-    p = bridge.getSteamHeaderUrl(appid)
-    steamHeaderLookups.set(appid, p)
+    p = bridge.getSteamArt(appid)
+    steamArtLookups.set(appid, p)
     // A miss (rate limit, offline) is not remembered: the next cover mount asks again.
-    p.then(url => { if (!url) steamHeaderLookups.delete(appid) })
+    p.then(art => { if (!art) steamArtLookups.delete(appid) })
   }
-  return p
+  return p.then(art => (portrait ? art?.portrait || art?.header : art?.header) || null)
 }
 
 export async function loadGameImage(appid: string, localHeaderUrl?: string, _gameName?: string, preferredImageTypes?: readonly string[]): Promise<string | null> {
@@ -576,7 +577,8 @@ export async function loadGameImage(appid: string, localHeaderUrl?: string, _gam
       const storeWork = (async () => {
         await cdnWork
         if (cdnWon) return
-        const real = await resolveSteamHeader(appid)
+        const wantsPortrait = !!preferredImageTypes?.some(t => t.includes('portrait') || t.includes('600x900'))
+        const real = await resolveSteamArt(appid, wantsPortrait)
         if (!real || cdnWon) return
         const hit = await trackFetch(real, 6000)
         if (hit) deferredResolve(hit)
