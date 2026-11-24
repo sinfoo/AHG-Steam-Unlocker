@@ -113,13 +113,10 @@ export const FixesPage = memo(function FixesPage({ handlers, colors }: PageProps
         // best match first, popular games ahead on ties. Typos fall back to fuzzy search.
         result = rankByName(sourceFiltered, sourceFiltered.map(buildEntry), query, Infinity, popularOrder, false)
       }
-      if (result.length < 3 && query.length > 2 && !/^\d+$/.test(query)) {
-        const seen = new Set(result.map((f: any) => f.appid))
-        const fuzzyResults = fuzzySearch(sourceFiltered, query, 0.35).filter((f: any) => !seen.has(f.appid))
-        if (fuzzyResults.length > 0) {
-          fixesFuzzyActiveRef.current = result.length === 0
-          result = [...result, ...fuzzyResults]
-        }
+      // Typos ("phantm blade"): only when the matcher finds nothing, so fuzzy noise never trails real hits.
+      if (result.length === 0 && query.length > 2 && !/^\d+$/.test(query)) {
+        result = fuzzySearch(sourceFiltered, query, 0.35)
+        fixesFuzzyActiveRef.current = result.length > 0
       }
     }
 
