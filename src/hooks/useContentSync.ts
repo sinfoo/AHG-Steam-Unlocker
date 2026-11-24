@@ -13,8 +13,29 @@ import { useToastNotifications } from './useToastNotifications'
  *   • new / repaired fixes (Ryuu + online-fix.me, which share the fixes feed) raise a
  *     quiet info toast.
  */
+/** Reload fixes (fixes.db + custom fixes) into the store after main has written new ones. */
+function reloadFixes() {
+  bridge.getInitData().then((d: any) => {
+    if (!Array.isArray(d?.fixes)) return
+    const have = new Set(d.fixes.map((f: any) => f.appid))
+    const custom = Array.isArray(d.customFixes) ? d.customFixes.filter((f: any) => !have.has(f.appid)) : []
+    useGameStore.getState().setFixes([...d.fixes, ...custom])
+  }).catch(() => {})
+}
+
 export function useContentSync() {
   const { showToast } = useToastNotifications()
+
+  // ── First launch: fixes.db is empty until the first sync finishes. Main then sends only
+  // 'catalogue-ready' (not 'remote-sync-updated'), so without this a fresh install showed no
+  // fixes until the app was restarted. ──
+  // New AHG custom fixes found by the startup GitHub check had no listener either: they only
+  // appeared on the next launch.
+  useEffect(() => {
+    const api = (window as any).electronAPI
+    const offs = [api?.onCatalogueReady?.(reloadFixes), api?.onCustomFixesUpdated?.(reloadFixes)]
+    return () => { for (const off of offs) if (typeof off === 'function') off() }
+  }, [])
 
   // ── Live remote-sync events (fire ~3s after startup) ──
   useEffect(() => {
@@ -47,14 +68,7 @@ export function useContentSync() {
       }
 
       // Fixes were already persisted to fixes.db by main — reload them into the store.
-      if (newFixes.length || updatedFixes.length) {
-        bridge.getInitData().then((d: any) => {
-          if (!Array.isArray(d?.fixes)) return
-          const have = new Set(d.fixes.map((f: any) => f.appid))
-          const custom = Array.isArray(d.customFixes) ? d.customFixes.filter((f: any) => !have.has(f.appid)) : []
-          useGameStore.getState().setFixes([...d.fixes, ...custom])
-        }).catch(() => {})
-      }
+      if (newFixes.length || updatedFixes.length) reloadFixes()
 
       const bits: string[] = []
       if (newGames.length) bits.push(newGames.length > 1 ? t('ui.toast.newGameMany', { n: newGames.length }) : t('ui.toast.newGameOne'))
