@@ -53,7 +53,7 @@ function saveCustomFixes(data) {
 
 function fetchReleases() {
   return new Promise((resolve, reject) => {
-    const url = `https://api.github.com/repos/${GITHUB_REPO}/releases`;
+    const url = `https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=100`;
     console.log('[CUSTOM-FIXES] Fetching releases from', url);
     https.get(url, {
       headers: {

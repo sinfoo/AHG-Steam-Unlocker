@@ -4,6 +4,7 @@ import { useGameStore } from '../store'
 import { useShallow } from 'zustand/react/shallow'
 import { Fix, Game } from '../types'
 import { fuzzySearch } from '../hooks/useFuzzySearch'
+import { buildEntry, rankByName } from '../utils/gameMatch'
 import { PageProps } from '../types/pages'
 import popularIdsData from '../../data/popular_ids.json'
 import freeToPlayIdsData from '../../data/free_to_play_ids.json'
@@ -105,21 +106,21 @@ export const FixesPage = memo(function FixesPage({ handlers, colors }: PageProps
         return (a.name || '').localeCompare(b.name || '')
       })
     } else {
-      const isAppId = /^\d+$/.test(query)
-      result = sourceFiltered.filter((f: any) => {
-        const name = (f.name || '').toLowerCase()
-        const appid = f.appid || ''
-        if (isAppId) return appid === query
-        return name.includes(query)
-      })
-      if (result.length < 3 && query.length > 2) {
-        const fuzzyResults = fuzzySearch(sourceFiltered, query, 0.35)
+      if (/^\d+$/.test(query)) {
+        result = sourceFiltered.filter((f: any) => String(f.appid || '') === query)
+      } else {
+        // Same matcher as the catalogue: word starts, "spiderman" -> "Spider-Man", "gta" -> Grand Theft Auto,
+        // best match first, popular games ahead on ties. Typos fall back to fuzzy search.
+        result = rankByName(sourceFiltered, sourceFiltered.map(buildEntry), query, Infinity, popularOrder, false)
+      }
+      if (result.length < 3 && query.length > 2 && !/^\d+$/.test(query)) {
+        const seen = new Set(result.map((f: any) => f.appid))
+        const fuzzyResults = fuzzySearch(sourceFiltered, query, 0.35).filter((f: any) => !seen.has(f.appid))
         if (fuzzyResults.length > 0) {
-          fixesFuzzyActiveRef.current = true
-          result = fuzzyResults
+          fixesFuzzyActiveRef.current = result.length === 0
+          result = [...result, ...fuzzyResults]
         }
       }
-      result.sort((a: any, b: any) => (a.name || '').localeCompare(b.name || ''))
     }
 
     // Badge filter (AND logic — must have ALL selected badges)

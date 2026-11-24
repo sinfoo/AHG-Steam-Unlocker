@@ -98,7 +98,7 @@ export const NOT_A_GAME = /\b(soundtrack|ost|artbook|art book|wallpapers?|dlc|se
  * search worker uses: "cod" ranks Call of Duty (acronym 85 + bonus) over CODA (starts-with 90).
  */
 export function rankByName<T extends MatchableGame & { appid?: string | number }>(
-  games: T[], entries: SearchEntry[], query: string, limit: number, popularity: Record<string, number> = {},
+  games: T[], entries: SearchEntry[], query: string, limit: number, popularity: Record<string, number> = {}, dropJunk = true,
 ): T[] {
   const q = normalize(query)
   if (!q) return []
@@ -109,7 +109,7 @@ export function rankByName<T extends MatchableGame & { appid?: string | number }
   for (let i = 0; i < games.length; i++) {
     const e = entries[i]
     let s = e ? scoreEntry(e, q, qSquashed, qWords) : 0
-    if (s <= 0 || NOT_A_GAME.test(games[i]!.name || '')) continue
+    if (s <= 0 || (dropJunk && NOT_A_GAME.test(games[i]!.name || ''))) continue
     const pop = popularity[String(games[i]!.appid)]
     if (pop !== undefined && maxPop > 0) s += 10 * (1 - pop / maxPop)
     hits.push({ g: games[i]!, s, len: e!.norm.length })
