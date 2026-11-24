@@ -570,8 +570,20 @@ export async function loadGameImage(appid: string, localHeaderUrl?: string, _gam
         } catch {}
       })().catch(() => {})
 
+      // Store source: once every fixed CDN path has missed, the art is probably under a hashed
+      // path (newer games); Steam's appdetails knows the real header URL. Its own racer, so a
+      // stalled SteamGridDB call can't keep it from running.
+      const storeWork = (async () => {
+        await cdnWork
+        if (cdnWon) return
+        const real = await resolveSteamHeader(appid)
+        if (!real || cdnWon) return
+        const hit = await trackFetch(real, 6000)
+        if (hit) deferredResolve(hit)
+      })().catch(() => {})
+
       // Race: first success wins; if all fail, allSettled branch rejects → caught → null
-      const allDone = Promise.allSettled([localWork, cdnWork, sgdbWork])
+      const allDone = Promise.allSettled([localWork, cdnWork, sgdbWork, storeWork])
       const winner = await Promise.race([
         firstSuccess,
         allDone.then(() => { throw new Error('all failed') }),
@@ -587,18 +599,6 @@ export async function loadGameImage(appid: string, localHeaderUrl?: string, _gam
         }
       })
 
-      // Last resort: every fixed path missed, so the art is probably under a hashed path.
-      if (!winner) {
-        const real = await resolveSteamHeader(appid)
-        if (real) {
-          const hit = await fetchAsBlob(real, 6000)
-          if (hit) {
-            setMemoryCache(key, hit.blobUrl, true)
-            backgroundConvertAndCache(appid, hit.blob, preferredImageTypes, key)
-            return hit.blobUrl
-          }
-        }
-      }
       if (winner) {
         setMemoryCache(key, winner.blobUrl, true)
         backgroundConvertAndCache(appid, winner.blob, preferredImageTypes, key)
