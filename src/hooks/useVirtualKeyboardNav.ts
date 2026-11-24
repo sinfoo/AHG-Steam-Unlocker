@@ -50,6 +50,10 @@ export function useVirtualKeyboardNav<T>(
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     const len = itemsRef.current.length
     if (len === 0) return
+    // Keys typed into the page's own search box / selects bubble up here: never steal them
+    // (Space used to be swallowed, so a fix search could not contain a space).
+    const el = e.target as HTMLElement
+    if (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return
 
     let newIndex = focusedIndex
 
