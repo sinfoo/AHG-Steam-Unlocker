@@ -426,7 +426,12 @@ function loadDirect(appid: string, preferredImageTypes?: readonly string[]): Pro
 const steamHeaderLookups = new Map<string, Promise<string | null>>()
 export function resolveSteamHeader(appid: string): Promise<string | null> {
   let p = steamHeaderLookups.get(appid)
-  if (!p) { p = bridge.getSteamHeaderUrl(appid); steamHeaderLookups.set(appid, p) }
+  if (!p) {
+    p = bridge.getSteamHeaderUrl(appid)
+    steamHeaderLookups.set(appid, p)
+    // A miss (rate limit, offline) is not remembered: the next cover mount asks again.
+    p.then(url => { if (!url) steamHeaderLookups.delete(appid) })
+  }
   return p
 }
 

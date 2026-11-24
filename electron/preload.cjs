@@ -30,7 +30,8 @@ function fetchSteamAPIData(appid) {
       path: urlObj.pathname + urlObj.search,
       method: 'GET',
       headers: {
-        'User-Agent': 'AHG-Steam-Unlocker/9.4',
+        // Steam's store API answers 403 to non-browser User-Agents.
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
         'Accept': 'application/json',
       },
       timeout: 10000,

@@ -36,8 +36,11 @@ function recordRequest(appid, name, kind) {
   }
 }
 
+// Steam's store endpoints answer 403 to non-browser User-Agents.
+const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
+
 async function getJson(url) {
-  const res = await fetch(url, { headers: { 'User-Agent': 'AHG-Steam-Unlocker' }, signal: AbortSignal.timeout(10000) });
+  const res = await fetch(url, { headers: { 'User-Agent': BROWSER_UA }, signal: AbortSignal.timeout(10000) });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -56,7 +59,7 @@ const SEARCHES = [
     .filter(it => it.type === 'app' && it.id).map(it => ({ appid: String(it.id), name: it.name || '' })),
   async (term) => {
     const res = await fetch(`https://store.steampowered.com/search/suggest?term=${encodeURIComponent(term)}&f=games&cc=US&realm=1&l=english`,
-      { headers: { 'User-Agent': 'AHG-Steam-Unlocker' }, signal: AbortSignal.timeout(10000) });
+      { headers: { 'User-Agent': BROWSER_UA }, signal: AbortSignal.timeout(10000) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const html = await res.text();
     return [...html.matchAll(/data-ds-appid="(\d+)"[\s\S]*?class="match_name">([^<]*)</g)].map(m => ({ appid: m[1], name: m[2].replace(/&amp;/g, '&').replace(/&#0?39;/g, "'") }));
