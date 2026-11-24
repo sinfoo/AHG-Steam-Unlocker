@@ -20,12 +20,12 @@ import { useFixState } from '../components/fixes/fixState'
 
 const POPULAR_IDS: string[] = popularIdsData
 const FREE_TO_PLAY_IDS: Set<string> = new Set(freeToPlayIdsData)
-const F2P_NAME_PATTERNS = ['free to play', 'free-to-play', 'f2p', 'demo', 'trial', 'play free', 'free game', 'open beta', 'free access']
+// Whole words only: a bare includes('demo') hid "Demon Slayer" (and 'trial' hid "Industrial" games).
+const F2P_NAME = /\b(free to play|free-to-play|f2p|demo|trial|play free|free game|open beta|free access)\b/i
 
 function isF2PGame(g: any, dynamicFreeIds: Set<string>): boolean {
   if (FREE_TO_PLAY_IDS.has(g.appid) || dynamicFreeIds.has(g.appid)) return true
-  const name = (g.name || '').toLowerCase()
-  return F2P_NAME_PATTERNS.some(p => name.includes(p))
+  return F2P_NAME.test(g.name || '')
 }
 
 // ── Component ──
